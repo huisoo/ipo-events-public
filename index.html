@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>오늘의 공모주 · 금융 이벤트</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f4f2ee">
+<meta name="description" content="오늘 청약·상장 공모주 일정과 분석, 지금 챙길 증권사 신규 개설 혜택을 한 장에 정리했습니다.">
+<meta property="og:title" content="오늘의 공모주 · 증권사 혜택">
+<meta property="og:description" content="오늘 청약 · 상장 · 다음 일정 · 증권사 신규 개설 혜택">
+<meta property="og:type" content="website">
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%88%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="site-head">
+    <div class="brandbar">
+      <span class="brand">📈 공모주 데일리</span>
+      <span class="updated" id="updated"></span>
+    </div>
+    <h1>오늘의 공모주 · 증권사 혜택</h1>
+    <div class="dateline">
+      <span id="dateline">—</span>
+      <span class="draft" id="draft" hidden></span>
+    </div>
+    <nav class="quick" id="quick" aria-label="바로가기" hidden></nav>
+  </header>
+
+  <div class="state" id="loading">공모주와 이벤트를 정리하고 있어요…</div>
+
+  <main id="main" hidden>
+    <section class="sec" id="sec-ipo" aria-labelledby="h-ipo">
+      <div class="sec-head">
+        <h2 id="h-ipo"><span class="num">1</span>오늘의 공모주</h2>
+        <span class="sec-sub">청약 · 상장 · 일정</span>
+      </div>
+      <div id="ipo-body"></div>
+    </section>
+
+    <section class="sec" id="sec-events" aria-labelledby="h-events">
+      <div class="sec-head">
+        <h2 id="h-events"><span class="num">2</span>증권사 신규 개설 혜택</h2>
+        <span class="sec-sub">계좌개설 · 투자지원금</span>
+      </div>
+      <p class="sec-note" id="ev-note"></p>
+      <div class="ev-list" id="ev-list"></div>
+    </section>
+  </main>
+
+  <div class="state error" id="error" hidden>
+    정보를 불러오지 못했어요.<br>잠시 뒤 새로고침해 주세요.
+    <br><button type="button" onclick="location.reload()">새로고침</button>
+  </div>
+
+  <footer class="foot" id="foot" hidden>
+    <div class="foot-title">⚠️ 꼭 읽어주세요</div>
+    <ul id="notice-list"></ul>
+    <div class="foot-src" id="foot-src"></div>
+  </footer>
+
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

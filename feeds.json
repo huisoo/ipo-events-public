@@ -1,0 +1,261 @@
+{
+ "updated_at": "2026-11-18T23:37:29+09:00",
+ "channels": [
+  {
+   "name": "공모주한잔",
+   "channelTitle": "공모주 한잔",
+   "channelId": "UC8kMkLj4kAqMTeOeVQgxyUg",
+   "channelUrl": "https://www.youtube.com/@공모주한잔",
+   "latest": {
+    "videoId": "TM8NPtVp4WU",
+    "title": "[오늘의 공모주] 유캐스트 (공모가 밴드 하단이 결정적 판단 기준)",
+    "url": "https://www.youtube.com/watch?v=TM8NPtVp4WU",
+    "published": "2026-11-17T12:02:19+00:00"
+   },
+   "videos": [
+    {
+     "videoId": "TM8NPtVp4WU",
+     "title": "[오늘의 공모주] 유캐스트 (공모가 밴드 하단이 결정적 판단 기준)",
+     "url": "https://www.youtube.com/watch?v=TM8NPtVp4WU",
+     "published": "2026-11-17T12:02:19+00:00"
+    },
+    {
+     "videoId": "hKOPcwC6tOI",
+     "title": "[오늘의 공모주] 엠비디 (공모 철회 속 기회 발견)",
+     "url": "https://www.youtube.com/watch?v=hKOPcwC6tOI",
+     "published": "2026-11-11T13:09:17+00:00"
+    },
+    {
+     "videoId": "DO3tcSP5ktY",
+     "title": "[오늘의 공모주] 엠비디 (올해는 모두 성공했다)",
+     "url": "https://www.youtube.com/watch?v=DO3tcSP5ktY",
+     "published": "2026-11-10T12:24:28+00:00"
+    },
+    {
+     "videoId": "K8T8ykKKH8k",
+     "title": "[오늘의공모주] 하나에어로다이내믹스 (상장일 다이내믹할지라도)",
+     "url": "https://www.youtube.com/watch?v=K8T8ykKKH8k",
+     "published": "2026-11-09T11:45:15+00:00"
+    },
+    {
+     "videoId": "UfcNKhL-qUY",
+     "title": "[오늘의 공모주] 에이엘로봇 (상장일 힘 조절은 어려울 듯)",
+     "url": "https://www.youtube.com/watch?v=UfcNKhL-qUY",
+     "published": "2026-11-04T10:15:30+00:00"
+    }
+   ]
+  },
+  {
+   "name": "공모주투자의법칙(공주)",
+   "channelTitle": "공모주투자의법칙(공주)",
+   "channelId": "UCstq1xNCuEIR43dM3CMop3g",
+   "channelUrl": "https://www.youtube.com/@공모주투자의법칙",
+   "latest": {
+    "videoId": "wEkS9VIyHxs",
+    "title": "[공모주 경쟁률] 유캐스트 공모주 11/18일 1일차 실시간 경쟁률 LIVE",
+    "url": "https://www.youtube.com/watch?v=wEkS9VIyHxs",
+    "published": "2026-11-18T08:38:24+00:00"
+   },
+   "videos": [
+    {
+     "videoId": "wEkS9VIyHxs",
+     "title": "[공모주 경쟁률] 유캐스트 공모주 11/18일 1일차 실시간 경쟁률 LIVE",
+     "url": "https://www.youtube.com/watch?v=wEkS9VIyHxs",
+     "published": "2026-11-18T08:38:24+00:00"
+    },
+    {
+     "videoId": "Of_fTRKNxaE",
+     "title": "[비례배정 LIVE] 유캐스트 공모주 11/18일 1일차 예상비례배정 LIVE",
+     "url": "https://www.youtube.com/watch?v=Of_fTRKNxaE",
+     "published": "2026-11-18T08:31:22+00:00"
+    },
+    {
+     "videoId": "zMv8YWehkgM",
+     "title": "[상장 LIVE] 에이엘로봇 공모주 11/18일 상장일 주가흐름 LIVE",
+     "url": "https://www.youtube.com/watch?v=zMv8YWehkgM",
+     "published": "2026-11-18T06:45:43+00:00"
+    },
+    {
+     "videoId": "CP0BitQUqz8",
+     "title": "[상장 LIVE] 옵토닉스 공모주 11/17일 상장일 주가흐름 LIVE",
+     "url": "https://www.youtube.com/watch?v=CP0BitQUqz8",
+     "published": "2026-11-17T11:31:59+00:00"
+    },
+    {
+     "videoId": "6kO_QxLx4cE",
+     "title": "[공모주] 유캐스트 분석과 종합점수 - 하단으로 확정된 공모가, 수급이 여전히 약한데..?",
+     "url": "https://www.youtube.com/watch?v=6kO_QxLx4cE",
+     "published": "2026-11-17T09:03:01+00:00"
+    }
+   ]
+  }
+ ],
+ "schedule": {
+  "source": "38커뮤니케이션 공모주 청약일정",
+  "url": "http://www.38.co.kr/html/fund/index.htm?o=k",
+  "items": [
+   {
+    "name": "유캐스트",
+    "period": "2026.11.18~11.19",
+    "price_fixed": "19,000",
+    "price_band": "19,000~23,000",
+    "competition": "",
+    "brokers": "유진투자증권,신영증권"
+   },
+   {
+    "name": "아델",
+    "period": "2026.11.23~11.24",
+    "price_fixed": "-",
+    "price_band": "18,000~25,000",
+    "competition": "",
+    "brokers": "삼성증권,미래에셋증권"
+   },
+   {
+    "name": "케이엠에프",
+    "period": "2026.11.24~11.25",
+    "price_fixed": "-",
+    "price_band": "15,000~17,800",
+    "competition": "",
+    "brokers": "IBK투자증권"
+   },
+   {
+    "name": "신영스팩12호",
+    "period": "2026.11.24~11.25",
+    "price_fixed": "-",
+    "price_band": "2,000~2,000",
+    "competition": "",
+    "brokers": "신영증권"
+   },
+   {
+    "name": "에이엔에이치스트럭쳐",
+    "period": "2026.11.27~11.30",
+    "price_fixed": "-",
+    "price_band": "11,200~13,600",
+    "competition": "",
+    "brokers": "NH투자증권"
+   },
+   {
+    "name": "엔키화이트햇",
+    "period": "2026.12.01~12.02",
+    "price_fixed": "-",
+    "price_band": "13,000~16,500",
+    "competition": "",
+    "brokers": "신영증권"
+   },
+   {
+    "name": "우리투자스팩1호",
+    "period": "2026.12.02~12.03",
+    "price_fixed": "-",
+    "price_band": "2,000~2,000",
+    "competition": "",
+    "brokers": "우리투자증권"
+   },
+   {
+    "name": "이노보테라퓨틱스",
+    "period": "2026.12.07~12.08",
+    "price_fixed": "-",
+    "price_band": "20,000~24,000",
+    "competition": "",
+    "brokers": "한국투자증권"
+   },
+   {
+    "name": "마더스제약",
+    "period": "2026.12.08~12.09",
+    "price_fixed": "-",
+    "price_band": "11,000~14,500",
+    "competition": "",
+    "brokers": "KB증권,NH투자증권"
+   },
+   {
+    "name": "인터엑스",
+    "period": "2026.12.09~12.10",
+    "price_fixed": "-",
+    "price_band": "10,000~13,000",
+    "competition": "",
+    "brokers": "한국투자증권,BNK투자증권"
+   },
+   {
+    "name": "다비오",
+    "period": "2026.12.09~12.10",
+    "price_fixed": "-",
+    "price_band": "12,300~16,600",
+    "competition": "",
+    "brokers": "대신증권"
+   },
+   {
+    "name": "씨아이에스케미칼",
+    "period": "2026.12.10~12.11",
+    "price_fixed": "-",
+    "price_band": "5,400~6,800",
+    "competition": "",
+    "brokers": "KB증권"
+   },
+   {
+    "name": "데스틴파워",
+    "period": "2026.12.11~12.14",
+    "price_fixed": "-",
+    "price_band": "8,000~11,000",
+    "competition": "",
+    "brokers": "한국투자증권"
+   },
+   {
+    "name": "제논",
+    "period": "2026.12.14~12.15",
+    "price_fixed": "-",
+    "price_band": "9,700~12,200",
+    "competition": "",
+    "brokers": "삼성증권"
+   },
+   {
+    "name": "태석광학",
+    "period": "2026.12.14~12.15",
+    "price_fixed": "-",
+    "price_band": "17,500~20,200",
+    "competition": "",
+    "brokers": "신한투자증권,대신증권"
+   },
+   {
+    "name": "엠디에스코리아",
+    "period": "2026.12.14~12.15",
+    "price_fixed": "-",
+    "price_band": "9,500~11,500",
+    "competition": "",
+    "brokers": "미래에셋증권"
+   },
+   {
+    "name": "KTE",
+    "period": "2026.12.14~12.15",
+    "price_fixed": "-",
+    "price_band": "19,000~23,000",
+    "competition": "",
+    "brokers": "NH투자증권"
+   },
+   {
+    "name": "이나인페이",
+    "period": "2026.12.16~12.17",
+    "price_fixed": "-",
+    "price_band": "7,500~10,500",
+    "competition": "",
+    "brokers": "한국투자증권"
+   }
+  ]
+ },
+ "listings": [
+  {
+   "date": "11/20",
+   "name": "하나에어로다이내"
+  },
+  {
+   "date": "11/24",
+   "name": "엠비디"
+  },
+  {
+   "date": "11/30",
+   "name": "유캐스트"
+  },
+  {
+   "date": "12/02",
+   "name": "아델"
+  }
+ ]
+}

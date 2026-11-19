@@ -1,0 +1,195 @@
+{
+  "date": "2026-11-19",
+  "dateLabel": "2026년 11월 19일 목요일",
+  "updatedLabel": "22:13",
+  "draft": false,
+  "draftNote": "공모주 08:42 기준 · 증권사 혜택 11/19 확인",
+  "eventsAsOf": "2026-11-19",
+  "ipo": {
+    "subscribe": [
+      {
+        "name": "유캐스트",
+        "badge": "오늘 청약 마감",
+        "market": "코스닥 · 기술성장특례",
+        "period": "11/18(수)~11/19(목)",
+        "price": "확정 19,000원",
+        "priceNote": "밴드 19,000~23,000원 최하단",
+        "brokers": "유진투자증권(대표) · 신영증권",
+        "refund": "11/23(월)",
+        "minEqual": {
+          "shares": "10주",
+          "deposit": "95,000원",
+          "basis": "공모가 19,000원 × 최소주수 × 50%",
+          "brokers": [
+            {
+              "name": "유진",
+              "shares": "10주",
+              "deposit": "95,000원"
+            },
+            {
+              "name": "신영",
+              "shares": "50주",
+              "deposit": "475,000원"
+            }
+          ]
+        }
+      }
+    ],
+    "cancelled": [],
+    "listing": {
+      "hasListing": false,
+      "body": "오늘 신규 상장 없음 — 다음은 11/20(금) 하나에어로다이내믹스"
+    },
+    "hanjan": {
+      "channel": "공모주한잔",
+      "channelUrl": "https://www.youtube.com/@공모주한잔",
+      "items": [
+        {
+          "name": "유캐스트",
+          "equal": "패스",
+          "proportional": "패스"
+        }
+      ],
+      "note": "공모주한잔 11/17 영상 기준 · 균등·비례 모두 패스 (이후 새 영상 없음)",
+      "video": {
+        "title": "[오늘의 공모주] 유캐스트 (공모가 밴드 하단이 결정적 판단 기준)",
+        "url": "https://www.youtube.com/watch?v=TM8NPtVp4WU",
+        "date": "2026-11-17"
+      }
+    },
+    "gongmorin": {
+      "name": "공모주린이",
+      "channel": "공모주투자의법칙(공주)",
+      "channelUrl": "https://www.youtube.com/@공모주투자의법칙/streams",
+      "score": "C+",
+      "verdict": "패스",
+      "note": "적자·비싼 공모가·약한 수급 → 청약보다 상장 후 대응",
+      "video": {
+        "title": "[공모주] 유캐스트 분석과 종합점수 - 하단으로 확정된 공모가, 수급이 여전히 약한데..?",
+        "url": "https://www.youtube.com/watch?v=6kO_QxLx4cE",
+        "date": "2026-11-17"
+      },
+      "live": {
+        "on": true,
+        "label": "실시간 경쟁률 보기",
+        "url": "https://www.youtube.com/@공모주투자의법칙/streams"
+      }
+    },
+    "next": {
+      "name": "아델",
+      "period": "11/23(월)~11/24(화)",
+      "price": "희망 18,000~25,000원",
+      "brokers": "삼성증권 · 미래에셋증권",
+      "memo": "다음 주 월요일부터 청약"
+    },
+    "source": {
+      "label": "38커뮤니케이션 공모주 일정",
+      "url": "https://www.38.co.kr/html/fund/index.htm?o=k"
+    }
+  },
+  "events": [
+    {
+      "id": "samsung",
+      "type": "증권사 신규",
+      "title": "신규 고객 국내주식 투자지원금 2만원",
+      "provider": "삼성증권 · 종합(비대면) 계좌",
+      "benefit": "투자지원금 2만원 + 온라인 수수료 1년 우대",
+      "benefitNote": "국내주식 주문에 바로 쓸 수 있는 현금성 지원금, 선착순 1.5만명",
+      "period": "2026.11.02~11.30",
+      "expiresAt": "2026-11-30",
+      "verifiedAt": "2026-11-19",
+      "terms": [
+        "계좌개설 후 mPOP에서 이벤트를 직접 신청해야 하고, 평일 08:00~20:00에만 신청할 수 있어요(11/30은 08:00~17:00).",
+        "지원금은 신청일 포함 5영업일까지만 쓸 수 있고 남은 금액은 자동 회수돼요.",
+        "예산이 소진되면 공지 없이 조기 종료될 수 있어요."
+      ],
+      "invite": {
+        "status": "none",
+        "howTo": "mPOP 앱 → 고객서비스 → 이벤트에서 신청"
+      },
+      "link": {
+        "label": "삼성증권 이벤트 안내",
+        "url": "https://onestopsamsungpop.co.kr/event/domestic-stock/"
+      }
+    },
+    {
+      "id": "kis",
+      "type": "증권사 신규",
+      "title": "뱅키스 계좌개설 스타트 패키지",
+      "provider": "한국투자증권 · 비대면(BanKIS) 주식계좌",
+      "benefit": "국내주식 2주 + 투자지원금 최대 10만원",
+      "benefitNote": "개설 즉시 2만원 · 100만원 거래 +2만원 · 500만원 잔고 유지 +6만원",
+      "period": "2026.11.01~12.31",
+      "expiresAt": "2026-12-31",
+      "verifiedAt": "2026-11-19",
+      "terms": [
+        "주식 추첨은 '한국투자' 앱 → 고객지원 → 이벤트 → 혜택 탭에서 직접 신청해야 지급돼요(자동 응모 아님).",
+        "투자지원금은 지급일 포함 7일 안에 국내주식 매수에만 쓸 수 있고, 남은 금액은 회수돼요.",
+        "주식계좌 최초 신규 고객 1인 1회 · 은행 제휴 채널은 별도 조건이 붙어요."
+      ],
+      "invite": {
+        "status": "none",
+        "howTo": "계좌개설 후 '한국투자' 앱 이벤트 탭에서 추첨 신청"
+      },
+      "link": {
+        "label": "한국투자증권 이벤트 안내",
+        "url": "https://channel.koreainvestment.com/naver/event/link.jsp"
+      }
+    },
+    {
+      "id": "mirae",
+      "type": "증권사 신규",
+      "title": "다이렉트 첫 고객 Welcome",
+      "provider": "미래에셋증권 · 다이렉트 주식계좌",
+      "benefit": "투자지원금 2만원 + 국내주식 90일 수수료 무료",
+      "benefitNote": "계좌를 만든 뒤 15일 안에 신청해야 지원금이 들어와요",
+      "period": "2026.07.01~12.31",
+      "expiresAt": "2026-12-31",
+      "verifiedAt": "2026-11-19",
+      "terms": [
+        "2026.12.31 23:00까지 계좌개설을 마쳐야 대상이에요.",
+        "지원금은 신청일 포함 15일간 국내주식 매수에만 쓸 수 있고, 남으면 회수돼요.",
+        "모바일 홈페이지·MTS·카카오뱅크·케이뱅크·토스뱅크 제휴 경로만 해당(증권통·카카오스탁 제외)."
+      ],
+      "invite": {
+        "status": "none",
+        "howTo": "m.Stock 앱 → 이벤트 → 다이렉트 첫 고객 Welcome에서 신청"
+      },
+      "link": {
+        "label": "미래에셋증권 신규 고객 안내",
+        "url": "https://digital.securities.miraeasset.com/first-time/"
+      }
+    },
+    {
+      "id": "kb",
+      "type": "증권사 신규",
+      "title": "WELCOME M-ABLE 주식쿠폰",
+      "provider": "KB증권 · M-able 비대면 위탁계좌",
+      "benefit": "국내주식쿠폰 6만원 + 첫 투자 미션 6만원",
+      "benefitNote": "계좌개설만 해도 6만원, 국내주식 300만원 이상 매수하면 6만원 더",
+      "period": "2026.10.01~2027.02.28",
+      "expiresAt": "2027-02-28",
+      "verifiedAt": "2026-11-19",
+      "terms": [
+        "계좌개설 완료 화면에서 '웰컴쿠폰 받기'를 눌러야 발급되고, 30일 안에 주문 1건 100만원 이상일 때 쓸 수 있어요.",
+        "KB스타뱅킹·카카오뱅크·케이뱅크·토스뱅크 제휴 개설과 직원추천 개설은 대상에서 빠져요.",
+        "이벤트 신청과 문자·앱 푸시 수신 동의가 필요해요."
+      ],
+      "invite": {
+        "status": "none",
+        "howTo": "M-able 앱 또는 start.kbsec.com 에서 계좌개설"
+      },
+      "link": {
+        "label": "KB증권 신규 고객 이벤트",
+        "url": "https://welcomemable.kbsec.com/"
+      }
+    }
+  ],
+  "notice": [
+    "이 페이지는 공개된 정보를 개인적으로 정리한 것으로, 투자 권유나 청약 권유가 아니에요. 투자 판단과 책임은 본인에게 있습니다.",
+    "공모주 일정·경쟁률은 38커뮤니케이션과 각 유튜브 채널 공개 내용을 기준으로 하며, 당일에도 바뀔 수 있어요.",
+    "증권사 신규 개설 혜택은 계좌를 만든 뒤 앱·홈페이지에서 이벤트를 직접 신청해야 지급되는 경우가 많아요. 개설 직후 신청 화면까지 확인하세요.",
+    "이벤트의 혜택·마감일·보상 한도는 각 사 사정으로 예고 없이 바뀔 수 있으니 가입 전 공식 페이지에서 확인하세요.",
+    "마감일이 지난 이벤트는 화면에서 자동으로 숨겨집니다."
+  ]
+}
