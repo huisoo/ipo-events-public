@@ -1,4 +1,4 @@
-"""배포된 공개 페이지 검증 (프로덕션 URL · 익명 모바일 390x844)."""
+"""배포된 공개 페이지 검증 (프로덕션 URL · 익명 모바일 390x844 + 데스크톱)."""
 import asyncio
 from pathlib import Path
 
@@ -11,6 +11,7 @@ UA = ("Mozilla/5.0 (Linux; Android 14; SM-S911N) AppleWebKit/537.36 "
 _terms_file = OUT / "privacy_terms.txt"
 TERMS = ([ln.strip() for ln in _terms_file.read_text(encoding="utf-8").splitlines()
           if ln.strip() and not ln.startswith("#")] if _terms_file.exists() else [])
+ALWAYS_TERMS = ["야탑", "판교", "이매", "쌍둥이", "육아", "어린이집", "배송지"]
 
 
 async def main():
@@ -33,28 +34,52 @@ async def main():
         await page.wait_for_timeout(400)
 
         res["title"] = await page.title()
+        res["h1"] = (await page.inner_text("h1")).replace("\n", " ")
         res["dateline"] = await page.inner_text("#dateline")
         res["updated"] = await page.inner_text("#updated")
         res["draft_badge_visible"] = await page.locator("#draft").is_visible()
-        res["pcard"] = await page.locator(".pcard").count()
-        res["events"] = await page.locator(".ev").count()
-        res["event_ids"] = await page.eval_on_selector_all(".ev", "els => els.map(e => e.dataset.id)")
-        res["event_titles"] = await page.eval_on_selector_all(".ev-title", "els => els.map(e => e.textContent.trim())")
-        res["qchips"] = await page.eval_on_selector_all(".qchip", "els => els.map(e => e.textContent.trim())")
-        res["ev_note"] = await page.inner_text("#ev-note")
-        res["notice_count"] = await page.locator("#notice-list li").count()
-        body = await page.inner_text("body")
+        res["robots"] = await page.get_attribute("meta[name='robots']", "content")
+        res["canonical"] = await page.get_attribute("link[rel='canonical']", "href")
+
+        # 1레벨 히어로
+        res["hero"] = await page.locator(".hero").count()
+        res["hero_name"] = (await page.inner_text(".hero .hname")).replace("\n", " ")
+        res["verdict"] = (await page.inner_text(".hero .verdict")).replace("\n", " ")
+        res["deposit"] = (await page.inner_text(".hero .deposit")).replace("\n", " ")
+        res["yt_rows"] = await page.eval_on_selector_all(".hero .yt-row", "els => els.length")
+        res["next_dday"] = await page.inner_text(".hero-next .dday")
+        first_screen = await page.evaluate("""(() => {
+            const n = document.querySelector('.hero-next');
+            return { next_bottom: Math.round(n.getBoundingClientRect().bottom),
+                     viewport_h: window.innerHeight };
+        })()""")
+        res.update(first_screen)
+
+        # 2레벨 접힘
+        res["benefits_collapsed"] = not await page.locator("#sec-events").evaluate("el => el.open")
+        res["ben_head"] = (await page.inner_text("#sec-events .ben-txt")).replace("\n", " ")
+        res["events"] = await page.locator("#ev-list .ev").count()
+        res["event_ids"] = await page.eval_on_selector_all("#ev-list .ev", "els => els.map(e => e.dataset.id)")
+        res["ev_note"] = (await page.locator("#ev-note").text_content()).strip()
+
+        body = await page.evaluate("document.body.textContent")
         res["has_draft_word"] = "초안" in body
-        res["privacy_hits"] = [t for t in TERMS if t in body]
+        res["privacy_hits"] = [t for t in TERMS + ALWAYS_TERMS if t in body]
         res["invite_words"] = any(w in body for w in ("초대 코드", "초대코드", "추천인"))
+        res["notice_count"] = await page.locator("#notice-list li").count()
         res["doc_width"] = await page.evaluate("document.documentElement.scrollWidth")
         res["viewport_width"] = await page.evaluate("window.innerWidth")
         res["console_errors"] = errors
 
         await page.screenshot(path=str(OUT / "preview-prod-mobile.png"), full_page=True)
-        await page.locator("#sec-events").scroll_into_view_if_needed()
-        await page.wait_for_timeout(300)
-        await page.locator("#sec-events").screenshot(path=str(OUT / "preview-prod-mobile-events.png"))
+        await page.locator("#sec-events > summary").click()
+        await page.wait_for_timeout(350)
+        res["accordion_opens"] = await page.locator("#sec-events").evaluate("el => el.open")
+        await page.locator("#ev-list .ev").first.locator("summary").click()
+        await page.wait_for_timeout(250)
+        res["row_opens"] = await page.locator("#ev-list .ev").first.evaluate("el => el.open")
+        await page.locator("#sec-events").screenshot(
+            path=str(OUT / "preview-prod-mobile-events.png"))
         await ctx.close()
 
         dark = await browser.new_context(
@@ -76,7 +101,8 @@ async def main():
         await dp.goto(URL, wait_until="networkidle", timeout=45000)
         await dp.wait_for_selector("#main:not([hidden])", timeout=15000)
         await dp.wait_for_timeout(300)
-        res["desktop_events"] = await dp.locator(".ev").count()
+        res["desktop_hero"] = await dp.locator(".hero").count()
+        res["desktop_events"] = await dp.locator("#ev-list .ev").count()
         res["desktop_h_overflow"] = await dp.evaluate(
             "document.documentElement.scrollWidth > window.innerWidth + 1")
         await dp.screenshot(path=str(OUT / "preview-prod-desktop.png"))
@@ -84,10 +110,20 @@ async def main():
         await browser.close()
 
     ok = (res["http_status"] == 200
+          and "1분 요약" in res["title"]
+          and res["robots"] and "noindex" not in res["robots"]
+          and "index" in res["robots"]
+          and res["canonical"] == URL
           and not res["draft_badge_visible"]
           and not res["has_draft_word"]
+          and res["hero"] == 1
+          and res["yt_rows"] >= 2
+          and res["next_dday"].startswith("D-")
+          and res["next_bottom"] <= res["viewport_h"]
+          and res["benefits_collapsed"]
+          and res["accordion_opens"]
+          and res["row_opens"]
           and res["events"] == 4
-          and res["pcard"] >= 1
           and not res["privacy_hits"]
           and not res["invite_words"]
           and not res["console_errors"]

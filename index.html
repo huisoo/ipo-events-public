@@ -2,15 +2,22 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<title>오늘의 공모주 · 금융 이벤트</title>
+<title>오늘의 공모주 1분 요약 — 청약·상장·최소증거금</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#f4f2ee">
-<meta name="description" content="오늘 청약·상장 공모주 일정과 분석, 지금 챙길 증권사 신규 개설 혜택을 한 장에 정리했습니다.">
-<meta property="og:title" content="오늘의 공모주 · 증권사 혜택">
-<meta property="og:description" content="오늘 청약 · 상장 · 다음 일정 · 증권사 신규 개설 혜택">
+<meta name="description" content="오늘 청약·상장하는 공모주와 균등·비례 결론, 주관사별 최소 증거금, 공모주한잔·공모주린이 요약, 다음 청약 D-day까지 한 화면에 정리합니다.">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<link rel="canonical" href="https://ipo-events-public.vercel.app/">
 <meta property="og:type" content="website">
-<meta name="robots" content="noindex, nofollow">
+<meta property="og:site_name" content="공모주 데일리">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:url" content="https://ipo-events-public.vercel.app/">
+<meta property="og:title" content="오늘의 공모주 1분 요약">
+<meta property="og:description" content="오늘 청약·상장 여부, 균등·비례 결론, 주관사별 최소 증거금, 다음 청약 D-day까지 한 장에.">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="오늘의 공모주 1분 요약">
+<meta name="twitter:description" content="오늘 청약·상장 여부, 균등·비례 결론, 주관사별 최소 증거금, 다음 청약 D-day까지 한 장에.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%88%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="styles.css">
 </head>
@@ -22,33 +29,37 @@
       <span class="brand">📈 공모주 데일리</span>
       <span class="updated" id="updated"></span>
     </div>
-    <h1>오늘의 공모주 · 증권사 혜택</h1>
+    <h1>오늘의 공모주 <em>1분 요약</em></h1>
     <div class="dateline">
       <span id="dateline">—</span>
       <span class="draft" id="draft" hidden></span>
     </div>
-    <nav class="quick" id="quick" aria-label="바로가기" hidden></nav>
   </header>
 
-  <div class="state" id="loading">공모주와 이벤트를 정리하고 있어요…</div>
+  <div class="state" id="loading">오늘의 공모주를 정리하고 있어요…</div>
 
   <main id="main" hidden>
-    <section class="sec" id="sec-ipo" aria-labelledby="h-ipo">
-      <div class="sec-head">
-        <h2 id="h-ipo"><span class="num">1</span>오늘의 공모주</h2>
-        <span class="sec-sub">청약 · 상장 · 일정</span>
-      </div>
+    <!-- 1레벨 · 오늘의 공모주 1분 요약 -->
+    <section class="hero-sec" id="sec-ipo" aria-labelledby="h-ipo">
+      <h2 class="sr-only" id="h-ipo">오늘의 공모주 1분 요약</h2>
       <div id="ipo-body"></div>
     </section>
 
-    <section class="sec" id="sec-events" aria-labelledby="h-events">
-      <div class="sec-head">
-        <h2 id="h-events"><span class="num">2</span>증권사 신규 개설 혜택</h2>
-        <span class="sec-sub">계좌개설 · 투자지원금</span>
+    <!-- 2레벨 · 주관사 신규 개설 혜택 (기본 접힘) -->
+    <details class="benefits" id="sec-events">
+      <summary class="ben-sum">
+        <span class="ben-txt">
+          <span class="ben-t">주관사 계좌가 없으신가요?</span>
+          <span class="ben-n">신규 개설 혜택 <b><span id="ev-count">0</span>건</b></span>
+        </span>
+        <span class="ben-chev" aria-hidden="true"></span>
+      </summary>
+      <div class="ben-body">
+        <h2 class="sr-only">증권사 신규 개설 혜택</h2>
+        <p class="ben-note" id="ev-note"></p>
+        <div class="ev-list" id="ev-list"></div>
       </div>
-      <p class="sec-note" id="ev-note"></p>
-      <div class="ev-list" id="ev-list"></div>
-    </section>
+    </details>
   </main>
 
   <div class="state error" id="error" hidden>

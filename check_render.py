@@ -1,15 +1,19 @@
-"""공개용 공모주·증권사 혜택 페이지 렌더 검증 (390x844 · 로컬)
+"""공개용 공모주 1분 요약 페이지 렌더 검증 (모바일 390x844 + 데스크톱 · 로컬)
 
 usage: python3 work/ipo-events-public/check_render.py
 data.json 을 로컬 HTTP 로 띄워 확인합니다(파일 직접 열면 fetch 가 막힘).
 
 확인 항목
 - 콘솔 에러·가로 스크롤·요소 잘림·개인정보 문구(privacy_terms.txt 의 검사어)
+- UI 위계: 히어로(1레벨)가 접힌 아코디언(2레벨)보다 위, 첫 화면(844px) 안에
+  오늘 청약·상장 여부 / 균등·비례 결론 / 주관사별 최소증거금 / 유튜브 요약 / 다음 청약 D-day
+- 2레벨: 기본 접힘, 머리말 '주관사 계좌가 없으신가요? · 신규 개설 혜택 N건', 탭하면 펼쳐짐
+  (얇은 행 → 상세 조건·신청 방법·공식 링크)
 - 증권사 신규 개설 혜택 4건 렌더, 초대 코드 슬롯 0건(누락 0 / 복사 버튼 0)
-- 화면에 '초대 코드·추천인' 문구가 남지 않았는지
 - expiresAt 이 지난 테스트 항목은 숨기고, 오늘 만료·상시 항목은 노출
 - (회귀용) 코드가 들어온(ready) 항목의 복사 버튼 동작
-- 스크린샷: preview-mobile.png / preview-mobile-events.png / preview-mobile-dark.png / preview-toast.png
+- 스크린샷: preview-mobile.png / preview-mobile-events.png / preview-mobile-dark.png /
+  preview-desktop.png / preview-toast.png
 """
 import asyncio
 import datetime as dt
@@ -35,6 +39,9 @@ PRIVACY_TERMS = ([ln.strip() for ln in _TERMS_FILE.read_text(encoding="utf-8").s
                   if ln.strip() and not ln.startswith("#")] if _TERMS_FILE.exists() else [])
 TODAY = dt.datetime.now(KST).date()
 
+# 개인정보 검사어가 없어도 항상 검사하는 기본 문구
+ALWAYS_TERMS = ["야탑", "판교", "이매", "쌍둥이", "육아", "어린이집", "휴대폰", "배송지"]
+
 
 def serve():
     handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(ROOT))
@@ -51,6 +58,7 @@ def test_events():
             "id": "test-expired",
             "type": "테스트",
             "title": "만료된 테스트 항목",
+            "provider": "테스트증권 · 계좌",
             "benefit": "이 카드는 화면에 나오면 안 됩니다",
             "period": "2026.10.01~11.01",
             "expiresAt": "2026-11-01",
@@ -61,6 +69,7 @@ def test_events():
             "id": "test-today",
             "type": "테스트",
             "title": "오늘까지 유효한 테스트 항목",
+            "provider": "테스트증권 · 계좌",
             "benefit": "오늘 마감 항목은 노출되어야 합니다",
             "period": f"{TODAY.isoformat()} 까지",
             "expiresAt": TODAY.isoformat(),
@@ -71,6 +80,7 @@ def test_events():
             "id": "test-always",
             "type": "테스트",
             "title": "상시 테스트 항목",
+            "provider": "테스트증권 · 계좌",
             "benefit": "expiresAt 이 null 이면 상시로 노출됩니다",
             "period": "상시",
             "expiresAt": None,
@@ -80,6 +90,7 @@ def test_events():
             "id": "test-ready",
             "type": "테스트",
             "title": "코드가 들어온 테스트 항목",
+            "provider": "테스트증권 · 계좌",
             "benefit": "복사 버튼이 동작해야 합니다",
             "period": "상시",
             "expiresAt": None,
@@ -88,8 +99,8 @@ def test_events():
     ]
 
 
-async def run_once(browser, inject=None):
-    ctx = await browser.new_context(
+async def open_page(browser, inject=None, **ctx_kw):
+    ctx_args = dict(
         viewport={"width": 390, "height": 844},
         device_scale_factor=2,
         is_mobile=True,
@@ -99,6 +110,8 @@ async def run_once(browser, inject=None):
         timezone_id="Asia/Seoul",
         permissions=["clipboard-read", "clipboard-write"],
     )
+    ctx_args.update(ctx_kw)
+    ctx = await browser.new_context(**ctx_args)
     page = await ctx.new_page()
     errors = []
     page.on("console", lambda m: errors.append(f"console.{m.type}: {m.text}")
@@ -117,8 +130,7 @@ async def run_once(browser, inject=None):
     await page.goto(BASE, wait_until="networkidle")
     await page.wait_for_selector("#main:not([hidden])", timeout=8000)
     await page.wait_for_timeout(300)
-    errors_ok = errors
-    return ctx, page, errors_ok
+    return ctx, page, errors
 
 
 async def main():
@@ -128,71 +140,125 @@ async def main():
         async with async_playwright() as p:
             browser = await p.chromium.launch()
 
-            # ── 1. 실제 데이터 그대로 ─────────────────────────────
-            ctx, page, errors = await run_once(browser)
+            # ── 1. 실제 데이터 그대로 (모바일) ─────────────────────
+            ctx, page, errors = await open_page(browser)
             results["title"] = await page.title()
+            results["h1"] = (await page.inner_text("h1")).replace("\n", " ")
             results["dateline"] = await page.inner_text("#dateline")
-            results["ipo_cards"] = await page.locator(".pcard").count()
-            results["events"] = await page.locator(".ev").count()
+            results["hero_count"] = await page.locator(".hero").count()
+            results["hero_name"] = await page.inner_text(".hero .hname")
+            results["flags"] = await page.eval_on_selector_all(
+                ".hero .flag", "els => els.map(e => e.textContent.trim())")
+            results["verdict_label"] = await page.inner_text(".hero .vk")
+            results["verdict_pills"] = await page.eval_on_selector_all(
+                ".hero .vbig", "els => els.map(e => e.textContent.trim())")
+            results["deposit"] = (await page.inner_text(".hero .deposit")).replace("\n", " ")
+            results["yt_rows"] = await page.eval_on_selector_all(
+                ".hero .yt-row", "els => els.map(e => e.textContent.replace(/\\s+/g,' ').trim())")
+            results["next_line"] = (await page.inner_text(".hero-next")).replace("\n", " ")
+            results["next_dday"] = await page.inner_text(".hero-next .dday")
+
+            # 위계: 히어로가 아코디언보다 위 + 히어로가 첫 화면 안에
+            hierarchy = await page.evaluate("""(() => {
+                const hero = document.querySelector('#sec-ipo').getBoundingClientRect();
+                const ben = document.querySelector('#sec-events').getBoundingClientRect();
+                const next = document.querySelector('.hero-next').getBoundingClientRect();
+                return {
+                    hero_top: Math.round(hero.top), hero_bottom: Math.round(hero.bottom),
+                    benefits_top: Math.round(ben.top), next_bottom: Math.round(next.bottom),
+                    viewport_h: window.innerHeight
+                };
+            })()""")
+            results.update(hierarchy)
+            results["hierarchy_ok"] = (
+                hierarchy["hero_bottom"] <= hierarchy["benefits_top"]
+                and hierarchy["next_bottom"] <= hierarchy["viewport_h"])
+
+            # 2레벨: 기본 접힘 → 탭하면 펼침
+            results["accordion_open_by_default"] = await page.locator("#sec-events").evaluate(
+                "el => el.open")
+            results["ev_visible_before"] = await page.locator("#ev-list .ev").first.is_visible()
+            results["ben_head"] = (await page.inner_text("#sec-events .ben-txt")).replace("\n", " ")
+
+            # 이벤트 수·초대 코드 0건
+            results["events"] = await page.locator("#ev-list .ev").count()
             results["invite_missing"] = await page.locator(".ev-code.is-pending").count()
             results["invite_none"] = await page.locator(".ev-code.is-none").count()
             results["copy_buttons"] = await page.locator(".ev-code .copy").count()
             results["always_badges"] = await page.locator(".ev-dday.is-always").count()
-            results["howto_label"] = await page.locator(
-                ".ev-code.is-none .inv-state").first.inner_text()
-            results["no_invite_words"] = not await page.evaluate(
-                "['초대 코드','초대코드','추천인','본인 초대'].some(t => document.body.innerText.includes(t))")
-            results["ev_note"] = await page.inner_text("#ev-note")
+            results["ev_note"] = (await page.locator("#ev-note").text_content()).strip()
             results["event_ids"] = await page.eval_on_selector_all(
-                ".ev", "els => els.map(e => e.dataset.id)")
-            results["doc_width"] = await page.evaluate("document.documentElement.scrollWidth")
-            results["viewport_width"] = await page.evaluate("window.innerWidth")
-            results["h_overflow"] = results["doc_width"] > results["viewport_width"]
-            results["no_agri_terms"] = await page.evaluate(
-                "terms => terms.some(t => document.body.innerText.includes(t))",
-                PRIVACY_TERMS) if PRIVACY_TERMS else False
-            results["privacy_terms_checked"] = len(PRIVACY_TERMS)
-            results["clipped"] = await page.evaluate("""
-                (() => {
-                  const vw = window.innerWidth, bad = [];
-                  document.querySelectorAll('.ev, .pcard, .foot, .ev-code, .copy, .inv-state, .howto')
-                    .forEach(el => {
-                      const r = el.getBoundingClientRect();
-                      if (r.left < -1 || r.right > vw + 1) {
-                        bad.push(el.className + ' ' + Math.round(r.left) + '~' + Math.round(r.right));
-                      }
-                    });
-                  return bad;
-                })()
-            """)
-            results["quick_chips"] = await page.locator(".qchip").count()
+                "#ev-list .ev", "els => els.map(e => e.dataset.id)")
 
             await page.screenshot(path=str(ROOT / "preview-mobile.png"), full_page=True)
-            await page.locator("#sec-events").scroll_into_view_if_needed()
+            await page.screenshot(path=str(ROOT / "preview-mobile-first-screen.png"))
+
+            # 아코디언 펼치기 → 얇은 행 → 행 상세 펼치기
+            await page.locator("#sec-events > summary").click()
+            await page.wait_for_timeout(300)
+            results["accordion_open_after_click"] = await page.locator("#sec-events").evaluate(
+                "el => el.open")
+            results["ev_visible_after"] = await page.locator("#ev-list .ev").first.is_visible()
+            first_row = page.locator("#ev-list .ev").first
+            results["row_summary"] = (await first_row.locator("summary").inner_text()).replace("\n", " ")
+            await first_row.locator("summary").click()
             await page.wait_for_timeout(200)
+            results["row_detail_visible"] = await first_row.evaluate("el => el.open")
+            results["row_has_terms"] = await first_row.locator(".ev-terms").count() > 0
+            results["row_has_howto"] = (await first_row.locator(".ev-code.is-none").count()) > 0
+            results["row_has_link"] = (await first_row.locator(".ev-link").count()) > 0
             await page.locator("#sec-events").screenshot(
                 path=str(ROOT / "preview-mobile-events.png"))
 
+            results["no_invite_words"] = not await page.evaluate(
+                "['초대 코드','초대코드','추천인','본인 초대'].some(t => document.body.innerText.includes(t))")
+            results["doc_width"] = await page.evaluate("document.documentElement.scrollWidth")
+            results["viewport_width"] = await page.evaluate("window.innerWidth")
+            results["h_overflow"] = results["doc_width"] > results["viewport_width"]
+            terms = PRIVACY_TERMS + ALWAYS_TERMS
+            results["privacy_hits"] = await page.evaluate("""terms =>
+                terms.filter(t => document.body.innerText.includes(t))""", terms)
+            results["privacy_terms_checked"] = len(terms)
+            results["clipped"] = await page.evaluate("""
+                (() => {
+                  const vw = window.innerWidth, bad = [];
+                  document.querySelectorAll('.hero, .hero *', )
+                    .forEach(el => {
+                      if (el.closest('.sr-only')) return;
+                      const r = el.getBoundingClientRect();
+                      if (r.width && (r.left < -1 || r.right > vw + 1)) {
+                        bad.push(el.tagName + '.' + el.className + ' ' +
+                                 Math.round(r.left) + '~' + Math.round(r.right));
+                      }
+                    });
+                  return bad.slice(0, 5);
+                })()
+            """)
             results["errors"] = errors
             await ctx.close()
 
             # ── 2. 만료/오늘/상시/코드보유 테스트 주입 ────────────
-            inject = test_events()
-            ctx2, page2, errors2 = await run_once(browser, inject=inject)
-            results["inject_events"] = await page2.locator(".ev").count()
+            ctx2, page2, errors2 = await open_page(browser, inject=test_events())
+            await page2.locator("#sec-events > summary").click()
+            await page2.wait_for_timeout(250)
+            results["inject_events"] = await page2.locator("#ev-list .ev").count()
             results["inject_ids"] = await page2.eval_on_selector_all(
-                ".ev", "els => els.map(e => e.dataset.id)")
-            body = await page2.inner_text("body")
+                "#ev-list .ev", "els => els.map(e => e.dataset.id)")
+            body = await page2.evaluate("document.body.textContent")
             results["expired_hidden"] = "만료된 테스트 항목" not in body
             results["today_shown"] = "오늘까지 유효한 테스트 항목" in body
             results["always_shown"] = "상시 테스트 항목" in body
-            results["note_mentions_hidden"] = "1건은 자동으로 숨겼어요" in await page2.inner_text("#ev-note")
+            results["note_mentions_hidden"] = "1건은 자동으로 숨겼어요" in await page2.locator(
+                "#ev-note").text_content()
             results["inject_errors"] = errors2
             results["ready_dday"] = await page2.locator(
                 ".ev[data-id='test-today'] .ev-dday").inner_text()
 
             # 코드가 들어온 항목의 복사 경로
-            await page2.locator(".ev[data-id='test-ready'] .copy").click()
+            ready = page2.locator(".ev[data-id='test-ready']")
+            await ready.locator("summary").click()
+            await page2.wait_for_timeout(150)
+            await ready.locator(".copy").click()
             await page2.wait_for_timeout(350)
             results["copy_toast"] = await page2.inner_text("#toast")
             results["clipboard"] = await page2.evaluate("navigator.clipboard.readText()")
@@ -200,17 +266,24 @@ async def main():
             await ctx2.close()
 
             # ── 3. 다크 모드 ───────────────────────────────────
-            dark = await browser.new_context(
-                viewport={"width": 390, "height": 844}, device_scale_factor=2,
-                is_mobile=True, has_touch=True, color_scheme="dark",
-                locale="ko-KR", timezone_id="Asia/Seoul")
-            dpage = await dark.new_page()
-            await dpage.goto(BASE, wait_until="networkidle")
-            await dpage.wait_for_selector("#main:not([hidden])")
-            await dpage.wait_for_timeout(300)
+            dark, dpage, dark_errors = await open_page(browser, color_scheme="dark")
             await dpage.screenshot(path=str(ROOT / "preview-mobile-dark.png"), full_page=True)
             results["dark_page_h"] = await dpage.evaluate("document.documentElement.scrollHeight")
+            results["dark_errors"] = dark_errors
             await dark.close()
+
+            # ── 4. 데스크톱 1280 ───────────────────────────────
+            desk, dp, desk_errors = await open_page(
+                browser, viewport={"width": 1280, "height": 900},
+                is_mobile=False, has_touch=False, device_scale_factor=1,
+                permissions=[])
+            results["desktop_hero"] = await dp.locator(".hero").count()
+            results["desktop_events"] = await dp.locator("#ev-list .ev").count()
+            results["desktop_h_overflow"] = await dp.evaluate(
+                "document.documentElement.scrollWidth > window.innerWidth + 1")
+            results["desktop_errors"] = desk_errors
+            await dp.screenshot(path=str(ROOT / "preview-desktop.png"))
+            await desk.close()
             await browser.close()
     finally:
         httpd.shutdown()
@@ -219,7 +292,20 @@ async def main():
           and results["invite_missing"] == 0
           and results["invite_none"] == 4
           and results["copy_buttons"] == 0
-          and results["howto_label"] == "신청 방법"
+          and results["hero_count"] == 1
+          and results["verdict_pills"]
+          and results["deposit"].startswith("주관사별 최소증거금")
+          and len(results["yt_rows"]) >= 2
+          and results["next_dday"].startswith("D-")
+          and results["hierarchy_ok"]
+          and not results["accordion_open_by_default"]
+          and not results["ev_visible_before"]
+          and results["accordion_open_after_click"]
+          and results["ev_visible_after"]
+          and results["row_detail_visible"]
+          and results["row_has_terms"]
+          and results["row_has_howto"]
+          and results["row_has_link"]
           and results["no_invite_words"]
           and results["inject_events"] == 7
           and results["expired_hidden"]
@@ -229,9 +315,12 @@ async def main():
           and results["clipboard"] == "HUI1234"
           and not results["errors"]
           and not results["inject_errors"]
+          and not results["dark_errors"]
+          and not results["desktop_errors"]
           and not results["h_overflow"]
           and not results["clipped"]
-          and not results["no_agri_terms"])
+          and not results["privacy_hits"]
+          and not results["desktop_h_overflow"])
     for k, v in results.items():
         print(f"{k}: {v}")
     print("\nRESULT:", "PASS" if ok else "CHECK")

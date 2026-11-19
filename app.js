@@ -1,4 +1,10 @@
-/* 공개용 공모주 · 금융 이벤트 페이지 — data.json 하나만 고치면 화면이 바뀝니다. */
+/* 공개용 공모주 1분 요약 페이지 — data.json 하나만 고치면 화면이 바뀝니다.
+ *
+ * 화면 위계
+ *   1레벨  .hero      오늘의 공모주 1분 요약 (오늘 청약·상장 → 균등·비례 결론 →
+ *                     주관사별 최소증거금 → 유튜브 요약 → 다음 청약 D-day)
+ *   2레벨  .benefits  주관사 신규 개설 혜택 (기본 접힘 아코디언 + 얇은 행)
+ */
 (function () {
   'use strict';
 
@@ -38,15 +44,27 @@
     return !!(d && today && d < today);
   }
 
-  /* 마감일 → D-43 / 오늘 마감 / 마감 */
-  function dday(deadline, base) {
-    var d = parseDay(deadline);
+  /* 마감일 → D-43 / 오늘 마감 / 마감 (Date 또는 ISO 문자열) */
+  function dday(target, base) {
+    var d = target instanceof Date ? target : parseDay(target);
     if (!d || !base) return null;
     var diff = Math.round((d - base) / 86400000);
     if (diff < 0) return { text: '마감', cls: 'off' };
     if (diff === 0) return { text: '오늘 마감', cls: 'hot' };
     if (diff <= 7) return { text: 'D-' + diff, cls: 'hot' };
     return { text: 'D-' + diff, cls: '' };
+  }
+
+  /* '11/23(월)~11/24(화)' → 올해 11/23 (이미 지난 날짜면 내년) */
+  function periodStart(period, base) {
+    var m = /(\d{1,2})\s*\/\s*(\d{1,2})/.exec(String(period || ''));
+    if (!m) return null;
+    var mo = Number(m[1]), da = Number(m[2]);
+    if (!(mo >= 1 && mo <= 12 && da >= 1 && da <= 31)) return null;
+    var y = base ? base.getFullYear() : new Date().getFullYear();
+    var d = new Date(y, mo - 1, da);
+    if (base && (base - d) > 180 * 86400000) d = new Date(y + 1, mo - 1, da);
+    return d;
   }
 
   /* 판단 문구 색 — 패스를 먼저 봄 */
@@ -69,66 +87,95 @@
     return '';
   }
 
-  /* ── 1. 오늘의 공모주 ─────────────────────── */
+  /* ── 1레벨 · 오늘의 공모주 1분 요약 ───────── */
 
-  function minEqualBar(m) {
+  function hanjanItem(ipo, name) {
+    var items = (ipo.hanjan && ipo.hanjan.items) || [];
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].name === name) return items[i];
+    }
+    return null;
+  }
+
+  /* 균등·비례 결론 — 같은 판단이면 큰 배지 하나, 다르면 나란히 */
+  function verdictBlock(ipo, name) {
+    var hit = hanjanItem(ipo, name);
+    var eq = hit && has(hit.equal) ? hit.equal : '';
+    var pr = hit && has(hit.proportional) ? hit.proportional : '';
+    if (!eq && !pr) return '';
+
+    var pills = '';
+    if (eq && pr && eq === pr) {
+      pills = '<span class="vbig ' + tone(eq) + '">' + esc(eq) + '</span>';
+    } else {
+      if (eq) pills += '<span class="vbig sm ' + tone(eq) + '"><i>균등</i>' + esc(eq) + '</span>';
+      if (pr) pills += '<span class="vbig sm ' + tone(pr) + '"><i>비례</i>' + esc(pr) + '</span>';
+    }
+    return '<div class="verdict">' +
+        '<span class="vk">균등·비례 결론</span>' + pills +
+      '</div>';
+  }
+
+  /* 주관사별 균등 최소증거금 */
+  function depositBlock(m) {
     if (!m) return '';
     var body = '';
     if (m.brokers && m.brokers.length) {
       body = m.brokers.map(function (b) {
         var bits = [];
         if (has(b.name)) bits.push('<em>' + esc(b.name) + '</em>');
-        if (has(b.shares)) bits.push(esc(b.shares));
         if (has(b.deposit)) bits.push('<b>' + esc(b.deposit) + '</b>');
-        return '<span class="bi">' + bits.join(' ') + '</span>';
+        if (has(b.shares)) bits.push('<span class="sh">' + esc(b.shares) + '</span>');
+        return '<span class="bi">' + bits.join('') + '</span>';
       }).join('');
     } else if (has(m.deposit)) {
       body = '<span class="bi"><b>' + esc(m.deposit) + '</b>' +
-        (has(m.shares) ? ' ' + esc(m.shares) : '') + '</span>';
+        (has(m.shares) ? '<span class="sh">' + esc(m.shares) + '</span>' : '') + '</span>';
     }
     if (!body) return '';
-    return '<div class="mineq"' + (has(m.basis) ? ' title="' + esc(m.basis) + '"' : '') + '>' +
-      '<span class="k">균등 최소증거금</span>' + body + '</div>';
+    return '<div class="deposit"' + (has(m.basis) ? ' title="' + esc(m.basis) + '"' : '') + '>' +
+        '<span class="dk">주관사별 최소증거금</span>' + body + '</div>';
   }
 
-  function opinionRows(ipo, name) {
+  /* 청약 기간·환불·주관 */
+  function metaRows(s) {
+    var rows = '';
+    if (has(s.period)) rows += '<div><dt>청약</dt><dd><b>' + esc(s.period) + '</b></dd></div>';
+    if (has(s.refund)) rows += '<div><dt>환불</dt><dd>' + esc(s.refund) + '</dd></div>';
+    if (has(s.brokers)) rows += '<div><dt>주관</dt><dd>' + esc(s.brokers) + '</dd></div>';
+    return rows ? '<dl class="hmeta">' + rows + '</dl>' : '';
+  }
+
+  /* 유튜브 요약 — 공모주한잔 / 공모주린이 */
+  function ytBlock(ipo, name) {
     var hanjan = ipo.hanjan || {};
     var gm = ipo.gongmorin || {};
-    var hit = null;
-    (hanjan.items || []).forEach(function (it) {
-      if (!hit && it.name === name) hit = it;
-    });
-
+    var hit = hanjanItem(ipo, name);
     var out = '';
 
-    /* 공모주한잔 */
-    if (hit || hanjan.note) {
+    if (hit || has(hanjan.note) || (hanjan.video && hanjan.video.url)) {
+      var vUrl = (hanjan.video && hanjan.video.url) || hanjan.channelUrl || '';
       var vs = '';
       if (hit && has(hit.equal)) vs += '<span class="v ' + tone(hit.equal) + '">균등 ' + esc(hit.equal) + '</span>';
       if (hit && has(hit.proportional)) vs += '<span class="v ' + tone(hit.proportional) + '">비례 ' + esc(hit.proportional) + '</span>';
-      var vUrl = (hanjan.video && hanjan.video.url) || hanjan.channelUrl || '';
-      out += '<div class="op-row">' +
-          '<span class="op-name">🍸 ' + esc(hanjan.channel || '공모주한잔') + '</span>' + vs +
-          (vUrl ? '<a class="op-link" href="' + esc(vUrl) + '" target="_blank" rel="noopener"' +
+      out += '<div class="yt-row">' +
+          '<span class="yt-name">🍸 ' + esc(hanjan.channel || '공모주한잔') + '</span>' + vs +
+          (vUrl ? '<a class="yt-link" href="' + esc(vUrl) + '" target="_blank" rel="noopener"' +
             (hanjan.video && hanjan.video.title ? ' title="' + esc(hanjan.video.title) + '"' : '') + '>' +
             (hanjan.video && hanjan.video.url ? '분석 영상' : '채널') + '<i aria-hidden="true">›</i></a>' : '') +
         '</div>' +
-        (hanjan.note ? '<div class="op-note">' + esc(hanjan.note) + '</div>' : '');
+        (has(hanjan.note) ? '<p class="yt-note">' + esc(hanjan.note) + '</p>' : '');
     }
 
-    /* 공모주린이 */
-    if (has(gm.verdict) || has(gm.note)) {
+    if (has(gm.verdict) || has(gm.note) || (gm.video && gm.video.url)) {
       var gUrl = (gm.video && gm.video.url) || gm.channelUrl || '';
-      out += '<div class="op-row">' +
-          '<span class="op-name">📺 ' + esc(gm.name || '공모주린이') + '</span>' +
+      out += '<div class="yt-row">' +
+          '<span class="yt-name">📺 ' + esc(gm.name || '공모주린이') + '</span>' +
           (has(gm.verdict) ? '<span class="v ' + tone(gm.verdict) + '">' + esc(gm.verdict) + '</span>' : '') +
-          (gUrl ? '<a class="op-link" href="' + esc(gUrl) + '" target="_blank" rel="noopener">분석 영상<i aria-hidden="true">›</i></a>' : '') +
+          (has(gm.score) ? '<span class="score ' + scoreTone(gm.score) + '">' + esc(gm.score) + '</span>' : '') +
+          (gUrl ? '<a class="yt-link" href="' + esc(gUrl) + '" target="_blank" rel="noopener">분석 영상<i aria-hidden="true">›</i></a>' : '') +
         '</div>' +
-        (has(gm.note)
-          ? '<div class="op-note">' +
-              (has(gm.score) ? '<b class="sc ' + scoreTone(gm.score) + '">종합점수 ' + esc(gm.score) + '</b> · ' : '') +
-              esc(gm.note) + '</div>'
-          : '');
+        (has(gm.note) ? '<p class="yt-note">' + esc(gm.note) + '</p>' : '');
     }
 
     if (gm.live && gm.live.on && (gm.live.url || gm.channelUrl)) {
@@ -139,58 +186,108 @@
         '</a>';
     }
 
-    return out ? '<div class="ops">' + out + '</div>' : '';
+    return out ? '<div class="yt"><div class="yt-h">유튜브 요약</div>' + out + '</div>' : '';
   }
 
-  function subscribeCard(s, ipo) {
-    var badge = String(s.badge || '').replace(/^오늘\s*청약\s*/, '');
-    var price = String(s.price || '');
-    var priceNum = price.replace(/^확정\s*/, '');
+  /* '오늘 신규 상장 없음 — 다음은 11/20(금) 하나에어로다이내믹스' → '11/20(금) 하나에어로다이내믹스' */
+  function listingHint(body) {
+    var s = String(body || '').trim();
+    s = s.replace(/^오늘\s*신규?\s*상장\s*(이\s*)?없(음|습니다)?\s*[—–\-:·]?\s*/, '');
+    s = s.replace(/^다음은\s*/, '');
+    return s.trim();
+  }
 
-    return '<article class="pcard accent-ipo">' +
-        '<div class="ptop"><span class="plbl">오늘 청약</span>' +
-          (badge ? '<span class="ptag">' + esc(badge) + '</span>' : '') +
+  /* 다음 청약(D-day) · 다음 상장 — 히어로 하단 띠 */
+  function nextBand(ipo, today) {
+    var rows = '';
+    var n = ipo.next;
+    if (n) {
+      var start = periodStart(n.period, today);
+      var dd = start ? dday(start, today) : null;
+      var sub = [];
+      if (has(n.price)) sub.push(esc(n.price));
+      if (has(n.brokers)) sub.push(esc(n.brokers));
+      if (has(n.memo)) sub.push(esc(n.memo));
+      rows += '<div class="nrow">' +
+          '<span class="nk">다음 청약</span>' +
+          '<b>' + esc(n.name) + '</b>' +
+          (dd ? '<span class="dday ' + dd.cls + '">' + dd.text + '</span>' : '') +
+          (has(n.period) ? '<span class="nd">' + esc(n.period) + '</span>' : '') +
         '</div>' +
-        '<div class="pname">' + esc(s.name) +
-          (has(s.market) ? '<span class="pmarket">' + esc(s.market) + '</span>' : '') +
+        (sub.length ? '<div class="nrow is-sub"><span class="nd">' + sub.join(' · ') + '</span></div>' : '');
+    }
+    if (ipo.listing && !ipo.listing.hasListing) {
+      var hint = listingHint(ipo.listing.body);
+      if (hint) {
+        rows += '<div class="nrow is-sub">' +
+            '<span class="nk is-list">다음 상장</span><span class="nd">' + esc(hint) + '</span>' +
+          '</div>';
+      }
+    }
+    return rows ? '<div class="hero-next">' + rows + '</div>' : '';
+  }
+
+  /* 오늘 청약 카드 — 1분 요약의 본문 */
+  function heroCard(s, ipo, today) {
+    var badge = String(s.badge || '').replace(/^오늘\s*청약\s*/, '');
+    var priceNum = String(s.price || '').replace(/^확정\s*/, '');
+    var listingToday = !!(ipo.listing && ipo.listing.hasListing);
+    var flags = '<span class="flag">' + esc('오늘 청약' + (badge ? ' ' + badge : '')) + '</span>' +
+      (listingToday
+        ? '<span class="flag is-list-on">오늘 상장 1건</span>'
+        : '<span class="flag is-off">오늘 상장 없음</span>');
+
+    return '<article class="hero">' +
+        '<div class="flags">' + flags + '</div>' +
+        '<div class="hname">' + esc(s.name) +
+          (has(s.market) ? '<span class="hmarket">' + esc(s.market) + '</span>' : '') +
         '</div>' +
-        '<div class="pbig"><b>' + esc(priceNum) + '</b>' +
-          (has(s.priceNote) ? '<span class="pnote">' + esc(s.priceNote) + '</span>' : '') +
+        '<div class="hprice"><b>' + esc(priceNum) + '</b>' +
+          (has(s.priceNote) ? '<span>' + esc(s.priceNote) + '</span>' : '') +
         '</div>' +
-        minEqualBar(s.minEqual) +
-        '<dl class="pmeta">' +
-          (has(s.period) ? '<div><dt>청약</dt><dd><b>' + esc(s.period) + '</b></dd></div>' : '') +
-          (has(s.refund) ? '<div><dt>환불</dt><dd>' + esc(s.refund) + '</dd></div>' : '') +
-          (has(s.brokers) ? '<div><dt>주관</dt><dd>' + esc(s.brokers) + '</dd></div>' : '') +
-        '</dl>' +
-        opinionRows(ipo, s.name) +
+        verdictBlock(ipo, s.name) +
+        depositBlock(s.minEqual) +
+        metaRows(s) +
+        ytBlock(ipo, s.name) +
+        nextBand(ipo, today) +
       '</article>';
   }
 
-  function listingCard(l) {
+  /* 오늘 상장 카드 — 청약이 없는 날의 1레벨 */
+  function listingHero(l) {
     var badge = String(l.badge || '').replace(/^오늘\s*상장\s*/, '');
     var pts = (l.points && l.points.length)
       ? '<ul class="pts">' + l.points.map(function (p) { return '<li>' + esc(p) + '</li>'; }).join('') + '</ul>'
       : '';
-    var chgCls = dirOf(l.earlyChange);
-    return '<article class="pcard accent-list">' +
-        '<div class="ptop"><span class="plbl">오늘 상장</span>' +
-          (badge ? '<span class="ptag is-list">' + esc(badge) + '</span>' : '') +
+    var meta = '';
+    if (has(l.ipoPrice)) meta += '<div><dt>공모가</dt><dd><b>' + esc(l.ipoPrice) + '</b></dd></div>';
+    if (has(l.openPrice)) {
+      meta += '<div><dt>시초</dt><dd>' + esc(l.openPrice) +
+        (has(l.openChange) ? ' <span class="chg sm ' + dirOf(l.openChange) + '">' + esc(l.openChange) + '</span>' : '') +
+        '</dd></div>';
+    }
+    return '<article class="hero is-list">' +
+        '<div class="flags"><span class="flag is-list">오늘 상장</span>' +
+          (badge ? '<span class="flag is-soft">' + esc(badge) + '</span>' : '') +
         '</div>' +
-        '<div class="pname">' + esc(l.name) +
-          (has(l.code) ? '<span class="pcode">' + esc(l.code) + '</span>' : '') +
-          (has(l.market) ? '<span class="pmarket">' + esc(l.market) + '</span>' : '') +
+        '<div class="hname">' + esc(l.name) +
+          (has(l.code) ? '<span class="hmarket">' + esc(l.code) + '</span>' : '') +
+          (has(l.market) ? '<span class="hmarket">' + esc(l.market) + '</span>' : '') +
         '</div>' +
-        '<div class="pbig"><b>' + esc(l.earlyPrice) + '</b>' +
-          (has(l.earlyChange) ? '<span class="chg ' + chgCls + '">' + esc(l.earlyChange) + '</span>' : '') +
+        '<div class="hprice"><b>' + esc(l.earlyPrice) + '</b>' +
+          (has(l.earlyChange) ? '<span class="chg ' + dirOf(l.earlyChange) + '">' + esc(l.earlyChange) + '</span>' : '') +
         '</div>' +
-        '<dl class="pmeta">' +
-          (has(l.ipoPrice) ? '<div><dt>공모가</dt><dd><b>' + esc(l.ipoPrice) + '</b></dd></div>' : '') +
-          (has(l.openPrice) ? '<div><dt>시초</dt><dd>' + esc(l.openPrice) +
-            (has(l.openChange) ? ' <span class="chg sm ' + dirOf(l.openChange) + '">' + esc(l.openChange) + '</span>' : '') +
-            '</dd></div>' : '') +
-        '</dl>' +
+        (meta ? '<dl class="hmeta">' + meta + '</dl>' : '') +
         pts +
+      '</article>';
+  }
+
+  function emptyHero(ipo, today) {
+    return '<article class="hero is-empty">' +
+        '<div class="flags"><span class="flag is-off">오늘 청약 없음</span></div>' +
+        '<div class="hname sm">오늘은 청약하는 공모주가 없어요</div>' +
+        '<p class="hempty">다음 청약 일정과 지난 결론만 확인하세요.</p>' +
+        nextBand(ipo, today) +
       '</article>';
   }
 
@@ -202,44 +299,32 @@
       '</div>';
   }
 
-  function ipoSection(ipo) {
+  function ipoSection(ipo, today) {
     if (!ipo) return '<div class="empty">오늘 공모주 정보가 아직 없어요.</div>';
 
-    var main = '';
-    (ipo.subscribe || []).forEach(function (s) { main += subscribeCard(s, ipo); });
-    if (ipo.listing && ipo.listing.hasListing) main += listingCard(ipo.listing);
-    if (!main) {
-      main = '<article class="pcard accent-ipo"><div class="ptop"><span class="plbl">오늘 청약</span></div>' +
-        '<div class="empty">오늘은 진행 중인 청약이 없어요.</div></article>';
+    var html = '';
+    var subs = ipo.subscribe || [];
+    if (subs.length) {
+      subs.forEach(function (s) { html += heroCard(s, ipo, today); });
+    } else if (!(ipo.listing && ipo.listing.hasListing)) {
+      html += emptyHero(ipo, today);
     }
+    if (ipo.listing && ipo.listing.hasListing) html += listingHero(ipo.listing);
 
     var side = '';
     (ipo.cancelled || []).forEach(function (c) {
       side += smallRow('off', c.badge || '청약 취소', c.name, esc(c.body));
     });
-    if (ipo.listing && !ipo.listing.hasListing) {
-      side += smallRow('off', '오늘 상장', '', esc(ipo.listing.body || '오늘 신규 상장 종목은 없어요.'));
-    }
-    if (ipo.next) {
-      var n = ipo.next;
-      var bits = [];
-      if (has(n.period)) bits.push(esc(n.period));
-      if (has(n.price)) bits.push(esc(n.price));
-      if (has(n.brokers)) bits.push(esc(n.brokers));
-      if (has(n.memo)) bits.push(esc(n.memo));
-      side += smallRow('next', '다음 청약', n.name, bits.join(' · '));
-    }
-    var sideHtml = side ? '<div class="srows">' + side + '</div>' : '';
+    if (side) html += '<div class="srows">' + side + '</div>';
 
-    var src = ipo.source
-      ? '<div class="src">출처 <a href="' + esc(ipo.source.url) + '" target="_blank" rel="noopener">' +
-        esc(ipo.source.label) + '</a></div>'
-      : '';
-
-    return main + sideHtml + src;
+    if (ipo.source) {
+      html += '<div class="src">출처 <a href="' + esc(ipo.source.url) + '" target="_blank" rel="noopener">' +
+        esc(ipo.source.label) + '</a></div>';
+    }
+    return html;
   }
 
-  /* ── 2. 증권사 신규 개설 혜택 ────────────── */
+  /* ── 2레벨 · 증권사 신규 개설 혜택 ────────── */
 
   /*
    * 신청 방법 블록 — 초대 코드가 없는 이벤트는 방법만 한 줄로 보여 줍니다.
@@ -288,12 +373,15 @@
       '</div>';
   }
 
-  function eventCard(ev, today) {
+  /* 얇은 한 줄 + 탭하면 상세 조건·공식 링크 */
+  function eventRow(ev, today) {
     var always = !parseDay(ev.expiresAt);
     var dd = always ? null : dday(ev.expiresAt, today);
     var badge = always
       ? '<span class="ev-dday is-always">상시</span>'
       : (dd ? '<span class="ev-dday ' + dd.cls + '">' + dd.text + '</span>' : '');
+
+    var prov = has(ev.provider) ? String(ev.provider).split('·')[0].trim() : (ev.type || '');
 
     var terms = (ev.terms && ev.terms.length)
       ? '<div class="ev-terms"><span class="k">유의사항</span><ul>' +
@@ -301,64 +389,48 @@
         '</ul></div>'
       : '';
 
-    return '<article class="ev" data-id="' + esc(ev.id) + '" data-expires="' + esc(ev.expiresAt || 'always') + '">' +
-        '<div class="ev-top">' +
-          '<span class="ev-type">' + esc(ev.type) + '</span>' +
+    return '<details class="ev" data-id="' + esc(ev.id) + '" data-expires="' + esc(ev.expiresAt || 'always') + '">' +
+        '<summary class="ev-sum">' +
+          '<span class="ev-prov">' + esc(prov) + '</span>' +
+          '<span class="ev-ben">' + esc(ev.benefit || ev.title) + '</span>' +
           (ev.sample ? '<span class="ev-sample">샘플</span>' : '') +
           badge +
+          '<span class="ev-chev" aria-hidden="true"></span>' +
+        '</summary>' +
+        '<div class="ev-body">' +
+          '<h3 class="ev-title">' + esc(ev.title) + '</h3>' +
+          (has(ev.provider) ? '<div class="ev-prov-full">' + esc(ev.provider) + '</div>' : '') +
+          '<div class="ev-benefit">' +
+            '<span class="k">혜택</span>' +
+            '<b>' + esc(ev.benefit) + '</b>' +
+            (has(ev.benefitNote) ? '<span class="note">' + esc(ev.benefitNote) + '</span>' : '') +
+          '</div>' +
+          '<div class="ev-deadline">' +
+            '<span class="k">마감</span>' +
+            '<span class="val">' + esc(always ? '상시 진행' : (longDay(ev.expiresAt) || '미정')) + '</span>' +
+            (has(ev.period) ? '<span class="per">' + esc(ev.period) + '</span>' : '') +
+          '</div>' +
+          terms +
+          inviteBlock(ev) +
+          (ev.link && ev.link.url
+            ? '<a class="ev-link" href="' + esc(ev.link.url) + '" target="_blank" rel="noopener">' +
+              esc(ev.link.label || '이벤트 자세히') + '<i aria-hidden="true">›</i></a>'
+            : '') +
         '</div>' +
-        '<h3 class="ev-title">' + esc(ev.title) + '</h3>' +
-        (has(ev.provider) ? '<div class="ev-prov">' + esc(ev.provider) + '</div>' : '') +
-        '<div class="ev-benefit">' +
-          '<span class="k">혜택</span>' +
-          '<b>' + esc(ev.benefit) + '</b>' +
-          (has(ev.benefitNote) ? '<span class="note">' + esc(ev.benefitNote) + '</span>' : '') +
-        '</div>' +
-        '<div class="ev-deadline">' +
-          '<span class="k">마감일</span>' +
-          '<span class="val">' + esc(always ? '상시 진행' : (longDay(ev.expiresAt) || '미정')) + '</span>' +
-          (has(ev.period) ? '<span class="per">' + esc(ev.period) + '</span>' : '') +
-        '</div>' +
-        terms +
-        inviteBlock(ev) +
-        (ev.link && ev.link.url
-          ? '<a class="ev-link" href="' + esc(ev.link.url) + '" target="_blank" rel="noopener">' +
-            esc(ev.link.label || '이벤트 자세히') + '<i aria-hidden="true">›</i></a>'
-          : '') +
-      '</article>';
+      '</details>';
   }
 
   /* ── 렌더 ─────────────────────────────── */
   function render(d) {
-    var base = parseDay(d.date);
     var today = todayDay();
     var allEvents = d.events || [];
     var liveEvents = allEvents.filter(function (ev) { return !isExpired(ev, today); });
     var hiddenEvents = allEvents.length - liveEvents.length;
-    var title = '오늘의 공모주 · 증권사 혜택';
+    var title = '오늘의 공모주 1분 요약';
     document.title = title + (d.date ? ' · ' + shortDay(d.date) : '');
 
     $('dateline').textContent = d.dateLabel || shortDay(d.date);
     $('updated').textContent = d.updatedLabel ? d.updatedLabel + ' 업데이트' : '';
-
-    /* 한눈에 보는 요약 칩 */
-    var quick = $('quick');
-    var chips = [];
-    (d.ipo && d.ipo.subscribe ? d.ipo.subscribe : []).forEach(function (s) {
-      chips.push('<a class="qchip" href="#sec-ipo"><span class="qd"></span>청약 <b>' + esc(s.name) + '</b></a>');
-    });
-    if (d.ipo && d.ipo.listing && d.ipo.listing.hasListing) {
-      chips.push('<a class="qchip is-list" href="#sec-ipo"><span class="qd"></span>상장 <b>' +
-        esc(d.ipo.listing.name) + '</b></a>');
-    }
-    if (liveEvents.length) {
-      chips.push('<a class="qchip is-ev" href="#sec-events"><span class="qd"></span>증권사 혜택 <b>' +
-        liveEvents.length + '건</b></a>');
-    }
-    if (chips.length) {
-      quick.innerHTML = chips.join('');
-      quick.hidden = false;
-    }
 
     if (d.draft) {
       var badge = $('draft');
@@ -366,9 +438,10 @@
       badge.hidden = false;
     }
 
-    $('ipo-body').innerHTML = ipoSection(d.ipo);
+    $('ipo-body').innerHTML = ipoSection(d.ipo, today);
 
-    var evs = d.events || [];
+    /* 2레벨: 개설 혜택 — 기본 접힘, 머리말에 건수만 */
+    $('ev-count').textContent = liveEvents.length;
     var needCode = liveEvents.filter(function (ev) { return inviteState(ev) === 'missing'; }).length;
     var note = [];
     if (d.eventsAsOf) note.push(shortDay(d.eventsAsOf) + ' 확인 기준이에요.');
@@ -377,7 +450,7 @@
     if (hiddenEvents) note.push('기간이 끝난 이벤트 ' + hiddenEvents + '건은 자동으로 숨겼어요.');
     $('ev-note').textContent = note.join(' ');
     $('ev-list').innerHTML = liveEvents.length
-      ? liveEvents.map(function (ev) { return eventCard(ev, today); }).join('')
+      ? liveEvents.map(function (ev) { return eventRow(ev, today); }).join('')
       : '<div class="empty">지금 챙길 이벤트가 없어요.</div>';
 
     var notices = d.notice || [];

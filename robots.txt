@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://ipo-events-public.vercel.app/sitemap.xml
