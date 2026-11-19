@@ -1,86 +1,61 @@
 {
-  "date": "2026-11-19",
-  "dateLabel": "2026년 11월 19일 목요일",
-  "updatedLabel": "22:13",
+  "date": "2026-11-20",
+  "dateLabel": "2026년 11월 20일 금요일",
+  "updatedLabel": "08:35",
   "draft": false,
   "draftNote": "공모주 08:42 기준 · 증권사 혜택 11/19 확인",
   "eventsAsOf": "2026-11-19",
   "ipo": {
-    "subscribe": [
-      {
-        "name": "유캐스트",
-        "badge": "오늘 청약 마감",
-        "market": "코스닥 · 기술성장특례",
-        "period": "11/18(수)~11/19(목)",
-        "price": "확정 19,000원",
-        "priceNote": "밴드 19,000~23,000원 최하단",
-        "brokers": "유진투자증권(대표) · 신영증권",
-        "refund": "11/23(월)",
-        "minEqual": {
-          "shares": "10주",
-          "deposit": "95,000원",
-          "basis": "공모가 19,000원 × 최소주수 × 50%",
-          "brokers": [
-            {
-              "name": "유진",
-              "shares": "10주",
-              "deposit": "95,000원"
-            },
-            {
-              "name": "신영",
-              "shares": "50주",
-              "deposit": "475,000원"
-            }
-          ]
-        }
-      }
-    ],
+    "date": "2026-11-20",
+    "dateLabel": "2026년 11월 20일 금요일",
+    "updatedAt": "2026-11-20T08:35:00+09:00",
+    "updatedLabel": "08:35",
+    "subscribe": [],
     "cancelled": [],
     "listing": {
-      "hasListing": false,
-      "body": "오늘 신규 상장 없음 — 다음은 11/20(금) 하나에어로다이내믹스"
+      "hasListing": true,
+      "name": "하나에어로다이내믹스",
+      "code": "271160",
+      "market": "코스닥 · 벤처기업부",
+      "badge": "상장일",
+      "ipoPrice": "5,700원",
+      "openPrice": "",
+      "openChange": "",
+      "earlyPrice": "09:00 상장",
+      "earlyChange": "",
+      "points": [
+        "공모가 5,700원(밴드 상단) · IBK투자증권 주관 · 공모금액 250.8억원",
+        "첫날 매도가능 3,066,604주(17.30%·약 175억원) — 최종 확약 72.69% 반영",
+        "15일 확약 169만4천주가 12/5경 풀려 12월 초 오버행 주의",
+        "상장일 60~400% = 3,420~22,800원 · VI 미적용",
+        "2025년 매출 333억·영업익 50억(15.0%), 올 상반기 영업익률 23.5% · 벨 장기공급"
+      ]
     },
     "hanjan": {
       "channel": "공모주한잔",
       "channelUrl": "https://www.youtube.com/@공모주한잔",
-      "items": [
-        {
-          "name": "유캐스트",
-          "equal": "패스",
-          "proportional": "패스"
-        }
-      ],
-      "note": "공모주한잔 11/17 영상 기준 · 균등·비례 모두 패스 (이후 새 영상 없음)",
+      "items": [],
+      "note": "오늘 청약 종목 없음 · 하나에어로다이내믹스 상장일 (11/09 분석: 풀 청약·목표 12,000~15,000원)",
       "video": {
-        "title": "[오늘의 공모주] 유캐스트 (공모가 밴드 하단이 결정적 판단 기준)",
-        "url": "https://www.youtube.com/watch?v=TM8NPtVp4WU",
-        "date": "2026-11-17"
+        "title": "[오늘의공모주] 하나에어로다이내믹스 (상장일 다이내믹할지라도)",
+        "url": "https://www.youtube.com/watch?v=K8T8ykKKH8k",
+        "date": "2026-11-09"
       }
     },
-    "gongmorin": {
-      "name": "공모주린이",
-      "channel": "공모주투자의법칙(공주)",
-      "channelUrl": "https://www.youtube.com/@공모주투자의법칙/streams",
-      "score": "C+",
-      "verdict": "패스",
-      "note": "적자·비싼 공모가·약한 수급 → 청약보다 상장 후 대응",
-      "video": {
-        "title": "[공모주] 유캐스트 분석과 종합점수 - 하단으로 확정된 공모가, 수급이 여전히 약한데..?",
-        "url": "https://www.youtube.com/watch?v=6kO_QxLx4cE",
-        "date": "2026-11-17"
-      },
-      "live": {
-        "on": true,
-        "label": "실시간 경쟁률 보기",
-        "url": "https://www.youtube.com/@공모주투자의법칙/streams"
-      }
-    },
+    "gongmorin": {},
     "next": {
       "name": "아델",
       "period": "11/23(월)~11/24(화)",
       "price": "희망 18,000~25,000원",
       "brokers": "삼성증권 · 미래에셋증권",
       "memo": "다음 주 월요일부터 청약"
+    },
+    "nextListing": {
+      "name": "엠비디",
+      "period": "11/24(화)",
+      "price": "확정 7,000원",
+      "brokers": "하나증권",
+      "memo": "다음 상장"
     },
     "source": {
       "label": "38커뮤니케이션 공모주 일정",
