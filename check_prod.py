@@ -7,13 +7,14 @@ from pathlib import Path
 
 from playwright.async_api import async_playwright
 
-from check_render import expected_copy, expected_listing_copy, IOS_UA  # 공유문 기대값 규칙 공유
+from check_render import expected_copy, expected_listing_copy, IOS_UA, DESKTOP_UA  # 공유문 기대값 규칙 공유
 
 URL = "https://ipo-events-public.vercel.app/"
 SITE_URL = "https://ipo-events-public.vercel.app"
 OUT = Path(__file__).resolve().parent
 UA = ("Mozilla/5.0 (Linux; Android 14; SM-S911N) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
+PLAY_ENC = "https%3A%2F%2Fplay.google.com%2Fstore%2Fapps%2Fdetails"
 _terms_file = OUT / "privacy_terms.txt"
 TERMS = ([ln.strip() for ln in _terms_file.read_text(encoding="utf-8").splitlines()
           if ln.strip() and not ln.startswith("#")] if _terms_file.exists() else [])
@@ -69,7 +70,7 @@ async def main():
         res["verdict"] = await opt_text(page, ".hero .verdict")
         res["deposit"] = await opt_text(page, ".hero .deposit")
         res["listing_points"] = await page.locator(".hero .pts li").count()
-        # 주관사 앱 열기 — Android(기본) UA 에서는 Google Play 링크
+        # 주관사 앱 열기 — Android(기본) UA 에서는 intent:// 직접 실행(미설치 시 Play 폴백)
         res["app_btns"] = await page.eval_on_selector_all(
             ".hero .app-open",
             """els => els.map(e => ({ text: e.textContent.replace(/\\s+/g, ' ').trim(),
@@ -362,6 +363,21 @@ async def main():
         res["ios_h_overflow"] = await ip.evaluate(
             "document.documentElement.scrollWidth > window.innerWidth + 1")
         await iosctx.close()
+
+        # 주관사 앱 열기 — 데스크톱 UA 에서는 그대로 Google Play 스토어 링크
+        dctx = await browser.new_context(viewport={"width": 1280, "height": 900},
+                                        user_agent=DESKTOP_UA,
+                                        locale="ko-KR", timezone_id="Asia/Seoul")
+        dsp = await dctx.new_page()
+        await dsp.goto(URL, wait_until="networkidle", timeout=45000)
+        await dsp.wait_for_selector("#main:not([hidden])", timeout=15000)
+        await dsp.wait_for_timeout(300)
+        res["desktop_app_btns"] = await dsp.eval_on_selector_all(
+            ".hero .app-open",
+            "els => els.map(e => ({ text: e.textContent.replace(/\\s+/g, ' ').trim(),"
+            " href: e.getAttribute('href'), target: e.getAttribute('target'),"
+            " rel: e.getAttribute('rel') || '' }))")
+        await dctx.close()
         await browser.close()
 
     # 청약일이면 유튜브 요약까지, 상장일이면 상장 포인트로 히어로를 검증
@@ -416,15 +432,22 @@ async def main():
           and res["dark_share_grid"]["fit"]
           and res["desktop_share_visible"]
           and res["desktop_share_labels"] == ["청약 정보 공유", "상장 정보 공유"]
-          # 주관사 앱 열기 — Android 는 Play, iPhone UA 는 App Store
+          # 주관사 앱 열기 — Android 는 intent://(Play 폴백·같은 창), iPhone UA 는 App Store, 데스크톱은 Play
           and (res["app_btns"] and all(
-              b["href"].startswith("https://play.google.com/store/apps/details?id=")
-              and b["target"] == "_blank" and "noopener" in b["rel"] and b["h"] >= 36
+              b["href"].startswith("intent://launch#Intent;package=")
+              and "package=com.ibks.ione.mts" in b["href"]
+              and ";S.browser_fallback_url=" + PLAY_ENC in b["href"]
+              and b["href"].endswith(";end")
+              and not b["target"] and b["h"] >= 36
               for b in res["app_btns"]))
           and (res["ios_app_btns"] and all(
               b["href"].startswith("https://apps.apple.com/kr/app/id")
               for b in res["ios_app_btns"]))
           and not res["ios_h_overflow"]
+          and (res["desktop_app_btns"] and all(
+              b["href"].startswith("https://play.google.com/store/apps/details?id=")
+              and b["target"] == "_blank" and "noopener" in b["rel"]
+              for b in res["desktop_app_btns"]))
           and "1분 요약" in res["title"]
           and res["robots"] and "noindex" not in res["robots"]
           and "index" in res["robots"]

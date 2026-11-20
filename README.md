@@ -173,8 +173,10 @@ https://ipo-events-public.vercel.app   ← 클립보드 복사본에만(공유 �
 주관사 문자열(`ipo.listing.brokers` · `ipo.subscribe[].brokers`)을 ` · `, `,` 기준으로 나눠
 매핑된 증권사마다 칩 하나를 만들고, 복수 주관사면 칩이 나란히(좁은 화면에서는 다음 줄로) 놓입니다.
 
-- **OS 판별**(`app.js`): `iPhone|iPad|iPod` UA 또는 터치 지원 Mac(`platform === 'MacIntel' && maxTouchPoints > 1`) → **App Store**,
-  그 외(Android·PC) → **Google Play**. 링크는 `target="_blank" rel="noopener"`.
+- **OS 판별**(`app.js`) — 기기별로 여는 방식이 다릅니다.
+  - **Android** (`/Android/i.test(navigator.userAgent)`): `intent://launch#Intent;package={Play 패키지};action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;S.browser_fallback_url={Play 스토어 URL(URL 인코딩)};end` — 설치된 증권사 앱을 바로 열고, 미설치면 `browser_fallback_url` 로 **Play 스토어**에 보냅니다(같은 창, `target` 없음 — 빈 새 탭 방지).
+  - **iOS** (`iPhone|iPad|iPod` UA 또는 터치 지원 Mac): **App Store** `https://apps.apple.com/kr/app/id{App Store ID}` (`target="_blank" rel="noopener"`).
+  - **Desktop(그 외)**: **Google Play** `https://play.google.com/store/apps/details?id={Play 패키지}` (`target="_blank" rel="noopener"`).
 - 버튼은 `BROKER_APPS`에 들어 있는 증권사만 만듭니다(확인되지 않은 증권사는 버튼 없음 — 추정 링크를 만들지 않음).
 - 크기: 높이 38px(최소 36px 이상), 12px 굵은 글씨, `--blue-soft` 배경 · `--blue` 글자, 다크 모드 대응,
   가로 스크롤 없음(390px 기준).
@@ -295,11 +297,15 @@ python3 check_render.py
 청약·다음 청약까지 모두 없는 날은 왼쪽 버튼이 `오늘 청약 없음` 비활성으로 남는지도 검사합니다.
 
 **📱 주관사 앱 열기 버튼**도 함께 검사합니다. 오늘 상장 카드(`하나에어로다이내믹스` · 주관 IBK투자증권)에
-`📱 IBK투자증권 앱 열기`가 **3줄 요약 아래·다음 청약 띠 위**에 1개 있고, Android UA에서 `href`가
-`https://play.google.com/store/apps/details?id=com.ibks.ione.mts`인지, 같은 페이지를 **iPhone UA**로 열면
-`https://apps.apple.com/kr/app/id6612018102`로 바뀌는지, 청약 당일 mock(`KB증권 · NH투자증권`)에서
-카드마다 `📱 KB증권 앱 열기`·`📱 NH투자증권 앱 열기` 2개가 정상 링크로 뜨는지(단일 주관사 카드는 1개),
-모두 `_blank`/`noopener`·높이 36px 이상·가로 스크롤 없음·요소 잘림 없음인지, 다크 모드에서도 같은 버튼이
+`📱 IBK투자증권 앱 열기`가 **3줄 요약 아래·다음 청약 띠 위**에 1개 있고,
+- **Android UA**: `href`가 `intent://`로 시작하고 `package=com.ibks.ione.mts`·
+  `S.browser_fallback_url=https%3A%2F%2Fplay.google.com%2F...`를 포함하며 `;end`로 끝날 것(같은 창 — `target` 없음)
+- **iPhone UA**: `https://apps.apple.com/kr/app/id6612018102`
+- **Desktop UA**: `https://play.google.com/store/apps/details?id=com.ibks.ione.mts` (`_blank`/`noopener`)
+
+로 바뀌는지, 청약 당일 mock(`KB증권 · NH투자증권`)에서
+카드마다 `📱 KB증권 앱 열기`·`📱 NH투자증권 앱 열기` 2개가 정상 링크(intent://)로 뜨는지(단일 주관사 카드는 1개),
+모두 높이 36px 이상·가로 스크롤 없음·요소 잘림 없음인지, 다크 모드에서도 같은 버튼이
 보이고 38px을 유지하는지 확인합니다.
 
 ```bash

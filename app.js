@@ -119,19 +119,33 @@
     'BNK투자증권':  { play: 'com.bnkfn.mtsplus',                 app: '1170374515' }   /* BNK투자증권 */
   };
 
-  /* iOS(아이폰·아이패드·터치 지원 맥) → App Store, 그 외(안드로이드·PC) → Google Play */
+  /* iOS(아이폰·아이패드·터치 지원 맥) → App Store, Android → intent:// 직접 실행(미설치 시 Play 폴백),
+     그 외(PC) → Google Play */
   function isIOS() {
     var ua = navigator.userAgent || '';
     if (/iPhone|iPad|iPod/i.test(ua)) return true;
     return navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1;
   }
 
+  function isAndroid() {
+    return /Android/i.test(navigator.userAgent || '');
+  }
+
+  /* 설치된 앱은 intent:// 로 바로 열고, 없으면 S.browser_fallback_url(Play 스토어)로 보냅니다. */
+  function androidIntentUrl(pkg) {
+    var fallback = 'https://play.google.com/store/apps/details?id=' + pkg;
+    return 'intent://launch#Intent;package=' + pkg +
+      ';action=android.intent.action.MAIN' +
+      ';category=android.intent.category.LAUNCHER' +
+      ';S.browser_fallback_url=' + encodeURIComponent(fallback) + ';end';
+  }
+
   function brokerAppUrl(name) {
     var a = BROKER_APPS[name];
     if (!a) return '';
-    return isIOS()
-      ? 'https://apps.apple.com/kr/app/id' + a.app
-      : 'https://play.google.com/store/apps/details?id=' + a.play;
+    if (isIOS()) return 'https://apps.apple.com/kr/app/id' + a.app;
+    if (isAndroid()) return androidIntentUrl(a.play);
+    return 'https://play.google.com/store/apps/details?id=' + a.play;
   }
 
   /* brokers 문자열('KB증권 · NH투자증권') → 📱 {증권사} 앱 열기 칩(매핑된 증권사만) */
@@ -144,7 +158,9 @@
       var url = brokerAppUrl(name);
       if (!url) return;
       seen[name] = 1;
-      out += '<a class="app-open" href="' + esc(url) + '" target="_blank" rel="noopener"' +
+      /* Android intent:// 는 같은 창에서 열어야 빈 새 탭이 남지 않고 앱/폴백으로 넘어갑니다. */
+      var blank = isAndroid() ? '' : ' target="_blank" rel="noopener"';
+      out += '<a class="app-open" href="' + esc(url) + '"' + blank +
         ' aria-label="' + esc(name) + ' 앱 열기">' +
         '<span class="ico" aria-hidden="true">📱</span>' + esc(name) + ' 앱 열기</a>';
     });

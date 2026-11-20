@@ -55,11 +55,23 @@ UA = ("Mozilla/5.0 (Linux; Android 14; SM-S911N) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
 KST = dt.timezone(dt.timedelta(hours=9))
 
-# 주관사 앱 열기 버튼 — OS 판별 확인용 iPhone UA
+# 주관사 앱 열기 버튼 — OS 판별 확인용 iPhone·데스크톱 UA
 IOS_UA = ("Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 "
           "(KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1")
+DESKTOP_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+              "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
 PLAY = "https://play.google.com/store/apps/details?id="
 APPSTORE = "https://apps.apple.com/kr/app/id"
+PLAY_ENC = "https%3A%2F%2Fplay.google.com%2Fstore%2Fapps%2Fdetails"
+
+
+def intent_url(pkg):
+    """app.js 의 androidIntentUrl 과 같은 규칙 — Android UA 의 기대 href."""
+    from urllib.parse import quote
+    return ("intent://launch#Intent;package=" + pkg
+            + ";action=android.intent.action.MAIN"
+            + ";category=android.intent.category.LAUNCHER"
+            + ";S.browser_fallback_url=" + quote(PLAY + pkg, safe="") + ";end")
 
 # 개인정보 검사어 — 저장소에 올리지 않는 로컬 파일(privacy_terms.txt)에서 한 줄에 하나씩 읽습니다.
 _TERMS_FILE = ROOT / "privacy_terms.txt"
@@ -1069,12 +1081,16 @@ async def main():
                 ".hero.is-list .app-open", GET_APP)
             results["listing_app_btns"] = listing_apps
             results["listing_app_count"] = len(listing_apps)
+            # Android UA — intent:// 로 앱 직접 실행(미설치 시 Play 스토어 폴백), 같은 창에서 열기
             results["listing_app_ok"] = bool(listing_apps) and all([
                 listing_apps[0]["text"].startswith("📱"),
                 listing_apps[0]["text"].endswith("IBK투자증권 앱 열기"),
-                listing_apps[0]["href"] == PLAY + "com.ibks.ione.mts",
-                listing_apps[0]["target"] == "_blank",
-                "noopener" in listing_apps[0]["rel"],
+                listing_apps[0]["href"] == intent_url("com.ibks.ione.mts"),
+                listing_apps[0]["href"].startswith("intent://"),
+                listing_apps[0]["href"].find("package=com.ibks.ione.mts") >= 0,
+                ";S.browser_fallback_url=" + PLAY_ENC in listing_apps[0]["href"],
+                listing_apps[0]["href"].endswith(";end"),
+                not listing_apps[0]["target"],
                 listing_apps[0]["h"] >= 36,
                 listing_apps[0]["shown"],
             ])
@@ -1123,6 +1139,23 @@ async def main():
             results["ios_errors"] = ios_errors
             await iosctx.close()
 
+            # (b-2) 같은 페이지를 데스크톱 UA(Windows Chrome)로 — 그대로 Google Play 스토어 링크
+            dsctx, dspage, ds_errors = await open_page(
+                browser, user_agent=DESKTOP_UA, viewport={"width": 1280, "height": 900},
+                is_mobile=False, has_touch=False, device_scale_factor=1, permissions=[])
+            ds_apps = await dspage.eval_on_selector_all(".hero.is-list .app-open", GET_APP)
+            results["desktop_app_btns"] = ds_apps
+            results["desktop_app_ok"] = bool(ds_apps) and all([
+                ds_apps[0]["text"].endswith("IBK투자증권 앱 열기"),
+                ds_apps[0]["href"] == PLAY + "com.ibks.ione.mts",
+                ds_apps[0]["target"] == "_blank",
+                "noopener" in ds_apps[0]["rel"],
+                ds_apps[0]["shown"],
+            ])
+            results["desktop_app_platform"] = await dspage.evaluate("navigator.platform")
+            results["desktop_errors"] = ds_errors
+            await dsctx.close()
+
             # (c) 청약 당일 mock — 복수 주관사('KB증권 · NH투자증권') 카드에 버튼 2개
             brctx, brpage, br_errors = await open_page(browser, mutate=broker_day)
             results["br_cards"] = await brpage.locator(".hero").count()
@@ -1140,15 +1173,19 @@ async def main():
             results["br_two_on_multi"] = (
                 len(by_card) == 2
                 and [b["text"] for b in by_card[0]] == ["📱KB증권 앱 열기", "📱NH투자증권 앱 열기"]
-                and by_card[0][0]["href"] == PLAY + "com.kbsec.mts.iplustarngm2"
-                and by_card[0][1]["href"] == PLAY + "com.wooriwm.txsmart")
+                and by_card[0][0]["href"] == intent_url("com.kbsec.mts.iplustarngm2")
+                and by_card[0][1]["href"] == intent_url("com.wooriwm.txsmart"))
             results["br_one_on_single"] = (
                 len(by_card[1]) == 1
                 and by_card[1][0]["text"] == "📱IBK투자증권 앱 열기"
-                and by_card[1][0]["href"] == PLAY + "com.ibks.ione.mts")
+                and by_card[1][0]["href"] == intent_url("com.ibks.ione.mts"))
+            # Android intent:// 는 같은 창( target 없음 )에서 열고, 패키지·Play 폴백을 함께 싣습니다
             results["br_links_ok"] = all(
-                a["target"] == "_blank" and "noopener" in a["rel"] and a["shown"] and a["h"] >= 36
-                and a["href"].startswith(PLAY)
+                a["shown"] and a["h"] >= 36
+                and a["href"].startswith("intent://launch#Intent;package=")
+                and ";S.browser_fallback_url=" + PLAY_ENC in a["href"]
+                and a["href"].endswith(";end")
+                and not a["target"]
                 for card in by_card for a in card)
             results["br_overflow"] = await brpage.evaluate(
                 "document.documentElement.scrollWidth > window.innerWidth + 1")
@@ -1199,6 +1236,8 @@ async def main():
           and results["ios_app_ok"]
           and not results["ios_overflow"]
           and not results["ios_errors"]
+          and results["desktop_app_ok"]
+          and not results["desktop_errors"]
           and results["br_cards"] == 2
           and results["br_two_on_multi"]
           and results["br_one_on_single"]
