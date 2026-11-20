@@ -5,6 +5,8 @@
  *                     주관사별 최소증거금 → 유튜브 요약 → 다음 청약 D-day)
  *   2레벨  .benefits  주관사 신규 개설 혜택 (기본 접힘 아코디언 + 얇은 행)
  *   3레벨  .support   커피 한 잔 응원하기 (푸터 위 조용한 카드, 카카오페이 링크)
+ *
+ * 상단 탭  .tabs  오늘 요약(#panel-today) | 전체 일정(#panel-schedule, data.json ipo.upcoming)
  */
 (function () {
   'use strict';
@@ -326,6 +328,117 @@
     return html;
   }
 
+  /* ── 전체 일정 탭 ────────────────────────── */
+
+  /* 청약 D-day — 기간 중이면 '청약 중', 지나면 '종료' */
+  function subBadge(item, today) {
+    var s = parseDay(item.start);
+    var e = parseDay(item.end) || s;
+    if (!s) return null;
+    if (e && today > e) return { text: '청약 종료', cls: 'off' };
+    if (today >= s) return { text: '청약 중', cls: 'hot' };
+    var diff = Math.round((s - today) / 86400000);
+    if (diff <= 4) return { text: 'D-' + diff, cls: 'hot' };
+    return { text: 'D-' + diff, cls: '' };
+  }
+
+  function listBadge(item, today) {
+    var d = parseDay(item.date);
+    if (!d) return null;
+    var diff = Math.round((d - today) / 86400000);
+    if (diff < 0) return { text: '상장', cls: 'off' };
+    if (diff === 0) return { text: '오늘 상장', cls: 'hot' };
+    if (diff <= 4) return { text: 'D-' + diff, cls: 'hot' };
+    return { text: 'D-' + diff, cls: '' };
+  }
+
+  /* 2026-11-24 ~ 2026-11-25 → 11/24(월)~11/25(화) */
+  function dayRange(item) {
+    var s = shortDay(item.start);
+    if (!has(item.end) || item.end === item.start) return s;
+    return s + '~' + shortDay(item.end);
+  }
+
+  /* 일정 카드 한 장 — D-day · 종목명 / 일정 · 공모가 / 시장 · 주관 · 환불 */
+  function scheduleCard(item, kind, today) {
+    var isList = kind === 'listing';
+    var dd = isList ? listBadge(item, today) : subBadge(item, today);
+    var when = isList
+      ? (has(item.date) ? shortDay(item.date) + ' 상장' : '상장일 미정')
+      : (has(item.start) ? dayRange(item) + ' 청약' : '일정 미정');
+
+    var sub = [];
+    if (has(item.market)) sub.push(esc(item.market));
+    if (has(item.brokers)) sub.push(esc(item.brokers));
+    if (!isList && has(item.refund)) sub.push('환불 ' + esc(shortDay(item.refund)));
+
+    return '<li class="sc' + (isList ? ' is-list' : '') + '">' +
+        '<div class="sc-top">' +
+          (dd ? '<span class="sc-dd' + (dd.cls ? ' ' + dd.cls : '') + '">' + esc(dd.text) + '</span>' : '') +
+          '<span class="sc-name">' + esc(item.name) + '</span>' +
+          (item.spac ? '<span class="sc-tag">스팩</span>' : '') +
+        '</div>' +
+        '<div class="sc-mid">' +
+          '<span class="sc-when">' + esc(when) + '</span>' +
+          (has(item.price) ? '<span class="sc-price">' + esc(item.price) + '</span>' : '') +
+        '</div>' +
+        (sub.length ? '<div class="sc-sub">' + sub.join(' · ') + '</div>' : '') +
+      '</li>';
+  }
+
+  function scheduleSection(ipo, today) {
+    var up = (ipo && ipo.upcoming) || {};
+    var subs = (up.subscribe || []).slice().sort(function (a, b) {
+      return String(a.start || '9999').localeCompare(String(b.start || '9999'));
+    });
+    var lists = (up.listing || []).slice().sort(function (a, b) {
+      return String(a.date || '9999').localeCompare(String(b.date || '9999'));
+    });
+
+    var html = '';
+
+    html += '<div class="sch-head">' +
+        '<span class="sch-kicker">앞으로 4주</span>' +
+        '<h2 class="sch-h">청약 예정 <b>' + subs.length + '</b>건</h2>' +
+        (has(up.windowLabel) ? '<p class="sch-n">' + esc(up.windowLabel) + ' · 희망 공모가 기준</p>' : '') +
+      '</div>';
+    html += subs.length
+      ? '<ul class="sch-list" id="sch-subscribe">' +
+          subs.map(function (it) { return scheduleCard(it, 'subscribe', today); }).join('') + '</ul>'
+      : '<div class="empty">예정된 청약 일정이 아직 없어요.</div>';
+
+    html += '<div class="sch-head is-2nd">' +
+        '<h2 class="sch-h">상장 예정 <b>' + lists.length + '</b>건</h2>' +
+        '<p class="sch-n">확정 공모가 기준 · 상장일이 나온 종목만</p>' +
+      '</div>';
+    html += lists.length
+      ? '<ul class="sch-list" id="sch-listing">' +
+          lists.map(function (it) { return scheduleCard(it, 'listing', today); }).join('') + '</ul>'
+      : '<div class="empty">상장일이 확정된 종목이 아직 없어요.</div>';
+
+    var cancelled = (ipo && ipo.cancelled) || [];
+    if (cancelled.length) {
+      html += '<div class="sch-cancel">' + cancelled.map(function (c) {
+        return '<div class="sc-row">' +
+            '<span class="sc-off">' + esc(c.badge || '철회') + '</span>' +
+            '<b>' + esc(c.name) + '</b>' +
+            (has(c.body) ? '<span class="sc-off-n">' + esc(c.body) + '</span>' : '') +
+          '</div>';
+      }).join('') + '</div>';
+    }
+
+    var src = up.source || (ipo && ipo.source) || {};
+    html += '<div class="sch-src" id="sch-src">출처 ' +
+        '<a href="' + esc(src.url || '#') + '" target="_blank" rel="noopener">' +
+          esc(src.label || '38커뮤니케이션 공모주 청약일정') + '</a>' +
+        ' · <a href="https://www.38.co.kr/html/fund/index.htm?o=nw" target="_blank" rel="noopener">신규상장 일정</a>' +
+        (has(up.asOf) ? ' · ' + esc(shortDay(up.asOf)) + ' 확인' : '') +
+      '</div>';
+    if (has(up.sourceNote)) html += '<p class="sch-note">' + esc(up.sourceNote) + '</p>';
+
+    return html;
+  }
+
   /* ── 2레벨 · 증권사 신규 개설 혜택 ────────── */
 
   /*
@@ -441,6 +554,7 @@
     }
 
     $('ipo-body').innerHTML = ipoSection(d.ipo, today);
+    $('schedule-body').innerHTML = scheduleSection(d.ipo, today);
 
     /* 2레벨: 개설 혜택 — 기본 접힘, 머리말에 건수만 */
     $('ev-count').textContent = liveEvents.length;
@@ -465,9 +579,66 @@
 
     $('loading').hidden = true;
     $('main').hidden = false;
+    $('tabs').hidden = false;
     $('support').hidden = false;
     $('foot').hidden = false;
+    setTab(tabFromUrl(), { silent: true });
   }
+
+  /* ── 탭 (오늘 요약 · 전체 일정) ───────────── */
+  var TABS = ['today', 'schedule'];
+
+  function tabFromUrl() {
+    var q = (location.search.match(/[?&]tab=([a-zA-Z]+)/) || [])[1];
+    var h = String(location.hash || '').replace(/^#!?\/?/, '').replace(/[?&].*$/, '');
+    var t = q || h;
+    return TABS.indexOf(t) >= 0 ? t : 'today';
+  }
+
+  function setTab(name, opts) {
+    if (TABS.indexOf(name) < 0) name = 'today';
+    TABS.forEach(function (t) {
+      var btn = $('tab-' + t), panel = $('panel-' + t);
+      if (!btn || !panel) return;
+      var on = t === name;
+      btn.classList.toggle('is-on', on);
+      btn.setAttribute('aria-selected', on ? 'true' : 'false');
+      panel.hidden = !on;
+    });
+    if (!(opts && opts.silent)) {
+      var url = location.pathname + (name === 'schedule' ? '?tab=schedule' : '');
+      try { history.replaceState(null, '', url); } catch (e) { /* file:// 등 */ }
+    }
+    if (!(opts && opts.noScroll)) {
+      try { window.scrollTo(0, 0); } catch (e) { /* noop */ }
+    }
+  }
+
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest ? e.target.closest('[data-tab]') : null;
+    if (!btn) return;
+    var name = btn.getAttribute('data-tab');
+    if (TABS.indexOf(name) < 0) return;
+    e.preventDefault();
+    setTab(name);
+  });
+
+  document.addEventListener('keydown', function (e) {
+    var cur = document.activeElement;
+    if (!cur || !cur.getAttribute || !cur.hasAttribute('data-tab')) return;
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    var i = TABS.indexOf(cur.getAttribute('data-tab'));
+    var next = TABS[(i + (e.key === 'ArrowRight' ? 1 : TABS.length - 1)) % TABS.length];
+    e.preventDefault();
+    setTab(next);
+    var btn = $('tab-' + next);
+    if (btn) btn.focus();
+  });
+
+  window.addEventListener('hashchange', function () {
+    var t = tabFromUrl();
+    setTab(t, { silent: true });
+  });
 
   function fail(err) {
     if (err) console.error(err);

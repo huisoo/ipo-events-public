@@ -14,7 +14,9 @@ data.json 을 로컬 HTTP 로 띄워 확인합니다(파일 직접 열면 fetch 
 - expiresAt 이 지난 테스트 항목은 숨기고, 오늘 만료·상시 항목은 노출
 - (회귀용) 코드가 들어온(ready) 항목의 복사 버튼 동작
 - 스크린샷: preview-mobile.png / preview-mobile-events.png / preview-mobile-dark.png /
-  preview-desktop.png / preview-toast.png
+  preview-desktop.png / preview-toast.png / preview-mobile-schedule*.png
+- 상단 2탭: 기본 '오늘 요약', 탭하면 '전체 일정'(?tab=schedule) — 두 탭 모두 390px·다크·
+  데스크톱에서 가로 스크롤·잘림 없이 렌더
 """
 import asyncio
 import datetime as dt
@@ -108,7 +110,7 @@ def test_events():
     ]
 
 
-async def open_page(browser, inject=None, **ctx_kw):
+async def open_page(browser, inject=None, path="", **ctx_kw):
     ctx_args = dict(
         viewport={"width": 390, "height": 844},
         device_scale_factor=2,
@@ -136,7 +138,7 @@ async def open_page(browser, inject=None, **ctx_kw):
                                 body=json.dumps(body, ensure_ascii=False))
         await page.route("**/data.json*", handler)
 
-    await page.goto(BASE, wait_until="networkidle")
+    await page.goto(BASE + path, wait_until="networkidle")
     await page.wait_for_selector("#main:not([hidden])", timeout=8000)
     await page.wait_for_timeout(300)
     return ctx, page, errors
@@ -193,6 +195,21 @@ async def main():
             results["hierarchy_ok"] = (
                 hierarchy["hero_bottom"] <= hierarchy["benefits_top"]
                 and hierarchy["next_bottom"] <= hierarchy["viewport_h"])
+
+            # ── 상단 2탭: 기본은 오늘 요약, ?tab=schedule 로 전체 일정 ──
+            results["tabs_visible"] = await page.locator("#tabs").is_visible()
+            results["tab_labels"] = await page.eval_on_selector_all(
+                "#tabs .tab", "els => els.map(e => e.textContent.trim())")
+            results["tab_count"] = await page.locator("#tabs .tab").count()
+            results["tab_default_today"] = await page.evaluate("""(() => {
+                const t = document.querySelector('#tab-today'), s = document.querySelector('#tab-schedule');
+                return t.classList.contains('is-on') && t.getAttribute('aria-selected') === 'true'
+                    && !s.classList.contains('is-on')
+                    && !document.querySelector('#panel-today').hidden
+                    && document.querySelector('#panel-schedule').hidden;
+            })()""")
+            results["tab_height"] = round(await page.evaluate(
+                "document.querySelector('#tabs .tab').getBoundingClientRect().height"))
 
             # 2레벨: 기본 접힘 → 탭하면 펼침
             results["accordion_open_by_default"] = await page.locator("#sec-events").evaluate(
@@ -280,6 +297,82 @@ async def main():
             await page.locator("#foot").scroll_into_view_if_needed()
             await page.wait_for_timeout(150)
             await page.screenshot(path=str(ROOT / "preview-mobile-bottom.png"))
+
+            # ── 전체 일정 탭 ────────────────────────────────
+            await page.locator("#tab-schedule").click()
+            await page.wait_for_timeout(300)
+            results["tab_switch_on"] = await page.evaluate("""(() => {
+                const s = document.querySelector('#tab-schedule');
+                return s.classList.contains('is-on') && s.getAttribute('aria-selected') === 'true'
+                    && document.querySelector('#panel-schedule').hidden === false
+                    && document.querySelector('#panel-today').hidden === true;
+            })()""")
+            results["tab_url"] = page.url
+            results["tab_url_has_query"] = "tab=schedule" in page.url
+            results["sch_counts"] = {
+                "subscribe": await page.locator("#sch-subscribe .sc").count(),
+                "listing": await page.locator("#sch-listing .sc").count(),
+            }
+            results["sch_heads"] = await page.eval_on_selector_all(
+                ".sch-h", "els => els.map(e => e.textContent.replace(/\\s+/g,' ').trim())")
+            results["sch_first"] = await page.evaluate("""(() => {
+                const li = document.querySelector('#sch-subscribe .sc');
+                if (!li) return null;
+                return {
+                    dday: li.querySelector('.sc-dd')?.textContent.trim(),
+                    name: li.querySelector('.sc-name')?.textContent.trim(),
+                    when: li.querySelector('.sc-when')?.textContent.trim(),
+                    price: li.querySelector('.sc-price')?.textContent.trim(),
+                    sub: li.querySelector('.sc-sub')?.textContent.trim()
+                };
+            })()""")
+            results["sch_names"] = await page.eval_on_selector_all(
+                "#sch-subscribe .sc .sc-name", "els => els.map(e => e.textContent.trim())")
+            results["sch_ddays"] = await page.eval_on_selector_all(
+                "#sch-subscribe .sc .sc-dd", "els => els.map(e => e.textContent.trim())")
+            results["sch_list_items"] = await page.eval_on_selector_all(
+                "#sch-listing .sc", "els => els.map(e => e.textContent.replace(/\\s+/g,' ').trim())")
+            results["sch_src_urls"] = await page.eval_on_selector_all(
+                "#sch-src a", "els => els.map(e => e.getAttribute('href'))")
+            results["sch_src_text"] = (await page.inner_text("#sch-src")).replace("\n", " ")
+            results["sch_cancel_text"] = (await page.inner_text(".sch-cancel")).replace("\n", " ")
+            results["sch_has_38"] = "38커뮤니케이션" in await page.evaluate("document.body.innerText")
+            results["sch_doc_width"] = await page.evaluate("document.documentElement.scrollWidth")
+            results["sch_h_overflow"] = results["sch_doc_width"] > results["viewport_width"]
+            results["sch_clipped"] = await page.evaluate("""
+                (() => {
+                  const vw = window.innerWidth, bad = [];
+                  document.querySelectorAll('#panel-schedule .sc, #panel-schedule .sc *, #panel-schedule .sch-cancel *')
+                    .forEach(el => {
+                      const r = el.getBoundingClientRect();
+                      if (r.width && (r.left < -1 || r.right > vw + 1)) {
+                        bad.push(el.tagName + '.' + el.className + ' ' +
+                                 Math.round(r.left) + '~' + Math.round(r.right));
+                      }
+                    });
+                  return bad.slice(0, 5);
+                })()
+            """)
+            await page.screenshot(path=str(ROOT / "preview-mobile-schedule.png"), full_page=True)
+            await page.screenshot(path=str(ROOT / "preview-mobile-schedule-first.png"))
+            await page.locator("#sch-src").scroll_into_view_if_needed()
+            await page.wait_for_timeout(200)
+            await page.screenshot(path=str(ROOT / "preview-mobile-schedule-bottom.png"))
+
+            # 전체 일정 화면에서 개인정보 문구가 새지 않는지 한 번 더
+            results["sch_privacy_hits"] = await page.evaluate("""terms =>
+                terms.filter(t => document.body.innerText.includes(t))""", terms)
+            results["sch_errors"] = errors
+
+            # 탭을 되돌리면 다시 오늘 요약(1레벨)이 보인다
+            await page.locator("#tab-today").click()
+            await page.wait_for_timeout(250)
+            results["tab_back_today"] = await page.evaluate("""(() => {
+                return !document.querySelector('#panel-today').hidden
+                    && document.querySelector('#panel-schedule').hidden
+                    && document.querySelector('#tab-today').classList.contains('is-on');
+            })()""")
+            results["tab_back_url"] = page.url
             await ctx.close()
 
             # ── 2. 만료/오늘/상시/코드보유 테스트 주입 ────────────
@@ -310,14 +403,21 @@ async def main():
             await page2.screenshot(path=str(ROOT / "preview-toast.png"))
             await ctx2.close()
 
-            # ── 3. 다크 모드 ───────────────────────────────────
+            # ── 3. 다크 모드 ──────────────────────────────
             dark, dpage, dark_errors = await open_page(browser, color_scheme="dark")
             await dpage.screenshot(path=str(ROOT / "preview-mobile-dark.png"), full_page=True)
             results["dark_page_h"] = await dpage.evaluate("document.documentElement.scrollHeight")
             results["dark_errors"] = dark_errors
+            await dpage.locator("#tab-schedule").click()
+            await dpage.wait_for_timeout(300)
+            results["dark_sch_visible"] = await dpage.locator("#panel-schedule").is_visible()
+            results["dark_sch_cards"] = await dpage.locator("#sch-subscribe .sc").count()
+            results["dark_sch_overflow"] = await dpage.evaluate(
+                "document.documentElement.scrollWidth > window.innerWidth + 1")
+            await dpage.screenshot(path=str(ROOT / "preview-mobile-schedule-dark.png"), full_page=True)
             await dark.close()
 
-            # ── 4. 데스크톱 1280 ───────────────────────────────
+            # ── 4. 데스크톱 1280 ──────────────────────────────
             desk, dp, desk_errors = await open_page(
                 browser, viewport={"width": 1280, "height": 900},
                 is_mobile=False, has_touch=False, device_scale_factor=1,
@@ -328,7 +428,20 @@ async def main():
                 "document.documentElement.scrollWidth > window.innerWidth + 1")
             results["desktop_errors"] = desk_errors
             await dp.screenshot(path=str(ROOT / "preview-desktop.png"))
+            await dp.locator("#tab-schedule").click()
+            await dp.wait_for_timeout(300)
+            results["desktop_sch_cards"] = await dp.locator("#sch-subscribe .sc").count()
+            results["desktop_sch_overflow"] = await dp.evaluate(
+                "document.documentElement.scrollWidth > window.innerWidth + 1")
+            await dp.screenshot(path=str(ROOT / "preview-desktop-schedule.png"), full_page=True)
             await desk.close()
+
+            # ── 5. ?tab=schedule 딥링크 ──────────────────────
+            deepl, lpage, _ = await open_page(browser, path="?tab=schedule")
+            results["deeplink_schedule"] = await lpage.locator("#panel-schedule").is_visible()
+            results["deeplink_cards"] = await lpage.locator("#sch-subscribe .sc").count()
+            await deepl.close()
+
             await browser.close()
     finally:
         httpd.shutdown()
@@ -342,6 +455,35 @@ async def main():
                or (results["hero_kind"] == "empty" and bool(results["next_rows"])))
 
     ok = (results["events"] == 4
+          and results["tabs_visible"]
+          and results["tab_count"] == 2
+          and results["tab_labels"] == ["오늘 요약", "전체 일정"]
+          and results["tab_default_today"]
+          and results["tab_height"] >= 40
+          and results["tab_switch_on"]
+          and results["tab_url_has_query"]
+          and results["sch_counts"]["subscribe"] >= 10
+          and results["sch_counts"]["listing"] >= 1
+          and results["sch_first"] and results["sch_first"]["dday"].startswith("D-")
+          and results["sch_first"]["when"].endswith("청약")
+          and "희망" in (results["sch_first"]["price"] or "")
+          and results["sch_first"]["sub"] and "증권" in results["sch_first"]["sub"]
+          and all(d.startswith("D-") or d in ("청약 중", "청약 종료") for d in results["sch_ddays"])
+          and len(results["sch_list_items"]) >= 1
+          and all("상장" in it for it in results["sch_list_items"])
+          and any("38.co.kr" in (u or "") for u in results["sch_src_urls"])
+          and results["sch_has_38"]
+          and not results["sch_h_overflow"]
+          and not results["sch_clipped"]
+          and not results["sch_privacy_hits"]
+          and not results["sch_errors"]
+          and results["tab_back_today"]
+          and results["dark_sch_visible"]
+          and not results["dark_sch_overflow"]
+          and results["desktop_sch_cards"] >= 10
+          and not results["desktop_sch_overflow"]
+          and results["deeplink_schedule"]
+          and results["deeplink_cards"] >= 10
           and results["invite_missing"] == 0
           and results["invite_none"] == 4
           and results["copy_buttons"] == 0

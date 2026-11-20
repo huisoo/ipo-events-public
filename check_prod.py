@@ -86,6 +86,17 @@ async def main():
         res["invite_words"] = any(w in body for w in ("초대 코드", "초대코드", "추천인"))
         res["notice_count"] = await page.locator("#notice-list li").count()
 
+        # 상단 2탭
+        res["tabs_visible"] = await page.locator("#tabs").is_visible()
+        res["tab_labels"] = await page.eval_on_selector_all(
+            "#tabs .tab", "els => els.map(e => e.textContent.trim())")
+        res["tab_default_today"] = await page.evaluate("""(() => {
+            const t = document.querySelector('#tab-today'), s = document.querySelector('#tab-schedule');
+            return t.classList.contains('is-on') && !s.classList.contains('is-on')
+                && !document.querySelector('#panel-today').hidden
+                && document.querySelector('#panel-schedule').hidden;
+        })()""")
+
         # 하단 응원 카드(3레벨)
         res["support_visible"] = await page.locator("#support").is_visible()
         res["support_title"] = (await page.inner_text("#support .sup-t")).strip()
@@ -116,6 +127,50 @@ async def main():
         res["row_opens"] = await page.locator("#ev-list .ev").first.evaluate("el => el.open")
         await page.locator("#sec-events").screenshot(
             path=str(OUT / "preview-prod-mobile-events.png"))
+
+        # ── 전체 일정 탭 ────────────────────────────────
+        await page.locator("#tab-schedule").click()
+        await page.wait_for_timeout(350)
+        res["tab_switch_on"] = await page.evaluate("""(() => {
+            const s = document.querySelector('#tab-schedule');
+            return s.classList.contains('is-on')
+                && document.querySelector('#panel-schedule').hidden === false
+                && document.querySelector('#panel-today').hidden === true;
+        })()""")
+        res["tab_url_has_query"] = "tab=schedule" in page.url
+        res["sch_counts"] = {
+            "subscribe": await page.locator("#sch-subscribe .sc").count(),
+            "listing": await page.locator("#sch-listing .sc").count(),
+        }
+        res["sch_heads"] = await page.eval_on_selector_all(
+            ".sch-h", "els => els.map(e => e.textContent.replace(/\\s+/g,' ').trim())")
+        res["sch_first"] = await page.evaluate("""(() => {
+            const li = document.querySelector('#sch-subscribe .sc');
+            if (!li) return null;
+            return {
+                dday: li.querySelector('.sc-dd')?.textContent.trim(),
+                name: li.querySelector('.sc-name')?.textContent.trim(),
+                when: li.querySelector('.sc-when')?.textContent.trim(),
+                price: li.querySelector('.sc-price')?.textContent.trim(),
+                sub: li.querySelector('.sc-sub')?.textContent.trim()
+            };
+        })()""")
+        res["sch_list_items"] = await page.eval_on_selector_all(
+            "#sch-listing .sc", "els => els.map(e => e.textContent.replace(/\\s+/g,' ').trim())")
+        res["sch_src_urls"] = await page.eval_on_selector_all(
+            "#sch-src a", "els => els.map(e => e.getAttribute('href'))")
+        res["sch_src_text"] = (await page.inner_text("#sch-src")).replace("\n", " ")
+        res["sch_has_cancel"] = await page.locator(".sch-cancel").count() > 0
+        res["sch_doc_width"] = await page.evaluate("document.documentElement.scrollWidth")
+        res["sch_h_overflow"] = res["sch_doc_width"] > res["viewport_width"]
+        res["sch_privacy_hits"] = [t for t in TERMS + ALWAYS_TERMS
+                                   if t in await page.evaluate("document.body.innerText")]
+        res["sch_errors"] = errors
+        await page.screenshot(path=str(OUT / "preview-prod-mobile-schedule.png"), full_page=True)
+        await page.screenshot(path=str(OUT / "preview-prod-mobile-schedule-first.png"))
+        await page.locator("#sch-src").scroll_into_view_if_needed()
+        await page.wait_for_timeout(200)
+        await page.screenshot(path=str(OUT / "preview-prod-mobile-schedule-bottom.png"))
         await ctx.close()
 
         dark = await browser.new_context(
@@ -128,6 +183,13 @@ async def main():
         await dpage.wait_for_timeout(300)
         await dpage.screenshot(path=str(OUT / "preview-prod-mobile-dark.png"), full_page=True)
         res["dark_ok"] = await dpage.locator(".ev").count()
+        await dpage.locator("#tab-schedule").click()
+        await dpage.wait_for_timeout(300)
+        res["dark_sch_visible"] = await dpage.locator("#panel-schedule").is_visible()
+        res["dark_sch_cards"] = await dpage.locator("#sch-subscribe .sc").count()
+        res["dark_sch_overflow"] = await dpage.evaluate(
+            "document.documentElement.scrollWidth > window.innerWidth + 1")
+        await dpage.screenshot(path=str(OUT / "preview-prod-mobile-schedule-dark.png"), full_page=True)
         await dark.close()
 
         # 데스크톱 폭에서도 확인
@@ -142,7 +204,25 @@ async def main():
         res["desktop_h_overflow"] = await dp.evaluate(
             "document.documentElement.scrollWidth > window.innerWidth + 1")
         await dp.screenshot(path=str(OUT / "preview-prod-desktop.png"))
+        await dp.locator("#tab-schedule").click()
+        await dp.wait_for_timeout(300)
+        res["desktop_sch_cards"] = await dp.locator("#sch-subscribe .sc").count()
+        res["desktop_sch_overflow"] = await dp.evaluate(
+            "document.documentElement.scrollWidth > window.innerWidth + 1")
+        await dp.screenshot(path=str(OUT / "preview-prod-desktop-schedule.png"), full_page=True)
         await desk.close()
+
+        # ?tab=schedule 딥링크
+        deepl = await browser.new_context(
+            viewport={"width": 390, "height": 844}, device_scale_factor=2, is_mobile=True,
+            has_touch=True, user_agent=UA, locale="ko-KR", timezone_id="Asia/Seoul")
+        lp = await deepl.new_page()
+        await lp.goto(URL + "?tab=schedule", wait_until="networkidle", timeout=45000)
+        await lp.wait_for_selector("#main:not([hidden])", timeout=15000)
+        await lp.wait_for_timeout(300)
+        res["deeplink_schedule"] = await lp.locator("#panel-schedule").is_visible()
+        res["deeplink_cards"] = await lp.locator("#sch-subscribe .sc").count()
+        await deepl.close()
         await browser.close()
 
     # 청약일이면 유튜브 요약까지, 상장일이면 상장 포인트로 히어로를 검증
@@ -165,6 +245,26 @@ async def main():
           and res["accordion_opens"]
           and res["row_opens"]
           and res["events"] == 4
+          and res["tabs_visible"]
+          and res["tab_labels"] == ["오늘 요약", "전체 일정"]
+          and res["tab_default_today"]
+          and res["tab_switch_on"]
+          and res["tab_url_has_query"]
+          and res["sch_counts"]["subscribe"] >= 10
+          and res["sch_counts"]["listing"] >= 1
+          and res["sch_first"] and res["sch_first"]["dday"].startswith("D-")
+          and res["sch_first"]["when"].endswith("청약")
+          and "희망" in (res["sch_first"]["price"] or "")
+          and any("38.co.kr" in (u or "") for u in res["sch_src_urls"])
+          and not res["sch_h_overflow"]
+          and not res["sch_privacy_hits"]
+          and not res["sch_errors"]
+          and res["dark_sch_visible"]
+          and not res["dark_sch_overflow"]
+          and res["desktop_sch_cards"] >= 10
+          and not res["desktop_sch_overflow"]
+          and res["deeplink_schedule"]
+          and res["deeplink_cards"] >= 10
           and not res["privacy_hits"]
           and not res["invite_words"]
           and res["support_visible"]

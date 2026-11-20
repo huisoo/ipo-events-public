@@ -37,30 +37,44 @@
     <p class="sched">평일 <b>07:30</b> · <b>16:05</b> 자동 갱신</p>
   </header>
 
+  <div class="tabs" id="tabs" role="tablist" aria-label="공모주 화면 전환" hidden>
+    <button type="button" class="tab is-on" id="tab-today" role="tab" aria-selected="true"
+      aria-controls="panel-today" data-tab="today">오늘 요약</button>
+    <button type="button" class="tab" id="tab-schedule" role="tab" aria-selected="false"
+      aria-controls="panel-schedule" data-tab="schedule">전체 일정</button>
+  </div>
+
   <div class="state" id="loading">오늘의 공모주를 정리하고 있어요…</div>
 
   <main id="main" hidden>
-    <!-- 1레벨 · 오늘의 공모주 1분 요약 -->
-    <section class="hero-sec" id="sec-ipo" aria-labelledby="h-ipo">
-      <h2 class="sr-only" id="h-ipo">오늘의 공모주 1분 요약</h2>
-      <div id="ipo-body"></div>
+    <section class="panel" id="panel-today" role="tabpanel" aria-labelledby="tab-today">
+      <!-- 1레벨 · 오늘의 공모주 1분 요약 -->
+      <section class="hero-sec" id="sec-ipo" aria-labelledby="h-ipo">
+        <h2 class="sr-only" id="h-ipo">오늘의 공모주 1분 요약</h2>
+        <div id="ipo-body"></div>
+      </section>
+
+      <!-- 2레벨 · 주관사 신규 개설 혜택 (기본 접힘) -->
+      <details class="benefits" id="sec-events">
+        <summary class="ben-sum">
+          <span class="ben-txt">
+            <span class="ben-t">주관사 계좌가 없으신가요?</span>
+            <span class="ben-n">신규 개설 혜택 <b><span id="ev-count">0</span>건</b></span>
+          </span>
+          <span class="ben-chev" aria-hidden="true"></span>
+        </summary>
+        <div class="ben-body">
+          <h2 class="sr-only">증권사 신규 개설 혜택</h2>
+          <p class="ben-note" id="ev-note"></p>
+          <div class="ev-list" id="ev-list"></div>
+        </div>
+      </details>
     </section>
 
-    <!-- 2레벨 · 주관사 신규 개설 혜택 (기본 접힘) -->
-    <details class="benefits" id="sec-events">
-      <summary class="ben-sum">
-        <span class="ben-txt">
-          <span class="ben-t">주관사 계좌가 없으신가요?</span>
-          <span class="ben-n">신규 개설 혜택 <b><span id="ev-count">0</span>건</b></span>
-        </span>
-        <span class="ben-chev" aria-hidden="true"></span>
-      </summary>
-      <div class="ben-body">
-        <h2 class="sr-only">증권사 신규 개설 혜택</h2>
-        <p class="ben-note" id="ev-note"></p>
-        <div class="ev-list" id="ev-list"></div>
-      </div>
-    </details>
+    <section class="panel" id="panel-schedule" role="tabpanel" aria-labelledby="tab-schedule" hidden>
+      <h2 class="sr-only">전체 일정 · 청약 예정 · 상장 예정</h2>
+      <div id="schedule-body"></div>
+    </section>
   </main>
 
   <div class="state error" id="error" hidden>

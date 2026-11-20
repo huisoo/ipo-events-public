@@ -101,6 +101,35 @@ h1 em{
 }
 .sched b{font-weight:800; color:var(--ink2)}
 
+/* ── 상단 2탭 (오늘 요약 | 전체 일정) ─────── */
+.tabs{
+  display:grid; grid-template-columns:1fr 1fr; gap:4px;
+  margin:0 0 13px; padding:4px;
+  background:var(--bg2);
+  border:1px solid var(--line); border-radius:13px;
+}
+@media (prefers-color-scheme: dark){ .tabs{background:#191614; border-color:var(--line)} }
+.tab{
+  -webkit-appearance:none; appearance:none;
+  font:inherit; font-size:13px; font-weight:800; letter-spacing:-.02em;
+  color:var(--ink3); background:transparent;
+  border:0; border-radius:10px;
+  min-height:42px; padding:9px 6px;
+  cursor:pointer; white-space:nowrap;
+  -webkit-tap-highlight-color:transparent;
+  transition:background .16s ease, color .16s ease, box-shadow .16s ease;
+}
+.tab.is-on{
+  color:var(--ink); background:var(--card);
+  box-shadow:0 1px 2px rgba(40,30,18,.07), 0 2px 8px rgba(40,30,18,.05);
+}
+@media (prefers-color-scheme: dark){ .tab.is-on{background:#221d1a; box-shadow:none} }
+.tab.is-on::after{
+  content:""; display:block; width:16px; height:2px; margin:3px auto 0;
+  border-radius:2px; background:var(--sun);
+}
+.tab:focus-visible{outline:2px solid var(--blue); outline-offset:1px}
+
 /* ── 1레벨 히어로 카드 ───────────────────── */
 .hero{
   position:relative;
@@ -452,6 +481,69 @@ h1 em{
   text-decoration:none;
 }
 .ev-link i{font-style:normal; opacity:.7}
+
+/* ── 전체 일정 탭 ─────────────────────── */
+.sch-head{margin:2px 2px 8px}
+.sch-head.is-2nd{margin-top:20px; padding-top:14px; border-top:1px dashed var(--line2)}
+.sch-kicker{
+  display:inline-block; margin-bottom:3px;
+  font-size:9.5px; font-weight:800; letter-spacing:.04em;
+  color:var(--sun); background:var(--sun-soft); border-radius:999px; padding:1px 7px;
+}
+.sch-h{margin:0; font-size:16px; font-weight:800; letter-spacing:-.035em; line-height:1.3; color:var(--ink)}
+.sch-h b{font-weight:800; color:var(--sun); font-variant-numeric:tabular-nums}
+.sch-n{margin:2px 0 0; font-size:10.5px; font-weight:600; color:var(--ink3); font-variant-numeric:tabular-nums}
+
+.sch-list{list-style:none; margin:0; padding:0; display:grid; gap:6px}
+.sc{
+  background:var(--card);
+  border:1px solid var(--line); border-left:3px solid var(--line2);
+  border-radius:11px;
+  padding:8px 11px 9px;
+  font-variant-numeric:tabular-nums;
+  min-width:0;
+}
+@media (prefers-color-scheme: dark){ .sc{background:#1d1917; border-color:#2c2722} }
+.sc.is-list{border-left-color:var(--blue)}
+.sc-top{display:flex; align-items:center; gap:6px; min-width:0}
+.sc-dd{
+  flex:none; font-size:9.5px; font-weight:800; letter-spacing:0;
+  border-radius:999px; padding:1px 7px;
+  background:var(--line); color:var(--ink2); white-space:nowrap;
+}
+.sc-dd.hot{background:var(--sun-soft); color:var(--sun)}
+.sc-dd.off{background:var(--line); color:var(--ink3); text-decoration:line-through}
+.sc.is-list .sc-dd.hot{background:var(--blue-soft); color:var(--blue)}
+.sc-name{
+  flex:0 1 auto; min-width:0;
+  font-size:14.5px; font-weight:800; letter-spacing:-.03em; line-height:1.3; color:var(--ink);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.sc-tag{
+  flex:none; font-size:9px; font-weight:800; color:var(--ink3);
+  background:var(--line); border-radius:4px; padding:1px 5px;
+}
+.sc-mid{display:flex; align-items:baseline; gap:3px 8px; flex-wrap:wrap; margin-top:2px}
+.sc-when{font-size:11px; font-weight:700; color:var(--ink2)}
+.sc-price{font-size:11.5px; font-weight:800; letter-spacing:-.02em; color:var(--ink)}
+.sc-sub{margin-top:1px; font-size:10px; font-weight:600; color:var(--ink3); line-height:1.45}
+
+.sch-cancel{
+  margin:14px 0 0; padding:9px 11px;
+  background:var(--red-soft); border:1px solid var(--red-soft); border-radius:11px;
+  display:grid; gap:5px;
+}
+.sch-cancel .sc-row{display:flex; align-items:baseline; gap:6px; flex-wrap:wrap; font-size:11px; color:var(--ink2)}
+.sch-cancel .sc-off{
+  flex:none; font-size:9.5px; font-weight:800; letter-spacing:0;
+  color:var(--red); background:var(--card); border-radius:4px; padding:1px 6px;
+}
+.sch-cancel b{font-size:12px; font-weight:800; color:var(--ink); letter-spacing:-.02em}
+.sch-cancel .sc-off-n{flex-basis:100%; font-size:10px; line-height:1.5; color:var(--ink3)}
+
+.sch-src{margin:14px 2px 0; font-size:9.5px; color:var(--ink3); line-height:1.6}
+.sch-src a{color:inherit; text-decoration:underline; text-underline-offset:2px}
+.sch-note{margin:4px 2px 0; font-size:9.5px; color:var(--ink3); line-height:1.55}
 
 /* ── 3레벨 · 운영 응원 (조용한 카드) ─────── */
 .support{
