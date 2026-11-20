@@ -13,16 +13,23 @@ data.json 을 로컬 HTTP 로 띄워 확인합니다(파일 직접 열면 fetch 
 - 증권사 신규 개설 혜택 4건 렌더, 초대 코드 슬롯 0건(누락 0 / 복사 버튼 0)
 - expiresAt 이 지난 테스트 항목은 숨기고, 오늘 만료·상시 항목은 노출
 - (회귀용) 코드가 들어온(ready) 항목의 복사 버튼 동작
-- 청약 정보 공유 바(.share): 히어로와 철회·출처 사이에 **버튼 1개**(1열 풀폭·44px·--sun-soft/--sun),
-  '청약 정보 공유하기' → navigator.share 로 {title,text,url} 전달(url 은 text 에 중복 없음),
-  미지원(헤드리스·데스크톱)·AbortError 이외 오류 시 클립보드에 청약 정보 포맷
-  (📌 {종목} ({M/DD} 마감) / * 항목 12개 / ✅ 청약 의견 / URL) · 토스트 · 라벨 '복사됐어요' 되돌림,
+- 청약·상장 정보 공유 바(.share): 히어로와 철회·출처 사이에 **2버튼 고정(2열 그리드)** —
+  왼쪽 `📤 청약 정보 공유`(오늘 청약 또는 ipo.next 가 있을 때, 없으면 `:disabled` + `오늘 청약 없음`),
+  오른쪽 `📈 상장 정보 공유`(ipo.listing.hasListing 일 때, 없으면 `:disabled` + `오늘 상장 없음`).
+  두 버튼 44px 이상·같은 줄·같은 폭·글자 잘림 없음·비활성은 커서 default/점선,
+  navigator.share 로 {title,text,url} 전달(url 은 text 에 중복 없음),
+  미지원(헤드리스)·AbortError 이외 오류 시 클립보드에 해당 정보 포맷
+  (청약: 📌 {종목} ({M/DD} 마감) / * 항목 12개 / ✅ 청약 의견,
+   상장: 📈 {종목} ({M/DD} 상장) / * 항목 7개) · 토스트 · 라벨 '복사됐어요' 되돌림,
   AbortError(사용자가 닫음)에는 아무 것도 하지 않음
 - 공유문 포맷: 풀 필드 mock 2건(빈 줄 구분·정확한 문자열 일치), 값이 없는 항목은 줄 생략,
-  오늘 청약 0건이면 ipo.next 폴백('11/25 마감 예정'), 청약·다음 청약 모두 없으면 공유 바 숨김
+  오늘 청약 0건이면 ipo.next 폴백('11/25 마감 예정'),
+  상장 정보 mock(풀 필드·빈 항목 생략), 상장 없는 날 → 오른쪽 버튼 비활성 '오늘 상장 없음',
+  청약·다음 청약 모두 없는 날 → 왼쪽 버튼 비활성 '오늘 청약 없음' + 눌러도 복사되지 않음
 - 스크린샷: preview-mobile.png / preview-mobile-events.png / preview-mobile-dark.png /
   preview-desktop.png / preview-toast.png / preview-mobile-schedule*.png /
-  preview-mobile-share.png / preview-mobile-share-dark.png / preview-mobile-share-full.png
+  preview-mobile-share.png / preview-mobile-share-dark.png / preview-mobile-share-full.png /
+  preview-mobile-share-off.png (양쪽 비활성)
 - 상단 2탭: 기본 '오늘 요약', 탭하면 '전체 일정'(?tab=schedule) — 두 탭 모두 390px·다크·
   데스크톱에서 가로 스크롤·잘림 없이 렌더
 """
@@ -174,8 +181,72 @@ MOCK_COPY = (
 )
 
 
+# 풀 필드 mock 의 기대 상장 공유문 — 포맷 자체를 고정합니다.
+MOCK_LISTING_COPY = (
+    "📈 하나에어로다이내믹스 (11/20 상장)\n"
+    "\n"
+    "* 공모가: 5,700원\n"
+    "* 시초가: 10,130원 (+77.7%)\n"
+    "* 종가: 6,050원 (+6.14%)\n"
+    "* 최종 확약률: 72.69%\n"
+    "* 상장일 유통물량: 17.30% (약 175억)\n"
+    "* 가격제한폭: 3,420원 ~ 22,800원 (60~400%)\n"
+    "* 한줄 요약: 장 초반 +98% 급등 후 마감 · 12/5 15일 확약 물량 주의\n"
+)
+
+# 값이 빠진 상장 mock — 확인 못 한 항목은 줄을 만들지 않고, closePrice 는 earlyPrice 로 대신
+MOCK_LISTING_SPARSE = (
+    "📈 엠비디 (11/24 상장)\n"
+    "\n"
+    "* 공모가: 7,000원\n"
+    "* 종가: 8,900원 (+27.1%)\n"
+)
+
+
+def listing_day(body):
+    """오늘 상장만 있는 날 — 왼쪽(청약)은 비활성, 오른쪽(상장)은 풀 필드."""
+    body = json.loads(json.dumps(body))
+    ipo = body.setdefault("ipo", {})
+    ipo["subscribe"] = []
+    ipo["next"] = {}
+    ipo["listing"] = {
+        "hasListing": True, "date": "2026-11-20", "name": "하나에어로다이내믹스",
+        "code": "271160", "market": "코스닥", "badge": "오늘 상장",
+        "ipoPrice": "5,700원",
+        "openPrice": "10,130원", "openChange": "+77.7%",
+        "closePrice": "6,050원", "closeChange": "+6.14%",
+        "lockupRate": "72.69%", "floatSummary": "17.30% (약 175억)",
+        "priceBand": "3,420원 ~ 22,800원 (60~400%)",
+        "shareSummary": "장 초반 +98% 급등 후 마감 · 12/5 15일 확약 물량 주의",
+    }
+    return body
+
+
+def listing_sparse_day(body):
+    """상장 정보에 확인된 값만 있는 날 — 빈 항목·미정은 줄 생략."""
+    body = json.loads(json.dumps(body))
+    ipo = body.setdefault("ipo", {})
+    ipo["subscribe"] = []
+    ipo["next"] = {}
+    ipo["listing"] = {
+        "hasListing": True, "date": "2026-11-24", "name": "엠비디",
+        "ipoPrice": "7,000원", "openPrice": "미정", "openChange": "",
+        "earlyPrice": "8,900원", "earlyChange": "+27.1%",
+        "lockupRate": "확인 필요", "floatSummary": "", "priceBand": "",
+        "shareSummary": "",
+    }
+    return body
+
+
+def no_listing_day(body):
+    """오늘 청약은 있지만 상장은 없는 날 — 오른쪽 버튼만 비활성."""
+    body = subscribe_day(body)
+    body["ipo"]["listing"] = {"hasListing": False}
+    return body
+
+
 def no_ipo_day(body):
-    """청약도 다음 청약도 없는 날 — 공유 바는 숨겨야 합니다."""
+    """청약도 다음 청약도 없는 날 — 두 버튼 모두 이유를 적은 비활성."""
     body = json.loads(json.dumps(body))
     ipo = body.setdefault("ipo", {})
     ipo["subscribe"] = []
@@ -209,6 +280,10 @@ def share_value(item, key):
         raw = item.get("price") or ""
     if not raw and key == "refundDate":
         raw = item.get("refund") or ""
+    if not raw and key == "closePrice":
+        raw = item.get("earlyPrice") or ""
+    if not raw and key == "closeChange":
+        raw = item.get("earlyChange") or ""
     v = str(raw or "").strip()
     if key == "ipoPrice":
         v = re.sub(r"^확정\s*", "", v)
@@ -274,6 +349,43 @@ def expected_body(data):
 
 def expected_copy(data):
     body = expected_body(data)
+    return f"{body}\n{SITE_URL}" if body else ""
+
+
+# ── 상장 정보 공유문 기대값 (app.js 의 listingBody 와 같은 규칙) ──────────
+LISTING_FIELDS = [
+    ("ipoPrice", "공모가", None),
+    ("openPrice", "시초가", "openChange"),
+    ("closePrice", "종가", "closeChange"),
+    ("lockupRate", "최종 확약률", None),
+    ("floatSummary", "상장일 유통물량", None),
+    ("priceBand", "가격제한폭", None),
+    ("shareSummary", "한줄 요약", None),
+]
+
+
+def listing_value(item, key, chg_key):
+    v = share_value(item, key)
+    if not v or not chg_key:
+        return v
+    c = share_value(item, chg_key)
+    return f"{v} ({c})" if c else v
+
+
+def listing_block(data):
+    ipo = data.get("ipo") or {}
+    l = ipo.get("listing") or {}
+    if not l.get("hasListing") or not str(l.get("name") or "").strip():
+        return ""
+    when = mdd(l.get("date") or l.get("listingDate") or ipo.get("date") or "")
+    head = "📈 " + str(l.get("name")).strip() + (f" ({when} 상장)" if when else "")
+    bullets = [f"* {label}: {v}" for key, label, chg in LISTING_FIELDS
+               if (v := listing_value(l, key, chg))]
+    return head + ("\n\n" + "\n".join(bullets) if bullets else "")
+
+
+def expected_listing_copy(data):
+    body = listing_block(data)
     return f"{body}\n{SITE_URL}" if body else ""
 
 
@@ -368,29 +480,50 @@ async def main():
                 hierarchy["hero_bottom"] <= hierarchy["benefits_top"]
                 and hierarchy["next_bottom"] <= hierarchy["viewport_h"])
 
-            # ── 오늘 요약 공유 바(.share) ──────────────────
+            # ── 청약·상장 정보 공유 바(.share) — 항상 2버튼 고정 ────────────
             share = page.locator("#share")
             results["share_visible"] = await share.is_visible()
             results["share_label"] = (await page.inner_text("#share .share-lab")).strip()
             results["share_btns"] = await page.eval_on_selector_all(
                 "#share .share-btn", "els => els.map(e => e.textContent.replace(/\\s+/g,' ').trim())")
+            results["share_ids"] = await page.eval_on_selector_all(
+                "#share .share-btn", "els => els.map(e => e.id)")
+            results["share_disabled"] = await page.eval_on_selector_all(
+                "#share .share-btn", "els => els.map(e => e.disabled)")
             results["share_btn_h"] = await page.eval_on_selector_all(
                 "#share .share-btn", "els => els.map(e => Math.round(e.getBoundingClientRect().height))")
-            # 1열 풀폭(버튼 폭 = .share 안쪽 폭) · 주 버튼 색(--sun-soft 배경 · --sun 글자)
-            results["share_full_width"] = await page.evaluate("""(() => {
-                const s = document.querySelector('#share'), b = document.querySelector('#share .share-btn');
-                const cs = getComputedStyle(s);
+            results["share_white_space"] = await page.eval_on_selector_all(
+                "#share .share-btn", "els => els.map(e => getComputedStyle(e).whiteSpace)")
+            # 2열 그리드 — 같은 줄·같은 폭으로 .share 안쪽 폭을 꽉 채우고, 글자가 잘리지 않음
+            results["share_grid"] = await page.evaluate("""(() => {
+                const s = document.querySelector('#share'), cs = getComputedStyle(s);
                 const inner = s.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
-                return Math.abs(b.getBoundingClientRect().width - inner) <= 2;
+                const b = [...document.querySelectorAll('#share .share-btn')].map(e => e.getBoundingClientRect());
+                const lbl = [...document.querySelectorAll('#share .share-btn .lbl')];
+                return {
+                    count: b.length,
+                    same_row: b.length === 2 && Math.abs(b[0].top - b[1].top) <= 1,
+                    equal_w: b.length === 2 && Math.abs(b[0].width - b[1].width) <= 2,
+                    fills: b.length === 2 &&
+                        Math.abs((b[0].width + b[1].width + (b[1].left - b[0].right)) - inner) <= 3,
+                    gap: b.length === 2 ? Math.round(b[1].left - b[0].right) : -1,
+                    widths: b.map(r => Math.round(r.width)),
+                    fit: lbl.every(e => e.scrollWidth <= e.clientWidth + 1),
+                };
             })()""")
-            results["share_primary_style"] = await page.evaluate("""(() => {
-                const cs = getComputedStyle(document.querySelector('#share .share-btn'));
+            # 왼쪽 색(--sun-soft/--sun) · 오른쪽 색(--blue-soft/--blue) · 둘 다 굵게
+            results["share_btn_style"] = await page.evaluate("""(() => {
                 const probe = v => { const d = document.createElement('div');
                     d.style.color = v; document.body.appendChild(d);
                     const c = getComputedStyle(d).color; d.remove(); return c; };
-                return { bg_ok: cs.backgroundColor === probe('var(--sun-soft)'),
-                         fg_ok: cs.color === probe('var(--sun)'),
-                         bold: Number(cs.fontWeight) >= 700 };
+                const st = (sel, bgVar, fgVar) => {
+                    const cs = getComputedStyle(document.querySelector(sel));
+                    return { bg_ok: cs.backgroundColor === probe(bgVar),
+                             fg_ok: cs.color === probe(fgVar),
+                             bold: Number(cs.fontWeight) >= 700 };
+                };
+                return { sub: st('#share-sub', 'var(--sun-soft)', 'var(--sun)'),
+                         listing: st('#share-listing', 'var(--blue-soft)', 'var(--blue)') };
             })()""")
             results["share_pos"] = await page.evaluate("""(() => {
                 const r = s => document.querySelector(s).getBoundingClientRect();
@@ -405,9 +538,9 @@ async def main():
             results["share_native"] = await page.evaluate("typeof navigator.share")
             await share.screenshot(path=str(ROOT / "preview-mobile-share.png"))
 
-            # 버튼 1개 — navigator.share 없는 환경(헤드리스)은 클립보드 복사로 폴백
+            # 왼쪽 버튼 — navigator.share 없는 환경(헤드리스)은 청약 정보 복사로 폴백
             await page.evaluate("navigator.clipboard.writeText('')")
-            await page.locator("#share .share-btn").click()
+            await page.locator("#share-sub").click()
             await page.wait_for_timeout(350)
             clip = await page.evaluate("navigator.clipboard.readText()")
             results["share_clipboard"] = clip
@@ -416,10 +549,10 @@ async def main():
             results["share_line_head"] = lines[0]
             results["share_last_line"] = lines[-1]
             results["share_copy_toast"] = await page.inner_text("#toast")
-            results["share_copy_label"] = (await page.inner_text("#share .share-btn")).strip()
+            results["share_copy_label"] = (await page.inner_text("#share-sub .lbl")).strip()
             await page.wait_for_timeout(1900)
             results["share_copy_label_back"] = (
-                await page.inner_text("#share .share-btn")).strip()
+                await page.inner_text("#share-sub .lbl")).strip()
 
             # 공유문 = 청약 정보만 — 현재 data.json 기준 기대값과 정확히 일치해야 함
             results["share_expect"] = expected_copy(DATA)
@@ -448,15 +581,39 @@ async def main():
             terms_all = PRIVACY_TERMS + ALWAYS_TERMS
             results["share_privacy_hits"] = [t for t in terms_all if t in clip]
 
-            # 공유하기 — 헤드리스에는 navigator.share 가 없어 같은 버튼이 청약 정보 복사로 폴백
+            # 오른쪽 버튼 — 상장 정보 복사 포맷
             await page.evaluate("navigator.clipboard.writeText('')")
-            await page.locator("#share .share-btn").click()
+            await page.locator("#share-listing").click()
+            await page.wait_for_timeout(350)
+            lclip = await page.evaluate("navigator.clipboard.readText()")
+            llines = lclip.split("\n")
+            results["list_clipboard"] = lclip
+            results["list_expect"] = expected_listing_copy(DATA)
+            results["list_exact"] = lclip == results["list_expect"]
+            results["list_head_ok"] = bool(
+                re.match(r"^📈 \S+ \(\d{1,2}/\d{1,2} 상장\)$", llines[0]))
+            results["list_bullets"] = lclip.count("* ")
+            results["list_last_line"] = llines[-1]
+            results["list_url_once"] = (lclip.count(SITE_URL) == 1
+                                        and lclip.endswith("\n" + SITE_URL))
+            results["list_no_subscribe_name"] = not any(
+                str(it.get("name")) in lclip for it, _ in share_items(DATA))
+            results["list_copy_toast"] = await page.inner_text("#toast")
+            results["list_copy_label"] = (await page.inner_text("#share-listing .lbl")).strip()
+            await page.wait_for_timeout(1900)
+            results["list_copy_label_back"] = (
+                await page.inner_text("#share-listing .lbl")).strip()
+            results["list_privacy_hits"] = [t for t in terms_all if t in lclip]
+
+            # 같은 버튼을 다시 눌러도 같은 포맷으로 복사 (라벨 되돌림 뒤 반복 동작)
+            await page.evaluate("navigator.clipboard.writeText('')")
+            await page.locator("#share-sub").click()
             await page.wait_for_timeout(400)
             results["share_fallback_toast"] = await page.inner_text("#toast")
             results["share_fallback_clipboard"] = (
                 await page.evaluate("navigator.clipboard.readText()")) == clip
             results["share_fallback_label"] = (
-                await page.inner_text("#share .share-btn")).strip()
+                await page.inner_text("#share-sub .lbl")).strip()
 
             # ── 상단 2탭: 기본은 오늘 요약, ?tab=schedule 로 전체 일정 ──
             results["tabs_visible"] = await page.locator("#tabs").is_visible()
@@ -671,12 +828,19 @@ async def main():
                 navigator.share = function (d) { window.__shared = d; return Promise.resolve(); };
             """)
             results["stub_share_type"] = await spage.evaluate("typeof navigator.share")
-            await spage.locator("#share .share-btn").click()
+            await spage.locator("#share-sub").click()
             await spage.wait_for_timeout(300)
             results["shared_payload"] = await spage.evaluate("window.__shared")
             results["stub_share_label"] = (
-                await spage.inner_text("#share .share-btn")).strip()
+                await spage.inner_text("#share-sub .lbl")).strip()
             results["stub_share_toast"] = (await spage.inner_text("#toast")).strip()
+            # 오른쪽 버튼도 공유 시트로 — title 은 '공모주 상장 정보'
+            await spage.evaluate("window.__shared = null")
+            await spage.locator("#share-listing").click()
+            await spage.wait_for_timeout(300)
+            results["shared_listing_payload"] = await spage.evaluate("window.__shared")
+            results["stub_list_label"] = (
+                await spage.inner_text("#share-listing .lbl")).strip()
             results["stub_errors"] = s_errors
             await sctx.close()
 
@@ -688,34 +852,44 @@ async def main():
                 };
             """)
             await apage.evaluate("navigator.clipboard.writeText('')")
-            await apage.locator("#share .share-btn").click()
+            await apage.locator("#share-sub").click()
             await apage.wait_for_timeout(450)
             results["abort_clipboard_empty"] = (
                 await apage.evaluate("navigator.clipboard.readText()")) == ""
             results["abort_toast_empty"] = (await apage.inner_text("#toast")).strip() == ""
-            results["abort_label"] = (await apage.inner_text("#share .share-btn")).strip()
+            results["abort_label"] = (await apage.inner_text("#share-sub .lbl")).strip()
             results["abort_errors"] = a_errors
             await actx.close()
 
-            # 공유가 거부(reject)되면 조용히 죽지 않고 청약 정보 복사로 폴백
+            # 공유가 거부(reject)되면 조용히 죽지 않고 복사 폴백 (오른쪽 버튼도 상장 정보로)
             rctx, rpage, r_errors = await open_page(browser, init_script="""
                 navigator.share = function () {
                     const e = new Error('denied'); e.name = 'NotAllowedError';
                     return Promise.reject(e);
                 };
             """)
-            await rpage.locator("#share .share-btn").click()
+            await rpage.locator("#share-sub").click()
             await rpage.wait_for_timeout(450)
             results["share_reject_toast"] = await rpage.inner_text("#toast")
             results["share_reject_clipboard"] = (
                 await rpage.evaluate("navigator.clipboard.readText()")) == expected_copy(DATA)
+            await rpage.evaluate("navigator.clipboard.writeText('')")
+            await rpage.locator("#share-listing").click()
+            await rpage.wait_for_timeout(450)
+            results["list_reject_toast"] = await rpage.inner_text("#toast")
+            results["list_reject_clipboard"] = (
+                await rpage.evaluate("navigator.clipboard.readText()")) == expected_listing_copy(DATA)
             results["reject_errors"] = r_errors
             await rctx.close()
 
-            # ── 2.6 청약일 — 풀 필드 mock 2건, 포맷 정확히 일치 ─────────
+            # ── 2.6 청약일 — 풀 필드 mock 2건, 포맷 정확히 일치 (오른쪽은 비활성) ────
             vctx, vpage, v_errors = await open_page(browser, mutate=subscribe_day)
             await vpage.wait_for_timeout(250)
-            await vpage.locator("#share .share-btn").click()
+            results["mock_disabled"] = await vpage.eval_on_selector_all(
+                "#share .share-btn", "els => els.map(e => e.disabled)")
+            results["mock_labels"] = await vpage.eval_on_selector_all(
+                "#share .share-btn .lbl", "els => els.map(e => e.textContent.trim())")
+            await vpage.locator("#share-sub").click()
             await vpage.wait_for_timeout(350)
             vclip = await vpage.evaluate("navigator.clipboard.readText()")
             results["mock_clipboard"] = vclip
@@ -732,9 +906,64 @@ async def main():
             results["sub_errors"] = v_errors
             await vctx.close()
 
-            # ── 2.7 청약 0건 + 다음 청약 0건 → 공유 바 숨김 ──────
+            # ── 2.7 상장일 — 오른쪽 버튼 활성/포맷 일치, 왼쪽은 '오늘 청약 없음' ────
+            gctx, gpage, g_errors = await open_page(browser, mutate=listing_day)
+            await gpage.wait_for_timeout(250)
+            results["ldisabled"] = await gpage.eval_on_selector_all(
+                "#share .share-btn", "els => els.map(e => e.disabled)")
+            results["llabels"] = await gpage.eval_on_selector_all(
+                "#share .share-btn .lbl", "els => els.map(e => e.textContent.trim())")
+            await gpage.locator("#share-listing").click()
+            await gpage.wait_for_timeout(350)
+            gclip = await gpage.evaluate("navigator.clipboard.readText()")
+            results["lmock_clipboard"] = gclip
+            results["lmock_exact"] = gclip == f"{MOCK_LISTING_COPY}{SITE_URL}"
+            results["lmock_bullets"] = gclip.count("* ")
+            results["lmock_url_once"] = (gclip.count(SITE_URL) == 1
+                                         and gclip.endswith("\n" + SITE_URL))
+            # 비활성 버튼은 눌러도 복사되지 않음 (이벤트를 직접 보내도 가드가 막음)
+            await gpage.evaluate("navigator.clipboard.writeText('')")
+            await gpage.locator("#share-sub").dispatch_event("click")
+            await gpage.wait_for_timeout(250)
+            results["ldisabled_no_copy"] = (await gpage.evaluate(
+                "navigator.clipboard.readText()")) == ""
+            results["disabled_cursor"] = await gpage.eval_on_selector(
+                "#share-sub", "e => getComputedStyle(e).cursor")
+            results["disabled_border"] = await gpage.eval_on_selector(
+                "#share-sub", "e => getComputedStyle(e).borderTopStyle")
+            await gpage.locator("#share").screenshot(
+                path=str(ROOT / "preview-mobile-share-off.png"))
+            results["listing_mock_errors"] = g_errors
+            await gctx.close()
+
+            # 값이 빠진 상장 — 빈 항목·미정은 줄 생략, closePrice 는 earlyPrice 로 대신
+            sctx2, spage2, s2_errors = await open_page(browser, mutate=listing_sparse_day)
+            await spage2.wait_for_timeout(250)
+            await spage2.locator("#share-listing").click()
+            await spage2.wait_for_timeout(350)
+            sclip = await spage2.evaluate("navigator.clipboard.readText()")
+            results["lsparse_exact"] = sclip == f"{MOCK_LISTING_SPARSE}{SITE_URL}"
+            results["lsparse_dropped"] = not any(
+                s in sclip for s in ("미정", "확인 필요", "None", "undefined"))
+            results["sparse_errors"] = s2_errors
+            await sctx2.close()
+
+            # ── 2.8 청약도 다음 청약도 없음 → 왼쪽 '오늘 청약 없음' 비활성 ────────
             nctx, npage, _ = await open_page(browser, mutate=no_ipo_day)
-            results["no_ipo_share_hidden"] = not await npage.locator("#share").is_visible()
+            results["no_ipo_share_visible"] = await npage.locator("#share").is_visible()
+            results["no_ipo_btns"] = await npage.eval_on_selector_all(
+                "#share .share-btn", "els => els.map(e => e.textContent.replace(/\\s+/g,' ').trim())")
+            results["no_ipo_disabled"] = await npage.eval_on_selector_all(
+                "#share .share-btn", "els => els.map(e => e.disabled)")
+            await npage.evaluate("navigator.clipboard.writeText('')")
+            await npage.locator("#share-sub").dispatch_event("click")
+            await npage.locator("#share-listing").dispatch_event("click")
+            await npage.wait_for_timeout(300)
+            results["no_ipo_clipboard_empty"] = (await npage.evaluate(
+                "navigator.clipboard.readText()")) == ""
+            results["no_ipo_toast_empty"] = (await npage.inner_text("#toast")).strip() == ""
+            await npage.locator("#share").screenshot(
+                path=str(ROOT / "preview-mobile-share-off.png"))
             await nctx.close()
 
             # ── 3. 다크 모드 ──────────────────────────────
@@ -746,7 +975,13 @@ async def main():
             results["dark_share_btns"] = await dpage.eval_on_selector_all(
                 "#share .share-btn", "els => els.map(e => Math.round(e.getBoundingClientRect().height))")
             results["dark_share_labels"] = await dpage.eval_on_selector_all(
-                "#share .share-btn", "els => els.map(e => e.textContent.replace(/\\s+/g,' ').trim())")
+                "#share .share-btn .lbl", "els => els.map(e => e.textContent.trim())")
+            results["dark_share_grid"] = await dpage.evaluate("""(() => {
+                const b = [...document.querySelectorAll('#share .share-btn')].map(e => e.getBoundingClientRect());
+                const lbl = [...document.querySelectorAll('#share .share-btn .lbl')];
+                return { same_row: b.length === 2 && Math.abs(b[0].top - b[1].top) <= 1,
+                         fit: lbl.every(e => e.scrollWidth <= e.clientWidth + 1) };
+            })()""")
             results["dark_share_overflow"] = await dpage.evaluate(
                 "document.documentElement.scrollWidth > window.innerWidth + 1")
             await dpage.locator("#share").scroll_into_view_if_needed()
@@ -772,7 +1007,12 @@ async def main():
             results["desktop_events"] = await dp.locator("#ev-list .ev").count()
             results["desktop_share_visible"] = await dp.locator("#share").is_visible()
             results["desktop_share_labels"] = await dp.eval_on_selector_all(
-                "#share .share-btn", "els => els.map(e => e.textContent.replace(/\\s+/g,' ').trim())")
+                "#share .share-btn .lbl", "els => els.map(e => e.textContent.trim())")
+            results["desktop_share_disabled"] = await dp.eval_on_selector_all(
+                "#share .share-btn", "els => els.map(e => e.disabled)")
+            results["desktop_share_fit"] = await dp.eval_on_selector_all(
+                "#share .share-btn .lbl",
+                "els => els.every(e => e.scrollWidth <= e.clientWidth + 1)")
             results["desktop_h_overflow"] = await dp.evaluate(
                 "document.documentElement.scrollWidth > window.innerWidth + 1")
             results["desktop_errors"] = desk_errors
@@ -833,18 +1073,30 @@ async def main():
           and not results["desktop_sch_overflow"]
           and results["deeplink_schedule"]
           and results["deeplink_cards"] >= 10
-          # 오늘 요약 공유 바
+          # 정보 공유 바 — 2버튼 고정(청약·상장)
           and results["share_visible"]
           and results["share_label"].startswith("단톡방에")
-          and "청약 정보" in results["share_label"]
-          and len(results["share_btns"]) == 1
+          and "상장" in results["share_label"]
+          and len(results["share_btns"]) == 2
+          and results["share_ids"] == ["share-sub", "share-listing"]
           and results["share_btns"][0].startswith("📤")
-          and results["share_btns"][0].endswith("청약 정보 공유하기")
+          and results["share_btns"][0].endswith("청약 정보 공유")
+          and results["share_btns"][1].startswith("📈")
+          and results["share_btns"][1].endswith("상장 정보 공유")
+          and results["share_disabled"] == [False, False]
           and min(results["share_btn_h"]) >= 44
-          and results["share_full_width"]
-          and results["share_primary_style"]["bg_ok"]
-          and results["share_primary_style"]["fg_ok"]
-          and results["share_primary_style"]["bold"]
+          and all(ws == "nowrap" for ws in results["share_white_space"])
+          and results["share_grid"]["count"] == 2
+          and results["share_grid"]["same_row"]
+          and results["share_grid"]["equal_w"]
+          and results["share_grid"]["fills"]
+          and results["share_grid"]["fit"]
+          and results["share_btn_style"]["sub"]["bg_ok"]
+          and results["share_btn_style"]["sub"]["fg_ok"]
+          and results["share_btn_style"]["sub"]["bold"]
+          and results["share_btn_style"]["listing"]["bg_ok"]
+          and results["share_btn_style"]["listing"]["fg_ok"]
+          and results["share_btn_style"]["listing"]["bold"]
           and results["share_placed_ok"]
           and results["share_native"] == "undefined"
           and results["share_lines"] >= 3
@@ -858,15 +1110,27 @@ async def main():
           and not results["share_privacy_hits"]
           and "청약 정보" in results["share_copy_toast"]
           and results["share_copy_label"] == "복사됐어요"
-          and results["share_copy_label_back"].endswith("청약 정보 공유하기")
+          and results["share_copy_label_back"] == "청약 정보 공유"
           and results["share_fallback_clipboard"]
           and "복사" in results["share_fallback_toast"]
+          # 오른쪽 — 상장 정보 포맷
+          and results["list_exact"]
+          and results["list_head_ok"]
+          and results["list_bullets"] == 7
+          and results["list_last_line"] == SITE_URL
+          and results["list_url_once"]
+          and results["list_no_subscribe_name"]
+          and not results["list_privacy_hits"]
+          and "상장 정보" in results["list_copy_toast"]
+          and results["list_copy_label"] == "복사됐어요"
+          and results["list_copy_label_back"] == "상장 정보 공유"
           and results["stub_share_type"] == "function"
-          and results["stub_share_label"].endswith("청약 정보 공유하기")
+          and results["stub_share_label"] == "청약 정보 공유"
           and results["stub_share_toast"] == ""
+          and results["stub_list_label"] == "상장 정보 공유"
           and results["abort_clipboard_empty"]
           and results["abort_toast_empty"]
-          and results["abort_label"].endswith("청약 정보 공유하기")
+          and results["abort_label"] == "청약 정보 공유"
           and not results["abort_errors"]
           and results["mock_exact"]
           and results["mock_blocks"] == 2
@@ -875,23 +1139,54 @@ async def main():
           and results["mock_blank_between"]
           and results["mock_dropped_unknown"]
           and results["mock_url_once"]
-          and results["no_ipo_share_hidden"]
+          and results["mock_disabled"] == [False, True]
+          and results["mock_labels"] == ["청약 정보 공유", "오늘 상장 없음"]
+          and results["ldisabled"] == [True, False]
+          and results["llabels"] == ["오늘 청약 없음", "상장 정보 공유"]
+          and results["lmock_exact"]
+          and results["lmock_bullets"] == 7
+          and results["lmock_url_once"]
+          and results["ldisabled_no_copy"]
+          and results["disabled_cursor"] == "default"
+          and results["disabled_border"] == "dashed"
+          and results["lsparse_exact"]
+          and results["lsparse_dropped"]
+          and results["no_ipo_share_visible"]
+          and results["no_ipo_disabled"] == [True, True]
+          and results["no_ipo_btns"][0].startswith("📤")
+          and results["no_ipo_btns"][0].endswith("오늘 청약 없음")
+          and results["no_ipo_btns"][1].startswith("📈")
+          and results["no_ipo_btns"][1].endswith("오늘 상장 없음")
+          and results["no_ipo_clipboard_empty"]
+          and results["no_ipo_toast_empty"]
           and not results["sub_errors"]
+          and not results["listing_mock_errors"]
+          and not results["sparse_errors"]
           and bool(results["shared_payload"])
           and results["shared_payload"].get("url") == SITE_URL
           and results["shared_payload"].get("title") == "공모주 청약 정보"
           and results["shared_payload"].get("text") == expected_body(DATA)
           and SITE_URL not in (results["shared_payload"].get("text") or "")
+          and bool(results["shared_listing_payload"])
+          and results["shared_listing_payload"].get("url") == SITE_URL
+          and results["shared_listing_payload"].get("title") == "공모주 상장 정보"
+          and results["shared_listing_payload"].get("text") == listing_block(DATA)
+          and SITE_URL not in (results["shared_listing_payload"].get("text") or "")
           and "복사" in results["share_reject_toast"]
           and results["share_reject_clipboard"]
+          and "복사" in results["list_reject_toast"]
+          and results["list_reject_clipboard"]
           and results["dark_share_visible"]
-          and results["dark_share_count"] == 1
+          and results["dark_share_count"] == 2
           and min(results["dark_share_btns"]) >= 44
-          and results["dark_share_labels"][0].endswith("청약 정보 공유하기")
+          and results["dark_share_labels"] == ["청약 정보 공유", "상장 정보 공유"]
+          and results["dark_share_grid"]["same_row"]
+          and results["dark_share_grid"]["fit"]
           and not results["dark_share_overflow"]
           and results["desktop_share_visible"]
-          and len(results["desktop_share_labels"]) == 1
-          and results["desktop_share_labels"][0].endswith("청약 정보 공유하기")
+          and results["desktop_share_labels"] == ["청약 정보 공유", "상장 정보 공유"]
+          and results["desktop_share_disabled"] == [False, False]
+          and results["desktop_share_fit"]
           and not results["stub_errors"]
           and not results["reject_errors"]
           and results["invite_missing"] == 0

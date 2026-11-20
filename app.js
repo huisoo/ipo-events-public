@@ -6,8 +6,9 @@
  *   2레벨  .benefits  주관사 신규 개설 혜택 (기본 접힘 아코디언 + 얇은 행)
  *   3레벨  .support   커피 한 잔 응원하기 (푸터 위 조용한 카드, 카카오페이 링크)
  *
- * 오늘 요약 탭 히어로 아래  .share  청약 정보 공유하기 버튼 1개 (카톡 단톡방 공유용 —
- *                                  청약 정보만. 공유 시트 없음·오류면 링크까지 복사로 폴백)
+ * 오늘 요약 탭 히어로 아래  .share  '청약 정보 공유' | '상장 정보 공유' 2버튼 고정
+ *                                  (카톡 단톡방 공유용 — 없는 쪽은 이유 적힌 비활성.
+ *                                   공유 시트 없음·오류면 링크까지 복사로 폴백)
  *
  * 상단 탭  .tabs  오늘 요약(#panel-today) | 전체 일정(#panel-schedule, data.json ipo.upcoming)
  */
@@ -272,6 +273,10 @@
         (has(l.openChange) ? ' <span class="chg sm ' + dirOf(l.openChange) + '">' + esc(l.openChange) + '</span>' : '') +
         '</dd></div>';
     }
+    /* 큰 가격은 종가(장 마감 뒤) — 아직 종가가 없으면 직전 체결가(earlyPrice) */
+    var lastPrice = has(l.closePrice) ? l.closePrice : (l.earlyPrice || '');
+    var lastChange = has(l.closeChange) ? l.closeChange
+      : (has(l.closePrice) ? '' : (l.earlyChange || ''));
     return '<article class="hero is-list">' +
         '<div class="flags"><span class="flag is-list">오늘 상장</span>' +
           (badge ? '<span class="flag is-soft">' + esc(badge) + '</span>' : '') +
@@ -280,8 +285,8 @@
           (has(l.code) ? '<span class="hmarket">' + esc(l.code) + '</span>' : '') +
           (has(l.market) ? '<span class="hmarket">' + esc(l.market) + '</span>' : '') +
         '</div>' +
-        '<div class="hprice"><b>' + esc(l.earlyPrice) + '</b>' +
-          (has(l.earlyChange) ? '<span class="chg ' + dirOf(l.earlyChange) + '">' + esc(l.earlyChange) + '</span>' : '') +
+        '<div class="hprice"><b>' + esc(lastPrice) + '</b>' +
+          (lastChange ? '<span class="chg ' + dirOf(lastChange) + '">' + esc(lastChange) + '</span>' : '') +
         '</div>' +
         (meta ? '<dl class="hmeta">' + meta + '</dl>' : '') +
         pts +
@@ -593,7 +598,7 @@
     $('loading').hidden = true;
     $('main').hidden = false;
     $('tabs').hidden = false;
-    $('share').hidden = !shareText;
+    $('share').hidden = false;
     $('support').hidden = false;
     $('foot').hidden = false;
     setTab(tabFromUrl(), { silent: true });
@@ -660,8 +665,11 @@
     $('error').hidden = false;
   }
 
-  /* ── 청약 정보 공유(복사 폴백) ──────────────
-   * 카톡 단톡방에 그대로 붙여넣는 '청약 정보' 텍스트(전체 요약 아님).
+  /* ── 정보 공유(복사 폴백) ──────────────────
+   * 카톡 단톡방에 그대로 붙여넣는 두 가지 텍스트 — 청약 정보 / 상장 정보.
+   * .share 안의 버튼은 항상 2개 고정이고, 그날 없는 쪽은 이유를 적은 :disabled 로 남습니다.
+   *
+   * 1) 청약 정보 — ipo.subscribe[](오늘 청약 종목) 순서대로, 오늘 청약이 없으면 ipo.next.
    *
    *   📌 {종목명} ({M/DD} 마감[ 예정])
    *
@@ -671,16 +679,25 @@
    *
    *   ✅ 청약 의견: …
    *
-   * 오늘 청약 종목이 여러 개면 빈 줄로 구분해 순서대로, 오늘 청약이 없으면 ipo.next를
-   * 같은 포맷으로 내보냅니다. 값이 없거나 '미정'·'확인 필요'인 항목은 줄을 만들지 않습니다.
-   * 버튼은 1개입니다 — navigator.share 가 있으면 공유 시트로 { title, text, url } 을 넘기고
-   * (text 에는 URL 을 넣지 않음), 미지원(데스크톱 등)이거나 AbortError 이외의 오류면
-   * 클립보드 복사본(마지막 줄에 URL)으로 폴백합니다.
+   * 2) 상장 정보 — ipo.listing(오늘 상장 종목)이 있을 때만.
+   *
+   *   📈 {종목명} ({M/DD} 상장)
+   *
+   *   * 공모가: …  * 시초가: … (…)  * 종가: … (…)  * 최종 확약률: …
+   *   * 상장일 유통물량: …  * 가격제한폭: …  * 한줄 요약: …
+   *
+   * 값이 없거나 '미정'·'확인 필요'인 항목은 줄을 만들지 않습니다.
+   * navigator.share 가 있으면 공유 시트로 { title, text, url } 을 넘기고 (text 에는 URL 없음),
+   * 미지원(데스크톱 등)이거나 AbortError 이외의 오류면 클립보드 복사본(마지막 줄에 URL)으로
+   * 폴백합니다.
    */
   var SITE_URL = 'https://ipo-events-public.vercel.app';
   var SHARE_TITLE = '공모주 청약 정보';
-  var shareText = '';
-  var sharePayload = null;
+  var LISTING_TITLE = '공모주 상장 정보';
+  var subText = '';
+  var subPayload = null;
+  var listText = '';
+  var listPayload = null;
 
   /* 공유문 순서·라벨 (data.json 필드명 → 사람이 읽는 이름) */
   var SHARE_FIELDS = [
@@ -698,6 +715,17 @@
     ['listingDate', '상장일']
   ];
 
+  /* 상장 정보 공유문 순서·라벨 — 세 번째 값은 괄호에 붙일 등락 필드 */
+  var LISTING_FIELDS = [
+    ['ipoPrice', '공모가'],
+    ['openPrice', '시초가', 'openChange'],
+    ['closePrice', '종가', 'closeChange'],
+    ['lockupRate', '최종 확약률'],
+    ['floatSummary', '상장일 유통물량'],
+    ['priceBand', '가격제한폭'],
+    ['shareSummary', '한줄 요약']
+  ];
+
   /* 값이 비었거나 미정으로 적힌 항목 — 추정 금지, 줄 자체를 뺍니다 */
   function shareUnknown(v) {
     var s = String(v == null ? '' : v).trim();
@@ -713,11 +741,14 @@
     return s.replace(/\([일월화수목금토]\)/g, '').trim();
   }
 
-  /* 필드 값 — ipoPrice 는 price, refundDate 는 refund 로 대신할 수 있습니다 */
+  /* 필드 값 — ipoPrice 는 price, refundDate 는 refund, closePrice·closeChange 는
+     earlyPrice·earlyChange 로 대신할 수 있습니다 */
   function shareValue(item, key) {
     var raw = has(item[key]) ? item[key] : '';
     if (!has(raw) && key === 'ipoPrice') raw = item.price || '';
     if (!has(raw) && key === 'refundDate') raw = item.refund || '';
+    if (!has(raw) && key === 'closePrice') raw = item.earlyPrice || '';
+    if (!has(raw) && key === 'closeChange') raw = item.earlyChange || '';
     var v = String(raw == null ? '' : raw).trim();
     if (key === 'ipoPrice') v = v.replace(/^확정\s*/, '');
     if (key === 'refundDate') v = v.replace(/^환불\s*/, '');
@@ -787,51 +818,109 @@
     }).join('\n\n');
   }
 
+  /* 등락 필드가 있으면 '값 (등락)' 으로 */
+  function listingValue(l, key, chgKey) {
+    var v = shareValue(l, key);
+    if (!v || !chgKey) return v;
+    var c = shareValue(l, chgKey);
+    return c ? v + ' (' + c + ')' : v;
+  }
+
+  /* 상장 정보 공유문 — ipo.listing 이 오늘 상장이 아니면 빈 문자열 */
+  function listingBody(d) {
+    var ipo = (d && d.ipo) || {};
+    var l = ipo.listing;
+    if (!l || !l.hasListing || !has(l.name)) return '';
+    var when = mdd(l.date || l.listingDate || ipo.date || '');
+    var head = '📈 ' + String(l.name).trim() + (when ? ' (' + when + ' 상장)' : '');
+
+    var bullets = [];
+    LISTING_FIELDS.forEach(function (f) {
+      var v = listingValue(l, f[0], f[2]);
+      if (v) bullets.push('* ' + f[1] + ': ' + v);
+    });
+    return bullets.length ? head + '\n\n' + bullets.join('\n') : head;
+  }
+
+  /* 버튼 상태 — payload 가 없으면 이유 라벨을 단 비활성 버튼으로 */
+  function shareReady(btn, payload, onLabel, offLabel) {
+    if (!btn) return;
+    var off = !payload;
+    btn.disabled = off;
+    btn.setAttribute('aria-disabled', off ? 'true' : 'false');
+    btn.classList.toggle('is-off', off);
+    var label = off ? offLabel : onLabel;
+    if (btn.getAttribute('data-label') !== label) {
+      btn.setAttribute('data-label', label);
+      var el = btn.querySelector('.lbl');
+      if (el) el.textContent = label;
+    }
+    /* 비활성이면 스크린리더에도 이유를 알려 줍니다 */
+    var base = btn.getAttribute('data-aria');
+    if (base == null) { base = btn.getAttribute('aria-label') || ''; btn.setAttribute('data-aria', base); }
+    btn.setAttribute('aria-label', off ? label : base);
+    btn.classList.remove('done');
+  }
+
   function setShare(d) {
     var body = shareBody(d);
-    shareText = body ? body + '\n' + SITE_URL : '';
-    sharePayload = body ? { title: SHARE_TITLE, text: body, url: SITE_URL } : null;
+    subText = body ? body + '\n' + SITE_URL : '';
+    subPayload = body ? { title: SHARE_TITLE, text: body, url: SITE_URL } : null;
+
+    var lbody = listingBody(d);
+    listText = lbody ? lbody + '\n' + SITE_URL : '';
+    listPayload = lbody ? { title: LISTING_TITLE, text: lbody, url: SITE_URL } : null;
+
+    shareReady($('share-sub'), subPayload, '청약 정보 공유', '오늘 청약 없음');
+    shareReady($('share-listing'), listPayload, '상장 정보 공유', '오늘 상장 없음');
   }
 
   /* 버튼 라벨을 잠깐 바꿔 복사 피드백 */
+  /* 버튼 라벨을 잠간 바꿔 복사 피드백 (원래 라벨 = data-label) */
   function flashLabel(btn, label) {
-    if (!btn) return;
-    if (!btn.dataset.label) btn.dataset.label = btn.innerHTML;
-    btn.innerHTML = label;
+    var el = btn && btn.querySelector('.lbl');
+    if (!el) return;
+    el.textContent = label;
     btn.classList.add('done');
     clearTimeout(btn._labelTimer);
     btn._labelTimer = setTimeout(function () {
-      btn.innerHTML = btn.dataset.label;
+      el.textContent = btn.getAttribute('data-label') || label;
       btn.classList.remove('done');
     }, 1800);
   }
 
-  /* 공유 시트를 못 쓰는 환경·공유 오류 → 같은 버튼으로 청약 정보 복사(URL 포함) 폴백 */
-  function shareFallback(btn, msg) {
-    copy(shareText).then(function (ok) {
+  /* 공유 시트를 못 쓰는 환경·공유 오류 → 같은 버튼으로 그 정보 복사(URL 포함) 폴백 */
+  function shareFallback(btn, text, what, msg) {
+    copy(text).then(function (ok) {
       if (!ok) { toast('복사가 안 됐어요. 길게 눌러 복사해 주세요'); return; }
-      toast(msg || '공유 기능이 없는 환경이라 청약 정보를 복사했어요', 'ok');
+      toast(msg || '공유 기능이 없는 환경이라 ' + what + '를 복사했어요', 'ok');
       flashLabel(btn, '복사됐어요');
     });
   }
 
   document.addEventListener('click', function (e) {
     var btn = e.target.closest ? e.target.closest('#share .share-btn') : null;
-    if (!btn || !shareText || !sharePayload) return;
+    if (!btn || btn.disabled) return;
 
-    /* 버튼 1개 — 공유 시트 우선, 없거나 실패하면 같은 버튼이 복사로 폴백 */
-    if (!navigator.share) { shareFallback(btn); return; }
+    /* 버튼 2개(청약·상장) — 공유 시트 우선, 없거나 실패하면 같은 버튼이 복사로 폴백 */
+    var isList = btn.getAttribute('data-share') === 'listing';
+    var payload = isList ? listPayload : subPayload;
+    var text = isList ? listText : subText;
+    var what = isList ? '상장 정보' : '청약 정보';
+    if (!payload || !text) return;
+
+    if (!navigator.share) { shareFallback(btn, text, what); return; }
     var p;
     try {
-      p = navigator.share(sharePayload);
+      p = navigator.share(payload);
     } catch (err) {
-      shareFallback(btn);
+      shareFallback(btn, text, what);
       return;
     }
     if (p && p.then) {
       p.then(function () { /* 공유 시트로 넘겼어요 */ }, function (err) {
         if (err && err.name === 'AbortError') return;  /* 사용자가 닫음 — 조용히 */
-        shareFallback(btn, '공유가 안 돼서 청약 정보를 복사했어요');
+        shareFallback(btn, text, what, '공유가 안 돼서 ' + what + '를 복사했어요');
       });
     }
   });
