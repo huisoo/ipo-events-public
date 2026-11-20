@@ -55,7 +55,22 @@
       "period": "11/24(화)~11/25(수)",
       "price": "희망 15,000~17,800원",
       "brokers": "IBK투자증권",
-      "memo": "같은 날 신영스팩12호도 청약"
+      "memo": "같은 날 신영스팩12호도 청약",
+      "closeDate": "2026-11-25",
+      "closeDateLabel": "11/25",
+      "closeNote": "예정",
+      "ipoPrice": "희망 15,000~17,800원",
+      "lockupRate": "",
+      "marketCap": "",
+      "minSubscription": "",
+      "fee": "",
+      "equalShares": "",
+      "expectedProRata": "",
+      "proRata10Shares": "",
+      "fullSubscription": "",
+      "refundDate": "11/27",
+      "listingDate": "",
+      "opinion": ""
     },
     "nextListing": {
       "name": "엠비디",

@@ -6,7 +6,7 @@
  *   2레벨  .benefits  주관사 신규 개설 혜택 (기본 접힘 아코디언 + 얇은 행)
  *   3레벨  .support   커피 한 잔 응원하기 (푸터 위 조용한 카드, 카카오페이 링크)
  *
- * 오늘 요약 탭 히어로 아래  .share  오늘 요약 복사 · 공유하기 (카톡 단톡방 공유용 3~5줄)
+ * 오늘 요약 탭 히어로 아래  .share  청약 정보 복사 · 공유하기 (카톡 단톡방 공유용 — 청약 정보만)
  *
  * 상단 탭  .tabs  오늘 요약(#panel-today) | 전체 일정(#panel-schedule, data.json ipo.upcoming)
  */
@@ -592,7 +592,7 @@
     $('loading').hidden = true;
     $('main').hidden = false;
     $('tabs').hidden = false;
-    $('share').hidden = false;
+    $('share').hidden = !shareText;
     $('support').hidden = false;
     $('foot').hidden = false;
     setTab(tabFromUrl(), { silent: true });
@@ -659,71 +659,135 @@
     $('error').hidden = false;
   }
 
-  /* ── 오늘 요약 공유 · 복사 ─────────────────
-   * 카톡 단톡방에 그대로 붙여넣는 3~5줄 텍스트 + 링크.
-   *   오늘 청약(있으면) / 오늘 상장 / 철회 한 줄 / 다음 청약(청약 없는 날만) / URL
+  /* ── 청약 정보 공유 · 복사 ─────────────────
+   * 카톡 단톡방에 그대로 붙여넣는 '청약 정보' 텍스트(전체 요약 아님).
+   *
+   *   📌 {종목명} ({M/DD} 마감[ 예정])
+   *
+   *   * 공모가: …  * 확약률: …  * 시총: …  * 주관사: …  * 최소청약: …  * 수수료: …
+   *   * 균등물량: …  * 예상 비례경쟁률: …  * 비례 10주: …  * 풀청약: …
+   *   * 환불일: …  * 상장일: …
+   *
+   *   ✅ 청약 의견: …
+   *
+   * 오늘 청약 종목이 여러 개면 빈 줄로 구분해 순서대로, 오늘 청약이 없으면 ipo.next를
+   * 같은 포맷으로 내보냅니다. 값이 없거나 '미정'·'확인 필요'인 항목은 줄을 만들지 않습니다.
+   * 클립보드 복사본은 마지막 줄에 URL을 붙이고, navigator.share 는 url 을 따로 넘깁니다.
    */
   var SITE_URL = 'https://ipo-events-public.vercel.app';
+  var SHARE_TITLE = '공모주 청약 정보';
   var shareText = '';
   var sharePayload = null;
 
-  /* 상장 카드의 대표 시세 — 현재가(없으면 시초) + 등락 */
-  function listingQuote(l) {
-    var p = has(l.earlyPrice) ? l.earlyPrice : (has(l.openPrice) ? l.openPrice : '');
-    var c = has(l.earlyPrice) ? l.earlyChange : (has(l.openPrice) ? l.openChange : '');
-    if (!p) return '';
-    return p + (has(c) ? '(' + c + ')' : '');
+  /* 공유문 순서·라벨 (data.json 필드명 → 사람이 읽는 이름) */
+  var SHARE_FIELDS = [
+    ['ipoPrice', '공모가'],
+    ['lockupRate', '확약률'],
+    ['marketCap', '시총'],
+    ['brokers', '주관사'],
+    ['minSubscription', '최소청약'],
+    ['fee', '수수료'],
+    ['equalShares', '균등물량'],
+    ['expectedProRata', '예상 비례경쟁률'],
+    ['proRata10Shares', '비례 10주'],
+    ['fullSubscription', '풀청약'],
+    ['refundDate', '환불일'],
+    ['listingDate', '상장일']
+  ];
+
+  /* 값이 비었거나 미정으로 적힌 항목 — 추정 금지, 줄 자체를 뺍니다 */
+  function shareUnknown(v) {
+    var s = String(v == null ? '' : v).trim();
+    if (!s) return true;
+    return /^미정/.test(s) || /^확인\s*(필요|못|전)/.test(s) || /^(-+|tbd|n\/a)$/i.test(s);
   }
 
-  function summaryBody(d) {
+  /* '2026-11-27' · '11/27(금)' → '11/27' */
+  function mdd(v) {
+    var s = String(v == null ? '' : v).trim();
+    var iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+    if (iso) return Number(iso[2]) + '/' + iso[3];
+    return s.replace(/\([일월화수목금토]\)/g, '').trim();
+  }
+
+  /* 필드 값 — ipoPrice 는 price, refundDate 는 refund 로 대신할 수 있습니다 */
+  function shareValue(item, key) {
+    var raw = has(item[key]) ? item[key] : '';
+    if (!has(raw) && key === 'ipoPrice') raw = item.price || '';
+    if (!has(raw) && key === 'refundDate') raw = item.refund || '';
+    var v = String(raw == null ? '' : raw).trim();
+    if (key === 'ipoPrice') v = v.replace(/^확정\s*/, '');
+    if (key === 'refundDate') v = v.replace(/^환불\s*/, '');
+    if (key === 'refundDate' || key === 'listingDate') v = mdd(v);
+    return shareUnknown(v) ? '' : v;
+  }
+
+  /* 마감일 M/DD — closeDateLabel · closeDate · period(마지막 M/D) */
+  function closeText(item) {
+    var v = has(item.closeDateLabel) ? item.closeDateLabel
+      : (has(item.closeDate) ? item.closeDate : '');
+    if (has(v)) return mdd(v);
+    var src = String(item.period || '');
+    var re = /(\d{1,2})\s*\/\s*(\d{1,2})/g, m, last = '';
+    while ((m = re.exec(src))) last = Number(m[1]) + '/' + m[2];
+    return last;
+  }
+
+  /* 마감일 Date — closeDate(ISO) 우선, 없으면 M/DD */
+  function closeDay(item) {
+    var d = parseDay(item.closeDate);
+    if (d) return d;
+    var label = closeText(item);
+    return label ? periodStart(label, todayDay()) : null;
+  }
+
+  /* 괄호 안 '마감' 뒤 문구 — 다음 청약은 지나지 않았으면 '예정' */
+  function closeNote(item, isNext) {
+    if (has(item.closeNote)) return String(item.closeNote).trim();
+    if (!isNext) return '';
+    var d = closeDay(item);
+    return (d && d <= todayDay()) ? '' : '예정';
+  }
+
+  /* 공유할 청약 목록 — 오늘 청약 종목들, 없으면 다음 청약 */
+  function shareItems(d) {
     var ipo = d.ipo || {};
     var subs = ipo.subscribe || [];
-    var listing = (ipo.listing && ipo.listing.hasListing) ? ipo.listing : null;
-    var day = shortDay(ipo.date || d.date);
-    var lines = ['📈 직장인 1분 공모주 요약' + (day ? ' · ' + day : '')];
+    if (subs.length) return subs.map(function (s) { return { item: s, next: false }; });
+    if (ipo.next && has(ipo.next.name)) return [{ item: ipo.next, next: true }];
+    return [];
+  }
 
-    if (subs.length) {
-      var s = subs[0];
-      var line = '• 오늘 청약 ' + s.name;
-      var price = String(s.price || '').replace(/^확정\s*/, '');
-      if (price) line += ' ' + price;
-      if (has(s.period)) line += ' (' + s.period + ')';
-      if (subs.length > 1) line += ' 외 ' + (subs.length - 1) + '건';
-      lines.push(line);
-      if (listing) {
-        var q = listingQuote(listing);
-        lines.push('• 오늘 상장 ' + listing.name + (q ? ' ' + q : ''));
-      }
-    } else {
-      var head = '• 오늘 청약 없음';
-      if (listing) {
-        var q2 = listingQuote(listing);
-        head += ' · 상장 ' + listing.name + (q2 ? ' ' + q2 : '');
-      }
-      lines.push(head);
-    }
+  /* 종목 한 건 — 제목 / 항목 / 청약 의견 */
+  function shareBlock(item, isNext) {
+    var head = '📌 ' + String(item.name == null ? '' : item.name).trim();
+    var close = closeText(item);
+    var note = closeNote(item, isNext);
+    if (close) head += ' (' + close + ' 마감' + (note ? ' ' + note : '') + ')';
 
-    var cancel = (ipo.cancelled || [])[0];
-    if (cancel && has(cancel.name)) {
-      lines.push('• 참고 ' + cancel.name + ' ' + (cancel.badge || '청약 취소'));
-    }
+    var bullets = [];
+    SHARE_FIELDS.forEach(function (f) {
+      var v = shareValue(item, f[0]);
+      if (v) bullets.push('* ' + f[1] + ': ' + v);
+    });
+    var opinion = shareValue(item, 'opinion');
 
-    /* 다음 청약 — 오늘 청약이 없는 날의 대체 줄 */
-    if (!subs.length && ipo.next && has(ipo.next.name)) {
-      var n = ipo.next;
-      var nl = '• 다음 청약 ' + n.name;
-      if (has(n.period)) nl += ' ' + n.period;
-      if (has(n.price)) nl += ' · ' + n.price;
-      if (has(n.brokers)) nl += ' · ' + n.brokers;
-      lines.push(nl);
-    }
-    return lines.join('\n');
+    var parts = [head];
+    if (bullets.length) parts.push(bullets.join('\n'));
+    if (opinion) parts.push('✅ 청약 의견: ' + opinion);
+    return parts.join('\n\n');
+  }
+
+  function shareBody(d) {
+    return shareItems(d).map(function (it) {
+      return shareBlock(it.item, it.next);
+    }).join('\n\n');
   }
 
   function setShare(d) {
-    var body = summaryBody(d);
-    shareText = body + '\n' + SITE_URL;
-    sharePayload = { title: '오늘의 공모주 1분 요약', text: body, url: SITE_URL };
+    var body = shareBody(d);
+    shareText = body ? body + '\n' + SITE_URL : '';
+    sharePayload = body ? { title: SHARE_TITLE, text: body, url: SITE_URL } : null;
   }
 
   /* 버튼 라벨을 잠깐 바꿔 복사 피드백 */
@@ -739,11 +803,11 @@
     }, 1800);
   }
 
-  /* 공유 시트를 못 쓰는 환경 → 요약 복사로 폴백 */
+  /* 공유 시트를 못 쓰는 환경 → 청약 정보 복사로 폴백 */
   function shareFallback(btn, msg) {
     copy(shareText).then(function (ok) {
-      toast(ok ? (msg || '공유 기능이 없는 환경이라 요약을 복사했어요')
-        : '공유를 지원하지 않는 환경이에요. 오늘 요약 복사 버튼을 눌러 주세요', ok ? 'ok' : '');
+      toast(ok ? (msg || '공유 기능이 없는 환경이라 청약 정보를 복사했어요')
+        : '공유를 지원하지 않는 환경이에요. 청약 정보 복사 버튼을 눌러 주세요', ok ? 'ok' : '');
       if (ok) flashLabel(btn, '복사됐어요');
     });
   }
@@ -756,7 +820,7 @@
     if (kind === 'copy') {
       copy(shareText).then(function (ok) {
         if (!ok) { toast('복사가 안 됐어요. 길게 눌러 복사해 주세요'); return; }
-        toast('요약을 복사했어요 · 카톡에 붙여넣기', 'ok');
+        toast('청약 정보를 복사했어요 · 카톡에 붙여넣기', 'ok');
         flashLabel(btn, '복사됐어요');
       });
       return;
@@ -774,7 +838,7 @@
       if (p && p.then) {
         p.then(function () { /* 공유 시트로 넘겼어요 */ }, function (err) {
           if (err && err.name === 'AbortError') return;  /* 사용자가 닫음 — 조용히 */
-          shareFallback(btn, '공유가 안 돼서 요약을 복사했어요');
+          shareFallback(btn, '공유가 안 돼서 청약 정보를 복사했어요');
         });
       }
     }

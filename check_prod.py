@@ -1,8 +1,13 @@
-"""배포된 공개 페이지 검증 (프로덕션 URL · 익명 모바일 390x844 + 데스크톱)."""
+"""배포된 공개 페이지 검증 (프로덕션 URL · 익명 모바일 390x844 + 데스크톱).
+
+공유·복사 기대값은 로컬 검증(check_render.py)과 같은 규칙 함수로 계산합니다.
+"""
 import asyncio
 from pathlib import Path
 
 from playwright.async_api import async_playwright
+
+from check_render import expected_copy  # 공유문 기대값 규칙 공유
 
 URL = "https://ipo-events-public.vercel.app/"
 SITE_URL = "https://ipo-events-public.vercel.app"
@@ -89,8 +94,9 @@ async def main():
         res["notice_count"] = await page.locator("#notice-list li").count()
 
         # 상단 2탭
-        # 오늘 요약 공유 바 (.share) — 히어로 아래
+        # 청약 정보 공유 바 (.share) — 히어로 아래
         res["share_visible"] = await page.locator("#share").is_visible()
+        res["share_label"] = (await page.inner_text("#share .share-lab")).strip()
         res["share_btns"] = await page.eval_on_selector_all(
             "#share .share-btn", "els => els.map(e => e.textContent.replace(/\\s+/g,' ').trim())")
         res["share_btn_h"] = await page.eval_on_selector_all(
@@ -107,6 +113,11 @@ async def main():
                                   and _p["foot"] <= _p["benefits"])
         await page.locator("#share").screenshot(path=str(OUT / "preview-prod-mobile-share.png"))
 
+        # 배포본 data.json — 공유문 기대값을 같은 규칙으로 계산
+        prod_data = await page.evaluate(
+            "fetch('data.json?t=' + Date.now()).then(r => r.json())")
+        res["prod_date"] = prod_data.get("date")
+
         await page.locator("#share [data-share='copy']").click()
         await page.wait_for_timeout(350)
         clip = await page.evaluate("navigator.clipboard.readText()")
@@ -114,11 +125,16 @@ async def main():
         res["share_lines"] = len(clip.split("\n"))
         res["share_clip_head"] = clip.split("\n")[0]
         res["share_clip_last"] = clip.split("\n")[-1]
+        res["share_expect"] = expected_copy(prod_data)
+        res["share_exact"] = clip == res["share_expect"]
+        res["share_head_ok"] = clip.startswith("📌 ") and " 마감" in res["share_clip_head"]
+        res["share_no_summary"] = not any(
+            s in clip for s in ("•", "직장인 1분 공모주 요약", "오늘 청약 없음", "상장 철회"))
         res["share_copy_toast"] = await page.inner_text("#toast")
         res["share_copy_label"] = (await page.inner_text("#share [data-share='copy']")).strip()
         res["share_privacy_hits"] = [t for t in TERMS + ALWAYS_TERMS if t in clip]
 
-        # 공유하기 — 헤드리스에는 navigator.share 가 없어 요약 복사로 폴백
+        # 공유하기 — 헤드리스에는 navigator.share 가 없어 청약 정보 복사로 폴백
         res["share_native"] = await page.evaluate("typeof navigator.share")
         await page.evaluate("navigator.clipboard.writeText('')")
         await page.locator("#share [data-share='share']").click()
@@ -278,20 +294,22 @@ async def main():
                or (res["hero_kind"] == "listing" and res["listing_points"] >= 1))
 
     ok = (res["http_status"] == 200
-          # 오늘 요약 공유 바
+          # 청약 정보 공유 바
           and res["share_visible"]
+          and "청약 정보" in res["share_label"]
           and len(res["share_btns"]) == 2
-          and "오늘 요약 복사" in res["share_btns"][0]
+          and "청약 정보 복사" in res["share_btns"][0]
           and res["share_btns"][1].endswith("공유하기")
           and min(res["share_btn_h"]) >= 40
           and res["share_placed_ok"]
           and res["share_native"] == "undefined"
-          and 3 <= res["share_lines"] <= 5
-          and res["share_clip_head"].startswith("📈 직장인 1분 공모주 요약")
+          and res["share_lines"] >= 3
+          and res["share_head_ok"]
           and res["share_clip_last"] == SITE_URL
-          and "• 오늘 청약" in res["share_clipboard"]
+          and res["share_exact"]
+          and res["share_no_summary"]
           and not res["share_privacy_hits"]
-          and "복사" in res["share_copy_toast"]
+          and "청약 정보" in res["share_copy_toast"]
           and res["share_copy_label"] == "복사됐어요"
           and res["share_fallback_clipboard"]
           and "복사" in res["share_fallback_toast"]

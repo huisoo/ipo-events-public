@@ -13,12 +13,16 @@ data.json 을 로컬 HTTP 로 띄워 확인합니다(파일 직접 열면 fetch 
 - 증권사 신규 개설 혜택 4건 렌더, 초대 코드 슬롯 0건(누락 0 / 복사 버튼 0)
 - expiresAt 이 지난 테스트 항목은 숨기고, 오늘 만료·상시 항목은 노출
 - (회귀용) 코드가 들어온(ready) 항목의 복사 버튼 동작
-- 오늘 요약 공유 바(.share): 히어로와 철회·출처 사이에 버튼 2개(44px 이상),
-  '오늘 요약 복사' → 클립보드에 3~5줄 요약+URL · 토스트 · 라벨 '복사됐어요' 되돌림,
-  '공유하기' → navigator.share 로 {title,text,url} 전달, 미지원·거부 시 요약 복사로 폴백
+- 청약 정보 공유 바(.share): 히어로와 철회·출처 사이에 버튼 2개(40px 이상),
+  '청약 정보 복사' → 클립보드에 청약 정보 포맷(📌 {종목} ({M/DD} 마감) / * 항목 12개 /
+  ✅ 청약 의견 / URL) · 토스트 · 라벨 '복사됐어요' 되돌림,
+  '공유하기' → navigator.share 로 {title,text,url} 전달(url 은 text 에 중복 없음),
+  미지원·거부 시 청약 정보 복사로 폴백
+- 공유문 포맷: 풀 필드 mock 2건(빈 줄 구분·정확한 문자열 일치), 값이 없는 항목은 줄 생략,
+  오늘 청약 0건이면 ipo.next 폴백('11/25 마감 예정'), 청약·다음 청약 모두 없으면 공유 바 숨김
 - 스크린샷: preview-mobile.png / preview-mobile-events.png / preview-mobile-dark.png /
   preview-desktop.png / preview-toast.png / preview-mobile-schedule*.png /
-  preview-mobile-share.png / preview-mobile-share-dark.png
+  preview-mobile-share.png / preview-mobile-share-dark.png / preview-mobile-share-full.png
 - 상단 2탭: 기본 '오늘 요약', 탭하면 '전체 일정'(?tab=schedule) — 두 탭 모두 390px·다크·
   데스크톱에서 가로 스크롤·잘림 없이 렌더
 """
@@ -27,6 +31,7 @@ import datetime as dt
 import functools
 import http.server
 import json
+import re
 import socketserver
 import threading
 from pathlib import Path
@@ -118,19 +123,158 @@ def test_events():
 
 
 def subscribe_day(body):
-    """청약일 화면 — 요약문이 '오늘 청약' 분기로 바뀌는지 보는 테스트 데이터."""
+    """청약일 화면 + 공유문 풀 필드 mock — 12개 항목·청약 의견이 모두 찍히는지 보는 테스트 데이터."""
     body = json.loads(json.dumps(body))
     ipo = body.setdefault("ipo", {})
     ipo["subscribe"] = [
-        {"name": "케이엠에프", "badge": "오늘 청약", "market": "코스닥",
-         "price": "확정 16,000원", "period": "11/20(금)~11/21(토)",
-         "refund": "11/25(화)", "brokers": "IBK투자증권"},
+        {"name": "하나에어로다이내믹스", "badge": "오늘 청약", "market": "코스닥",
+         "price": "확정 5,700원", "period": "11/19(수)~11/20(목)",
+         "refund": "11/24(월)", "brokers": "IBK투자증권",
+         "closeDate": "2026-11-20", "closeDateLabel": "11/20",
+         "ipoPrice": "5,700원", "lockupRate": "4.1%", "marketCap": "1,010억",
+         "minSubscription": "10주 / 28,500원", "fee": "2,000원",
+         "equalShares": "55만 주", "expectedProRata": "3,500:1",
+         "proRata10Shares": "약 1억 청약", "fullSubscription": "2억 1,375만 원",
+         "refundDate": "11/13", "listingDate": "11/20",
+         "opinion": "균등 + 비례 풀청약 추천"},
+        # 값이 빠진 종목 — 미정/확인 필요 항목은 줄을 만들지 않고, price·refund 로 대신합니다
         {"name": "신영스팩12호", "badge": "오늘 청약", "market": "코스닥",
          "price": "확정 2,000원", "period": "11/20(금)~11/21(토)",
-         "refund": "11/25(화)", "brokers": "신영증권"},
+         "refund": "2026-11-24", "brokers": "신영증권",
+         "lockupRate": "미정", "marketCap": "확인 필요", "expectedProRata": ""},
     ]
     ipo["listing"] = {"hasListing": False}
     return body
+
+
+# 풀 필드 mock 의 기대 공유문 — 화면이 아니라 포맷 자체를 고정합니다.
+MOCK_COPY = (
+    "📌 하나에어로다이내믹스 (11/20 마감)\n"
+    "\n"
+    "* 공모가: 5,700원\n"
+    "* 확약률: 4.1%\n"
+    "* 시총: 1,010억\n"
+    "* 주관사: IBK투자증권\n"
+    "* 최소청약: 10주 / 28,500원\n"
+    "* 수수료: 2,000원\n"
+    "* 균등물량: 55만 주\n"
+    "* 예상 비례경쟁률: 3,500:1\n"
+    "* 비례 10주: 약 1억 청약\n"
+    "* 풀청약: 2억 1,375만 원\n"
+    "* 환불일: 11/13\n"
+    "* 상장일: 11/20\n"
+    "\n"
+    "✅ 청약 의견: 균등 + 비례 풀청약 추천\n"
+    "\n"
+    "📌 신영스팩12호 (11/21 마감)\n"
+    "\n"
+    "* 공모가: 2,000원\n"
+    "* 주관사: 신영증권\n"
+    "* 환불일: 11/24\n"
+)
+
+
+def no_ipo_day(body):
+    """청약도 다음 청약도 없는 날 — 공유 바는 숨겨야 합니다."""
+    body = json.loads(json.dumps(body))
+    ipo = body.setdefault("ipo", {})
+    ipo["subscribe"] = []
+    ipo["next"] = {}
+    ipo["listing"] = {"hasListing": False}
+    return body
+
+
+# ── 공유문 기대값 계산 (app.js 의 shareBlock 과 같은 규칙) ──────────────
+SHARE_FIELDS = [
+    ("ipoPrice", "공모가"), ("lockupRate", "확약률"), ("marketCap", "시총"),
+    ("brokers", "주관사"), ("minSubscription", "최소청약"), ("fee", "수수료"),
+    ("equalShares", "균등물량"), ("expectedProRata", "예상 비례경쟁률"),
+    ("proRata10Shares", "비례 10주"), ("fullSubscription", "풀청약"),
+    ("refundDate", "환불일"), ("listingDate", "상장일"),
+]
+UNKNOWN = re.compile(r"^(미정|확인\s*(필요|못|전)|-+|tbd|n/a)$", re.I)
+
+
+def mdd(v):
+    s = str(v or "").strip()
+    m = re.match(r"^(\d{4})-(\d{2})-(\d{2})", s)
+    if m:
+        return f"{int(m.group(2))}/{m.group(3)}"
+    return re.sub(r"\([일월화수목금토]\)", "", s).strip()
+
+
+def share_value(item, key):
+    raw = item.get(key) if item.get(key) not in (None, "") else ""
+    if not raw and key == "ipoPrice":
+        raw = item.get("price") or ""
+    if not raw and key == "refundDate":
+        raw = item.get("refund") or ""
+    v = str(raw or "").strip()
+    if key == "ipoPrice":
+        v = re.sub(r"^확정\s*", "", v)
+    if key == "refundDate":
+        v = re.sub(r"^환불\s*", "", v)
+    if key in ("refundDate", "listingDate"):
+        v = mdd(v)
+    if not v or UNKNOWN.match(v):
+        return ""
+    return v
+
+
+def close_text(item):
+    v = item.get("closeDateLabel") or item.get("closeDate") or ""
+    if v:
+        return mdd(v)
+    pairs = re.findall(r"(\d{1,2})\s*/\s*(\d{1,2})", str(item.get("period") or ""))
+    return f"{int(pairs[-1][0])}/{pairs[-1][1]}" if pairs else ""
+
+
+def close_day(item):
+    m = re.match(r"^(\d{4})-(\d{2})-(\d{2})", str(item.get("closeDate") or ""))
+    if m:
+        return dt.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+    label = close_text(item)
+    mo, da = label.split("/")
+    d = dt.date(TODAY.year, int(mo), int(da))
+    if (TODAY - d).days > 180:
+        d = dt.date(TODAY.year + 1, int(mo), int(da))
+    return d
+
+
+def share_block(item, is_next=False):
+    head = "📌 " + str(item.get("name") or "").strip()
+    close = close_text(item)
+    note = str(item.get("closeNote") or "").strip()
+    if not note and is_next:
+        d = close_day(item)
+        note = "" if (d and d <= TODAY) else "예정"
+    if close:
+        head += f" ({close} 마감" + (f" {note}" if note else "") + ")"
+    bullets = [f"* {label}: {v}" for key, label in SHARE_FIELDS
+               if (v := share_value(item, key))]
+    parts = [head]
+    if bullets:
+        parts.append("\n".join(bullets))
+    if op := share_value(item, "opinion"):
+        parts.append("✅ 청약 의견: " + op)
+    return "\n\n".join(parts)
+
+
+def share_items(data):
+    ipo = data.get("ipo") or {}
+    if ipo.get("subscribe"):
+        return [(s, False) for s in ipo["subscribe"]]
+    nxt = ipo.get("next") or {}
+    return [(nxt, True)] if nxt.get("name") else []
+
+
+def expected_body(data):
+    return "\n\n".join(share_block(it, is_next) for it, is_next in share_items(data))
+
+
+def expected_copy(data):
+    body = expected_body(data)
+    return f"{body}\n{SITE_URL}" if body else ""
 
 
 async def open_page(browser, inject=None, path="", init_script=None, mutate=None, **ctx_kw):
@@ -245,7 +389,7 @@ async def main():
             results["share_native"] = await page.evaluate("typeof navigator.share")
             await share.screenshot(path=str(ROOT / "preview-mobile-share.png"))
 
-            # '오늘 요약 복사' → 클립보드 3~5줄 + URL, 토스트, 라벨 되돌림
+            # '청약 정보 복사' → 클립보드가 청약 정보 포맷 + URL, 토스트, 라벨 되돌림
             await page.locator("#share [data-share='copy']").click()
             await page.wait_for_timeout(350)
             clip = await page.evaluate("navigator.clipboard.readText()")
@@ -260,28 +404,34 @@ async def main():
             results["share_copy_label_back"] = (
                 await page.inner_text("#share [data-share='copy']")).strip()
 
-            # 요약문 내용 — 오늘 청약/상장·철회·다음 청약·URL
-            subs = IPO.get("subscribe") or []
-            listing = (IPO.get("listing") or {})
-            cancel = (IPO.get("cancelled") or [{}])[0]
+            # 공유문 = 청약 정보만 — 현재 data.json 기준 기대값과 정확히 일치해야 함
+            results["share_expect"] = expected_copy(DATA)
+            results["share_exact"] = clip == results["share_expect"]
             nxt = IPO.get("next") or {}
-            want = [SITE_URL]
-            if subs:
-                want.append(subs[0]["name"])
+            listing = (IPO.get("listing") or {})
+            results["share_head_ok"] = bool(re.match(r"^📌 \S+ \(\d{1,2}/\d{1,2} 마감", clip))
+            if not (IPO.get("subscribe")) and nxt.get("name"):
+                # 청약 없는 날은 다음 청약을 폴백으로, '마감 예정' 표기
+                results["share_next_fallback"] = (
+                    clip.startswith(f"📌 {nxt['name']} (") and "예정" in lines[0])
             else:
-                want.append("오늘 청약 없음")
-                if nxt.get("name"):
-                    want.append(nxt["name"])
+                results["share_next_fallback"] = True
+            # 전체 요약·상장·철회 문구는 빠져야 합니다
+            results["share_no_summary"] = not any(
+                s in clip for s in ("•", "직장인 1분 공모주 요약", "오늘 청약 없음", "상장 철회"))
+            head_names = [str(it.get("name")) for it, _ in share_items(DATA)]
+            other = []
             if listing.get("hasListing"):
-                want.append(listing["name"])
-            if cancel.get("name"):
-                want.append(cancel["name"])
-            results["share_text_has"] = {w: (w in clip) for w in want}
-            results["share_text_ok"] = all(w in clip for w in want)
+                other.append(listing["name"])
+            other += [c.get("name") for c in (IPO.get("cancelled") or [])]
+            results["share_no_listing"] = not any(
+                n and n not in head_names and n in clip for n in other)
+            results["share_only_subscribe_names"] = head_names == [
+                ln[2:].split(" (")[0] for ln in clip.split("\n") if ln.startswith("📌 ")]
             terms_all = PRIVACY_TERMS + ALWAYS_TERMS
             results["share_privacy_hits"] = [t for t in terms_all if t in clip]
 
-            # '공유하기' — navigator.share 없는 환경(헤드리스)은 요약 복사로 폴백
+            # '공유하기' — navigator.share 없는 환경(헤드리스)은 청약 정보 복사로 폴백
             await page.evaluate("navigator.clipboard.writeText('')")
             await page.locator("#share [data-share='share']").click()
             await page.wait_for_timeout(400)
@@ -512,7 +662,7 @@ async def main():
             results["stub_errors"] = s_errors
             await sctx.close()
 
-            # 공유가 거부(reject)되면 조용히 죽지 않고 요약 복사로 폴백
+            # 공유가 거부(reject)되면 조용히 죽지 않고 청약 정보 복사로 폴백
             rctx, rpage, r_errors = await open_page(browser, init_script="""
                 navigator.share = function () {
                     const e = new Error('denied'); e.name = 'NotAllowedError';
@@ -523,23 +673,34 @@ async def main():
             await rpage.wait_for_timeout(450)
             results["share_reject_toast"] = await rpage.inner_text("#toast")
             results["share_reject_clipboard"] = (
-                "직장인 1분 공모주 요약" in await rpage.evaluate("navigator.clipboard.readText()"))
+                await rpage.evaluate("navigator.clipboard.readText()")) == expected_copy(DATA)
             results["reject_errors"] = r_errors
             await rctx.close()
 
-            # ── 2.6 청약일 요약 — '오늘 청약' 분기 ─────────────
+            # ── 2.6 청약일 — 풀 필드 mock 2건, 포맷 정확히 일치 ─────────
             vctx, vpage, v_errors = await open_page(browser, mutate=subscribe_day)
             await vpage.wait_for_timeout(250)
             await vpage.locator("#share [data-share='copy']").click()
             await vpage.wait_for_timeout(350)
             vclip = await vpage.evaluate("navigator.clipboard.readText()")
-            results["sub_clipboard"] = vclip
-            results["sub_lines"] = len(vclip.split("\n"))
-            results["sub_line2"] = vclip.split("\n")[1] if len(vclip.split("\n")) > 1 else ""
-            results["sub_last"] = vclip.split("\n")[-1]
-            results["sub_has_next"] = "다음 청약" in vclip
+            results["mock_clipboard"] = vclip
+            results["mock_exact"] = vclip == f"{MOCK_COPY}{SITE_URL}"
+            results["mock_blocks"] = vclip.count("📌 ")
+            results["mock_bullets"] = vclip.count("* ")
+            results["mock_opinion"] = "✅ 청약 의견: 균등 + 비례 풀청약 추천" in vclip
+            results["mock_blank_between"] = "✅ 청약 의견: 균등 + 비례 풀청약 추천\n\n📌 신영스팩12호" in vclip
+            results["mock_dropped_unknown"] = not any(
+                s in vclip for s in ("미정", "확인 필요", "없음", "None"))
+            results["mock_url_once"] = vclip.count(SITE_URL) == 1 and vclip.endswith("\n" + SITE_URL)
+            await vpage.locator("#share").screenshot(
+                path=str(ROOT / "preview-mobile-share-full.png"))
             results["sub_errors"] = v_errors
             await vctx.close()
+
+            # ── 2.7 청약 0건 + 다음 청약 0건 → 공유 바 숨김 ──────
+            nctx, npage, _ = await open_page(browser, mutate=no_ipo_day)
+            results["no_ipo_share_hidden"] = not await npage.locator("#share").is_visible()
+            await nctx.close()
 
             # ── 3. 다크 모드 ──────────────────────────────
             dark, dpage, dark_errors = await open_page(browser, color_scheme="dark")
@@ -637,33 +798,41 @@ async def main():
           # 오늘 요약 공유 바
           and results["share_visible"]
           and results["share_label"].startswith("단톡방에")
+          and "청약 정보" in results["share_label"]
           and len(results["share_btns"]) == 2
-          and "오늘 요약 복사" in results["share_btns"][0]
+          and "청약 정보 복사" in results["share_btns"][0]
           and results["share_btns"][1].endswith("공유하기")
           and min(results["share_btn_h"]) >= 40
           and results["share_placed_ok"]
           and results["share_native"] == "undefined"
-          and 3 <= results["share_lines"] <= 5
-          and results["share_line_head"].startswith("📈 직장인 1분 공모주 요약")
+          and results["share_lines"] >= 3
+          and results["share_head_ok"]
           and results["share_last_line"] == SITE_URL
-          and results["share_text_ok"]
+          and results["share_exact"]
+          and results["share_next_fallback"]
+          and results["share_no_summary"]
+          and results["share_no_listing"]
+          and results["share_only_subscribe_names"]
           and not results["share_privacy_hits"]
-          and "복사" in results["share_copy_toast"]
+          and "청약 정보" in results["share_copy_toast"]
           and results["share_copy_label"] == "복사됐어요"
-          and results["share_copy_label_back"].endswith("오늘 요약 복사")
+          and results["share_copy_label_back"].endswith("청약 정보 복사")
           and results["share_fallback_clipboard"]
           and "복사" in results["share_fallback_toast"]
           and results["stub_share_type"] == "function"
-          and results["sub_lines"] == 4
-          and results["sub_line2"].startswith("• 오늘 청약 케이엠에프 16,000원")
-          and results["sub_line2"].endswith("외 1건")
-          and not results["sub_has_next"]
-          and results["sub_last"] == SITE_URL
+          and results["mock_exact"]
+          and results["mock_blocks"] == 2
+          and results["mock_bullets"] == 15
+          and results["mock_opinion"]
+          and results["mock_blank_between"]
+          and results["mock_dropped_unknown"]
+          and results["mock_url_once"]
+          and results["no_ipo_share_hidden"]
           and not results["sub_errors"]
           and bool(results["shared_payload"])
           and results["shared_payload"].get("url") == SITE_URL
-          and results["shared_payload"].get("title") == "오늘의 공모주 1분 요약"
-          and "직장인 1분 공모주 요약" in (results["shared_payload"].get("text") or "")
+          and results["shared_payload"].get("title") == "공모주 청약 정보"
+          and results["shared_payload"].get("text") == expected_body(DATA)
           and SITE_URL not in (results["shared_payload"].get("text") or "")
           and "복사" in results["share_reject_toast"]
           and results["share_reject_clipboard"]
