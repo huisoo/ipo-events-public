@@ -81,7 +81,7 @@ async def main():
         })()""")
         await page.locator("#support").scroll_into_view_if_needed()
         await page.wait_for_timeout(200)
-        await page.locator("#support").screenshot(path=str(OUT / "support-prod-mobile.png"))
+        await page.locator("#support").screenshot(path=str(OUT / "preview-prod-mobile-support.png"))
         await page.locator("#foot").scroll_into_view_if_needed()
         await page.wait_for_timeout(150)
         await page.screenshot(path=str(OUT / "preview-prod-mobile-bottom.png"))
