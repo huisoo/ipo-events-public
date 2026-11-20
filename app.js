@@ -6,7 +6,8 @@
  *   2레벨  .benefits  주관사 신규 개설 혜택 (기본 접힘 아코디언 + 얇은 행)
  *   3레벨  .support   커피 한 잔 응원하기 (푸터 위 조용한 카드, 카카오페이 링크)
  *
- * 오늘 요약 탭 히어로 아래  .share  청약 정보 복사 · 공유하기 (카톡 단톡방 공유용 — 청약 정보만)
+ * 오늘 요약 탭 히어로 아래  .share  청약 정보 공유하기 버튼 1개 (카톡 단톡방 공유용 —
+ *                                  청약 정보만. 공유 시트 없음·오류면 링크까지 복사로 폴백)
  *
  * 상단 탭  .tabs  오늘 요약(#panel-today) | 전체 일정(#panel-schedule, data.json ipo.upcoming)
  */
@@ -659,7 +660,7 @@
     $('error').hidden = false;
   }
 
-  /* ── 청약 정보 공유 · 복사 ─────────────────
+  /* ── 청약 정보 공유(복사 폴백) ──────────────
    * 카톡 단톡방에 그대로 붙여넣는 '청약 정보' 텍스트(전체 요약 아님).
    *
    *   📌 {종목명} ({M/DD} 마감[ 예정])
@@ -672,7 +673,9 @@
    *
    * 오늘 청약 종목이 여러 개면 빈 줄로 구분해 순서대로, 오늘 청약이 없으면 ipo.next를
    * 같은 포맷으로 내보냅니다. 값이 없거나 '미정'·'확인 필요'인 항목은 줄을 만들지 않습니다.
-   * 클립보드 복사본은 마지막 줄에 URL을 붙이고, navigator.share 는 url 을 따로 넘깁니다.
+   * 버튼은 1개입니다 — navigator.share 가 있으면 공유 시트로 { title, text, url } 을 넘기고
+   * (text 에는 URL 을 넣지 않음), 미지원(데스크톱 등)이거나 AbortError 이외의 오류면
+   * 클립보드 복사본(마지막 줄에 URL)으로 폴백합니다.
    */
   var SITE_URL = 'https://ipo-events-public.vercel.app';
   var SHARE_TITLE = '공모주 청약 정보';
@@ -803,44 +806,33 @@
     }, 1800);
   }
 
-  /* 공유 시트를 못 쓰는 환경 → 청약 정보 복사로 폴백 */
+  /* 공유 시트를 못 쓰는 환경·공유 오류 → 같은 버튼으로 청약 정보 복사(URL 포함) 폴백 */
   function shareFallback(btn, msg) {
     copy(shareText).then(function (ok) {
-      toast(ok ? (msg || '공유 기능이 없는 환경이라 청약 정보를 복사했어요')
-        : '공유를 지원하지 않는 환경이에요. 청약 정보 복사 버튼을 눌러 주세요', ok ? 'ok' : '');
-      if (ok) flashLabel(btn, '복사됐어요');
+      if (!ok) { toast('복사가 안 됐어요. 길게 눌러 복사해 주세요'); return; }
+      toast(msg || '공유 기능이 없는 환경이라 청약 정보를 복사했어요', 'ok');
+      flashLabel(btn, '복사됐어요');
     });
   }
 
   document.addEventListener('click', function (e) {
-    var btn = e.target.closest ? e.target.closest('[data-share]') : null;
-    if (!btn || !shareText) return;
-    var kind = btn.getAttribute('data-share');
+    var btn = e.target.closest ? e.target.closest('#share .share-btn') : null;
+    if (!btn || !shareText || !sharePayload) return;
 
-    if (kind === 'copy') {
-      copy(shareText).then(function (ok) {
-        if (!ok) { toast('복사가 안 됐어요. 길게 눌러 복사해 주세요'); return; }
-        toast('청약 정보를 복사했어요 · 카톡에 붙여넣기', 'ok');
-        flashLabel(btn, '복사됐어요');
-      });
+    /* 버튼 1개 — 공유 시트 우선, 없거나 실패하면 같은 버튼이 복사로 폴백 */
+    if (!navigator.share) { shareFallback(btn); return; }
+    var p;
+    try {
+      p = navigator.share(sharePayload);
+    } catch (err) {
+      shareFallback(btn);
       return;
     }
-
-    if (kind === 'share') {
-      if (!navigator.share) { shareFallback(btn); return; }
-      var p;
-      try {
-        p = navigator.share(sharePayload);
-      } catch (err) {
-        shareFallback(btn);
-        return;
-      }
-      if (p && p.then) {
-        p.then(function () { /* 공유 시트로 넘겼어요 */ }, function (err) {
-          if (err && err.name === 'AbortError') return;  /* 사용자가 닫음 — 조용히 */
-          shareFallback(btn, '공유가 안 돼서 청약 정보를 복사했어요');
-        });
-      }
+    if (p && p.then) {
+      p.then(function () { /* 공유 시트로 넘겼어요 */ }, function (err) {
+        if (err && err.name === 'AbortError') return;  /* 사용자가 닫음 — 조용히 */
+        shareFallback(btn, '공유가 안 돼서 청약 정보를 복사했어요');
+      });
     }
   });
 

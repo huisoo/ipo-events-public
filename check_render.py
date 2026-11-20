@@ -13,11 +13,11 @@ data.json 을 로컬 HTTP 로 띄워 확인합니다(파일 직접 열면 fetch 
 - 증권사 신규 개설 혜택 4건 렌더, 초대 코드 슬롯 0건(누락 0 / 복사 버튼 0)
 - expiresAt 이 지난 테스트 항목은 숨기고, 오늘 만료·상시 항목은 노출
 - (회귀용) 코드가 들어온(ready) 항목의 복사 버튼 동작
-- 청약 정보 공유 바(.share): 히어로와 철회·출처 사이에 버튼 2개(40px 이상),
-  '청약 정보 복사' → 클립보드에 청약 정보 포맷(📌 {종목} ({M/DD} 마감) / * 항목 12개 /
-  ✅ 청약 의견 / URL) · 토스트 · 라벨 '복사됐어요' 되돌림,
-  '공유하기' → navigator.share 로 {title,text,url} 전달(url 은 text 에 중복 없음),
-  미지원·거부 시 청약 정보 복사로 폴백
+- 청약 정보 공유 바(.share): 히어로와 철회·출처 사이에 **버튼 1개**(1열 풀폭·44px·--sun-soft/--sun),
+  '청약 정보 공유하기' → navigator.share 로 {title,text,url} 전달(url 은 text 에 중복 없음),
+  미지원(헤드리스·데스크톱)·AbortError 이외 오류 시 클립보드에 청약 정보 포맷
+  (📌 {종목} ({M/DD} 마감) / * 항목 12개 / ✅ 청약 의견 / URL) · 토스트 · 라벨 '복사됐어요' 되돌림,
+  AbortError(사용자가 닫음)에는 아무 것도 하지 않음
 - 공유문 포맷: 풀 필드 mock 2건(빈 줄 구분·정확한 문자열 일치), 값이 없는 항목은 줄 생략,
   오늘 청약 0건이면 ipo.next 폴백('11/25 마감 예정'), 청약·다음 청약 모두 없으면 공유 바 숨김
 - 스크린샷: preview-mobile.png / preview-mobile-events.png / preview-mobile-dark.png /
@@ -376,6 +376,22 @@ async def main():
                 "#share .share-btn", "els => els.map(e => e.textContent.replace(/\\s+/g,' ').trim())")
             results["share_btn_h"] = await page.eval_on_selector_all(
                 "#share .share-btn", "els => els.map(e => Math.round(e.getBoundingClientRect().height))")
+            # 1열 풀폭(버튼 폭 = .share 안쪽 폭) · 주 버튼 색(--sun-soft 배경 · --sun 글자)
+            results["share_full_width"] = await page.evaluate("""(() => {
+                const s = document.querySelector('#share'), b = document.querySelector('#share .share-btn');
+                const cs = getComputedStyle(s);
+                const inner = s.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+                return Math.abs(b.getBoundingClientRect().width - inner) <= 2;
+            })()""")
+            results["share_primary_style"] = await page.evaluate("""(() => {
+                const cs = getComputedStyle(document.querySelector('#share .share-btn'));
+                const probe = v => { const d = document.createElement('div');
+                    d.style.color = v; document.body.appendChild(d);
+                    const c = getComputedStyle(d).color; d.remove(); return c; };
+                return { bg_ok: cs.backgroundColor === probe('var(--sun-soft)'),
+                         fg_ok: cs.color === probe('var(--sun)'),
+                         bold: Number(cs.fontWeight) >= 700 };
+            })()""")
             results["share_pos"] = await page.evaluate("""(() => {
                 const r = s => document.querySelector(s).getBoundingClientRect();
                 return { hero: Math.round(r('#sec-ipo').bottom), share: Math.round(r('#share').top),
@@ -389,8 +405,9 @@ async def main():
             results["share_native"] = await page.evaluate("typeof navigator.share")
             await share.screenshot(path=str(ROOT / "preview-mobile-share.png"))
 
-            # '청약 정보 복사' → 클립보드가 청약 정보 포맷 + URL, 토스트, 라벨 되돌림
-            await page.locator("#share [data-share='copy']").click()
+            # 버튼 1개 — navigator.share 없는 환경(헤드리스)은 클립보드 복사로 폴백
+            await page.evaluate("navigator.clipboard.writeText('')")
+            await page.locator("#share .share-btn").click()
             await page.wait_for_timeout(350)
             clip = await page.evaluate("navigator.clipboard.readText()")
             results["share_clipboard"] = clip
@@ -399,10 +416,10 @@ async def main():
             results["share_line_head"] = lines[0]
             results["share_last_line"] = lines[-1]
             results["share_copy_toast"] = await page.inner_text("#toast")
-            results["share_copy_label"] = (await page.inner_text("#share [data-share='copy']")).strip()
+            results["share_copy_label"] = (await page.inner_text("#share .share-btn")).strip()
             await page.wait_for_timeout(1900)
             results["share_copy_label_back"] = (
-                await page.inner_text("#share [data-share='copy']")).strip()
+                await page.inner_text("#share .share-btn")).strip()
 
             # 공유문 = 청약 정보만 — 현재 data.json 기준 기대값과 정확히 일치해야 함
             results["share_expect"] = expected_copy(DATA)
@@ -431,15 +448,15 @@ async def main():
             terms_all = PRIVACY_TERMS + ALWAYS_TERMS
             results["share_privacy_hits"] = [t for t in terms_all if t in clip]
 
-            # '공유하기' — navigator.share 없는 환경(헤드리스)은 청약 정보 복사로 폴백
+            # 공유하기 — 헤드리스에는 navigator.share 가 없어 같은 버튼이 청약 정보 복사로 폴백
             await page.evaluate("navigator.clipboard.writeText('')")
-            await page.locator("#share [data-share='share']").click()
+            await page.locator("#share .share-btn").click()
             await page.wait_for_timeout(400)
             results["share_fallback_toast"] = await page.inner_text("#toast")
             results["share_fallback_clipboard"] = (
                 await page.evaluate("navigator.clipboard.readText()")) == clip
             results["share_fallback_label"] = (
-                await page.inner_text("#share [data-share='share']")).strip()
+                await page.inner_text("#share .share-btn")).strip()
 
             # ── 상단 2탭: 기본은 오늘 요약, ?tab=schedule 로 전체 일정 ──
             results["tabs_visible"] = await page.locator("#tabs").is_visible()
@@ -654,13 +671,31 @@ async def main():
                 navigator.share = function (d) { window.__shared = d; return Promise.resolve(); };
             """)
             results["stub_share_type"] = await spage.evaluate("typeof navigator.share")
-            await spage.locator("#share [data-share='share']").click()
+            await spage.locator("#share .share-btn").click()
             await spage.wait_for_timeout(300)
             results["shared_payload"] = await spage.evaluate("window.__shared")
             results["stub_share_label"] = (
-                await spage.inner_text("#share [data-share='share']")).strip()
+                await spage.inner_text("#share .share-btn")).strip()
+            results["stub_share_toast"] = (await spage.inner_text("#toast")).strip()
             results["stub_errors"] = s_errors
             await sctx.close()
+
+            # 사용자가 공유 시트를 닫은 경우(AbortError) — 복사·토스트 없이 조용히
+            actx, apage, a_errors = await open_page(browser, init_script="""
+                navigator.share = function () {
+                    const e = new Error('cancel'); e.name = 'AbortError';
+                    return Promise.reject(e);
+                };
+            """)
+            await apage.evaluate("navigator.clipboard.writeText('')")
+            await apage.locator("#share .share-btn").click()
+            await apage.wait_for_timeout(450)
+            results["abort_clipboard_empty"] = (
+                await apage.evaluate("navigator.clipboard.readText()")) == ""
+            results["abort_toast_empty"] = (await apage.inner_text("#toast")).strip() == ""
+            results["abort_label"] = (await apage.inner_text("#share .share-btn")).strip()
+            results["abort_errors"] = a_errors
+            await actx.close()
 
             # 공유가 거부(reject)되면 조용히 죽지 않고 청약 정보 복사로 폴백
             rctx, rpage, r_errors = await open_page(browser, init_script="""
@@ -669,7 +704,7 @@ async def main():
                     return Promise.reject(e);
                 };
             """)
-            await rpage.locator("#share [data-share='share']").click()
+            await rpage.locator("#share .share-btn").click()
             await rpage.wait_for_timeout(450)
             results["share_reject_toast"] = await rpage.inner_text("#toast")
             results["share_reject_clipboard"] = (
@@ -680,7 +715,7 @@ async def main():
             # ── 2.6 청약일 — 풀 필드 mock 2건, 포맷 정확히 일치 ─────────
             vctx, vpage, v_errors = await open_page(browser, mutate=subscribe_day)
             await vpage.wait_for_timeout(250)
-            await vpage.locator("#share [data-share='copy']").click()
+            await vpage.locator("#share .share-btn").click()
             await vpage.wait_for_timeout(350)
             vclip = await vpage.evaluate("navigator.clipboard.readText()")
             results["mock_clipboard"] = vclip
@@ -707,8 +742,11 @@ async def main():
             await dpage.screenshot(path=str(ROOT / "preview-mobile-dark.png"), full_page=True)
             results["dark_page_h"] = await dpage.evaluate("document.documentElement.scrollHeight")
             results["dark_share_visible"] = await dpage.locator("#share").is_visible()
+            results["dark_share_count"] = await dpage.locator("#share .share-btn").count()
             results["dark_share_btns"] = await dpage.eval_on_selector_all(
                 "#share .share-btn", "els => els.map(e => Math.round(e.getBoundingClientRect().height))")
+            results["dark_share_labels"] = await dpage.eval_on_selector_all(
+                "#share .share-btn", "els => els.map(e => e.textContent.replace(/\\s+/g,' ').trim())")
             results["dark_share_overflow"] = await dpage.evaluate(
                 "document.documentElement.scrollWidth > window.innerWidth + 1")
             await dpage.locator("#share").scroll_into_view_if_needed()
@@ -799,10 +837,14 @@ async def main():
           and results["share_visible"]
           and results["share_label"].startswith("단톡방에")
           and "청약 정보" in results["share_label"]
-          and len(results["share_btns"]) == 2
-          and "청약 정보 복사" in results["share_btns"][0]
-          and results["share_btns"][1].endswith("공유하기")
-          and min(results["share_btn_h"]) >= 40
+          and len(results["share_btns"]) == 1
+          and results["share_btns"][0].startswith("📤")
+          and results["share_btns"][0].endswith("청약 정보 공유하기")
+          and min(results["share_btn_h"]) >= 44
+          and results["share_full_width"]
+          and results["share_primary_style"]["bg_ok"]
+          and results["share_primary_style"]["fg_ok"]
+          and results["share_primary_style"]["bold"]
           and results["share_placed_ok"]
           and results["share_native"] == "undefined"
           and results["share_lines"] >= 3
@@ -816,10 +858,16 @@ async def main():
           and not results["share_privacy_hits"]
           and "청약 정보" in results["share_copy_toast"]
           and results["share_copy_label"] == "복사됐어요"
-          and results["share_copy_label_back"].endswith("청약 정보 복사")
+          and results["share_copy_label_back"].endswith("청약 정보 공유하기")
           and results["share_fallback_clipboard"]
           and "복사" in results["share_fallback_toast"]
           and results["stub_share_type"] == "function"
+          and results["stub_share_label"].endswith("청약 정보 공유하기")
+          and results["stub_share_toast"] == ""
+          and results["abort_clipboard_empty"]
+          and results["abort_toast_empty"]
+          and results["abort_label"].endswith("청약 정보 공유하기")
+          and not results["abort_errors"]
           and results["mock_exact"]
           and results["mock_blocks"] == 2
           and results["mock_bullets"] == 15
@@ -837,10 +885,13 @@ async def main():
           and "복사" in results["share_reject_toast"]
           and results["share_reject_clipboard"]
           and results["dark_share_visible"]
-          and min(results["dark_share_btns"]) >= 40
+          and results["dark_share_count"] == 1
+          and min(results["dark_share_btns"]) >= 44
+          and results["dark_share_labels"][0].endswith("청약 정보 공유하기")
           and not results["dark_share_overflow"]
           and results["desktop_share_visible"]
-          and len(results["desktop_share_labels"]) == 2
+          and len(results["desktop_share_labels"]) == 1
+          and results["desktop_share_labels"][0].endswith("청약 정보 공유하기")
           and not results["stub_errors"]
           and not results["reject_errors"]
           and results["invite_missing"] == 0

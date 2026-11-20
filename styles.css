@@ -293,19 +293,19 @@ h1 em{
   font-size:10px; font-weight:700; letter-spacing:0; color:var(--ink3);
 }
 .share-lab b{font-weight:800; color:var(--ink2)}
-.share-btns{display:grid; grid-template-columns:1fr 1fr; gap:6px}
+/* 버튼 1개 — 1열 풀폭(44px) 주 버튼. 공유 시트가 없으면 같은 버튼이 복사로 폴백합니다. */
 .share-btn{
   -webkit-appearance:none; appearance:none;
-  display:flex; align-items:center; justify-content:center; gap:5px;
-  min-height:44px; padding:10px 8px;
-  font:inherit; font-size:12px; font-weight:800; letter-spacing:-.02em;
+  display:flex; align-items:center; justify-content:center; gap:6px;
+  width:100%; min-height:44px; padding:10px 12px;
+  font:inherit; font-size:13px; font-weight:800; letter-spacing:-.02em;
   color:var(--ink2); background:var(--card);
   border:1px solid var(--line2); border-radius:11px;
   cursor:pointer; white-space:nowrap; overflow:hidden;
   -webkit-tap-highlight-color:transparent;
   transition:background .15s ease, border-color .15s ease, transform .1s ease;
 }
-.share-btn .ico{flex:none; font-size:13px; line-height:1}
+.share-btn .ico{flex:none; font-size:14px; line-height:1}
 .share-btn.is-primary{
   color:var(--sun); background:var(--sun-soft);
   border-color:rgba(217,128,23,.34);
