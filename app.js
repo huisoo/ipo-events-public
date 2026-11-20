@@ -94,6 +94,62 @@
     return '';
   }
 
+  /* ── 주관사 앱 열기 (OS 자동 구분) ───────────
+   * 증권사 공식 MTS 의 스토어 ID — 앱 이름·개발자를 스토어 페이지에서 확인한 것만.
+   *   play : Google Play 패키지명 / app : App Store 숫자 ID
+   * 확인되지 않은 증권사는 넣지 않습니다(버튼도 만들지 않음).
+   */
+  var BROKER_APPS = {
+    'IBK투자증권':  { play: 'com.ibks.ione.mts',                 app: '6612018102' },  /* IBK투자증권 (대표MTS) */
+    '삼성증권':     { play: 'com.samsungpop.android.mpop',       app: '1150231646' },  /* 삼성증권 mPOP */
+    '미래에셋증권': { play: 'com.miraeasset.trade',              app: '1248716281' },  /* 미래에셋증권 MAPS */
+    '한국투자증권': { play: 'com.truefriend.neosmartarenewal',    app: '1621986905' },  /* 한투-한국투자증권 */
+    'KB증권':       { play: 'com.kbsec.mts.iplustarngm2',        app: '350742701' },   /* KB M-able */
+    'NH투자증권':   { play: 'com.wooriwm.txsmart',               app: '486312400' },   /* 나무증권-NH투자증권 MTS */
+    '하나증권':     { play: 'com.hanasec.pro',                   app: '6755097570' },  /* 하나증권V-대표MTS(NEW) */
+    '신한투자증권': { play: 'com.shinhaninvest.nsmts',            app: '1168512940' },  /* 신한 SOL증권 */
+    '키움증권':     { play: 'com.kiwoom.heromts',                app: '1570370057' },  /* 키움증권 영웅문S# */
+    '신영증권':     { play: 'com.shinyoung.mts',                 app: '1619250855' },  /* 신영증권 그린 */
+    '유진투자증권': { play: 'com.eugenefn.smartchampion2',        app: '1080300592' },  /* 유진투자증권 */
+    '대신증권':     { play: 'com.daishin',                       app: '414850336' },   /* 대신증권 CYBOS Touch */
+    '우리투자증권': { play: 'com.wooriib.wonmts',                app: '6745938978' },  /* 우리WON MTS(증권) */
+    'DB증권':       { play: 'com.dbfi.xts',                      app: '1603371564' },  /* DB증권 MTS(알파증권) */
+    '한화투자증권': { play: 'plus.steps.sapp',                   app: '1200606784' },  /* 한화투자증권 MTS */
+    'BNK투자증권':  { play: 'com.bnkfn.mtsplus',                 app: '1170374515' }   /* BNK투자증권 */
+  };
+
+  /* iOS(아이폰·아이패드·터치 지원 맥) → App Store, 그 외(안드로이드·PC) → Google Play */
+  function isIOS() {
+    var ua = navigator.userAgent || '';
+    if (/iPhone|iPad|iPod/i.test(ua)) return true;
+    return navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1;
+  }
+
+  function brokerAppUrl(name) {
+    var a = BROKER_APPS[name];
+    if (!a) return '';
+    return isIOS()
+      ? 'https://apps.apple.com/kr/app/id' + a.app
+      : 'https://play.google.com/store/apps/details?id=' + a.play;
+  }
+
+  /* brokers 문자열('KB증권 · NH투자증권') → 📱 {증권사} 앱 열기 칩(매핑된 증권사만) */
+  function brokerAppLinks(brokers) {
+    var out = '';
+    var seen = {};
+    String(brokers == null ? '' : brokers).split(/[·,、\/]/).forEach(function (raw) {
+      var name = raw.trim();
+      if (!name || seen[name]) return;
+      var url = brokerAppUrl(name);
+      if (!url) return;
+      seen[name] = 1;
+      out += '<a class="app-open" href="' + esc(url) + '" target="_blank" rel="noopener"' +
+        ' aria-label="' + esc(name) + ' 앱 열기">' +
+        '<span class="ico" aria-hidden="true">📱</span>' + esc(name) + ' 앱 열기</a>';
+    });
+    return out ? '<div class="app-open-row">' + out + '</div>' : '';
+  }
+
   /* ── 1레벨 · 오늘의 공모주 1분 요약 ───────── */
 
   function hanjanItem(ipo, name) {
@@ -255,6 +311,7 @@
         verdictBlock(ipo, s.name) +
         depositBlock(s.minEqual) +
         metaRows(s) +
+        brokerAppLinks(s.brokers) +
         ytBlock(ipo, s.name) +
         nextBand(ipo, today) +
       '</article>';
@@ -290,6 +347,7 @@
         '</div>' +
         (meta ? '<dl class="hmeta">' + meta + '</dl>' : '') +
         pts +
+        brokerAppLinks(l.brokers) +
         nextBand(ipo, today) +
       '</article>';
   }

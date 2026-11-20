@@ -7,7 +7,7 @@ from pathlib import Path
 
 from playwright.async_api import async_playwright
 
-from check_render import expected_copy, expected_listing_copy  # 공유문 기대값 규칙 공유
+from check_render import expected_copy, expected_listing_copy, IOS_UA  # 공유문 기대값 규칙 공유
 
 URL = "https://ipo-events-public.vercel.app/"
 SITE_URL = "https://ipo-events-public.vercel.app"
@@ -69,6 +69,14 @@ async def main():
         res["verdict"] = await opt_text(page, ".hero .verdict")
         res["deposit"] = await opt_text(page, ".hero .deposit")
         res["listing_points"] = await page.locator(".hero .pts li").count()
+        # 주관사 앱 열기 — Android(기본) UA 에서는 Google Play 링크
+        res["app_btns"] = await page.eval_on_selector_all(
+            ".hero .app-open",
+            """els => els.map(e => ({ text: e.textContent.replace(/\\s+/g, ' ').trim(),
+                                     href: e.getAttribute('href'),
+                                     target: e.getAttribute('target'),
+                                     rel: e.getAttribute('rel') || '',
+                                     h: Math.round(e.getBoundingClientRect().height) }))""")
         res["yt_rows"] = await page.eval_on_selector_all(".hero .yt-row", "els => els.length")
         res["next_dday"] = await page.inner_text(".hero-next .dday")
         res["next_rows"] = await page.eval_on_selector_all(
@@ -338,6 +346,22 @@ async def main():
         res["deeplink_schedule"] = await lp.locator("#panel-schedule").is_visible()
         res["deeplink_cards"] = await lp.locator("#sch-subscribe .sc").count()
         await deepl.close()
+
+        # 주관사 앱 열기 — iPhone UA 에서는 같은 버튼이 App Store 로 바뀌는지
+        iosctx = await browser.new_context(
+            viewport={"width": 390, "height": 844}, device_scale_factor=2, is_mobile=True,
+            has_touch=True, user_agent=IOS_UA, locale="ko-KR", timezone_id="Asia/Seoul")
+        ip = await iosctx.new_page()
+        await ip.goto(URL, wait_until="networkidle", timeout=45000)
+        await ip.wait_for_selector("#main:not([hidden])", timeout=15000)
+        await ip.wait_for_timeout(300)
+        res["ios_app_btns"] = await ip.eval_on_selector_all(
+            ".hero .app-open",
+            "els => els.map(e => ({ text: e.textContent.replace(/\\s+/g, ' ').trim(),"
+            " href: e.getAttribute('href') }))")
+        res["ios_h_overflow"] = await ip.evaluate(
+            "document.documentElement.scrollWidth > window.innerWidth + 1")
+        await iosctx.close()
         await browser.close()
 
     # 청약일이면 유튜브 요약까지, 상장일이면 상장 포인트로 히어로를 검증
@@ -392,6 +416,15 @@ async def main():
           and res["dark_share_grid"]["fit"]
           and res["desktop_share_visible"]
           and res["desktop_share_labels"] == ["청약 정보 공유", "상장 정보 공유"]
+          # 주관사 앱 열기 — Android 는 Play, iPhone UA 는 App Store
+          and (res["app_btns"] and all(
+              b["href"].startswith("https://play.google.com/store/apps/details?id=")
+              and b["target"] == "_blank" and "noopener" in b["rel"] and b["h"] >= 36
+              for b in res["app_btns"]))
+          and (res["ios_app_btns"] and all(
+              b["href"].startswith("https://apps.apple.com/kr/app/id")
+              for b in res["ios_app_btns"]))
+          and not res["ios_h_overflow"]
           and "1분 요약" in res["title"]
           and res["robots"] and "noindex" not in res["robots"]
           and "index" in res["robots"]

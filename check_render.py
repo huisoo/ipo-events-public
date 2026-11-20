@@ -55,6 +55,12 @@ UA = ("Mozilla/5.0 (Linux; Android 14; SM-S911N) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
 KST = dt.timezone(dt.timedelta(hours=9))
 
+# 주관사 앱 열기 버튼 — OS 판별 확인용 iPhone UA
+IOS_UA = ("Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 "
+          "(KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1")
+PLAY = "https://play.google.com/store/apps/details?id="
+APPSTORE = "https://apps.apple.com/kr/app/id"
+
 # 개인정보 검사어 — 저장소에 올리지 않는 로컬 파일(privacy_terms.txt)에서 한 줄에 하나씩 읽습니다.
 _TERMS_FILE = ROOT / "privacy_terms.txt"
 PRIVACY_TERMS = ([ln.strip() for ln in _TERMS_FILE.read_text(encoding="utf-8").splitlines()
@@ -235,6 +241,22 @@ def listing_sparse_day(body):
         "lockupRate": "확인 필요", "floatSummary": "", "priceBand": "",
         "shareSummary": "",
     }
+    return body
+
+
+def broker_day(body):
+    """청약 당일 mock — 복수 주관사('KB증권 · NH투자증권') 카드에 앱 열기 버튼 2개가 뜨는지."""
+    body = json.loads(json.dumps(body))
+    ipo = body.setdefault("ipo", {})
+    ipo["listing"] = {"hasListing": False}
+    ipo["subscribe"] = [
+        {"name": "마더스제약", "badge": "오늘 청약", "market": "코스닥",
+         "price": "희망 11,000~14,500원", "period": "12/08(월)~12/09(화)",
+         "refund": "12/11(목)", "brokers": "KB증권 · NH투자증권"},
+        {"name": "케이엠에프", "badge": "오늘 청약", "market": "코스닥",
+         "price": "희망 15,000~17,800원", "period": "12/09(화)~12/10(수)",
+         "refund": "12/14(월)", "brokers": "IBK투자증권"},
+    ]
     return body
 
 
@@ -1031,6 +1053,129 @@ async def main():
             results["deeplink_cards"] = await lpage.locator("#sch-subscribe .sc").count()
             await deepl.close()
 
+            # ── 6. 주관사 앱 열기 버튼 — OS 자동 구분 (상장 · 청약 카드) ────────
+            # (a) 실제 데이터 — 오늘 상장(하나에어로다이내믹스, 대표주관 IBK투자증권), Android UA
+            appctx, apppage, app_errors = await open_page(browser)
+            results["app_hero_name"] = (await apppage.inner_text(".hero.is-list .hname")).strip()
+            GET_APP = """els => els.map(e => ({
+                text: e.textContent.replace(/\\s+/g, ' ').trim(),
+                href: e.getAttribute('href'),
+                target: e.getAttribute('target'),
+                rel: e.getAttribute('rel') || '',
+                h: Math.round(e.getBoundingClientRect().height),
+                shown: !!(e.offsetWidth && e.offsetHeight)
+            }))"""
+            listing_apps = await apppage.eval_on_selector_all(
+                ".hero.is-list .app-open", GET_APP)
+            results["listing_app_btns"] = listing_apps
+            results["listing_app_count"] = len(listing_apps)
+            results["listing_app_ok"] = bool(listing_apps) and all([
+                listing_apps[0]["text"].startswith("📱"),
+                listing_apps[0]["text"].endswith("IBK투자증권 앱 열기"),
+                listing_apps[0]["href"] == PLAY + "com.ibks.ione.mts",
+                listing_apps[0]["target"] == "_blank",
+                "noopener" in listing_apps[0]["rel"],
+                listing_apps[0]["h"] >= 36,
+                listing_apps[0]["shown"],
+            ])
+            # 위치: 3줄 요약(.pts) 아래 · 다음 청약 띠(.hero-next) 위
+            results["listing_app_pos"] = await apppage.evaluate("""(() => {
+                const r = s => { const e = document.querySelector(s); return e ? e.getBoundingClientRect() : null; };
+                const pts = r('.hero.is-list .pts'), app = r('.hero.is-list .app-open-row'),
+                      nxt = r('.hero.is-list .hero-next');
+                return { pts_bottom: pts ? Math.round(pts.bottom) : null,
+                         app: app ? Math.round(app.top) : null,
+                         next_top: nxt ? Math.round(nxt.top) : null };
+            })()""")
+            pos = results["listing_app_pos"]
+            results["listing_app_placed"] = (
+                pos["app"] is not None
+                and (pos["pts_bottom"] is None or pos["pts_bottom"] <= pos["app"])
+                and (pos["next_top"] is None or pos["app"] < pos["next_top"]))
+            results["app_overflow"] = await apppage.evaluate(
+                "document.documentElement.scrollWidth > window.innerWidth + 1")
+            results["app_clipped"] = await apppage.evaluate("""(() => {
+                const vw = window.innerWidth, bad = [];
+                document.querySelectorAll('.app-open-row, .app-open-row *').forEach(el => {
+                  const r = el.getBoundingClientRect();
+                  if (r.width && (r.left < -1 || r.right > vw + 1)) bad.push(el.tagName + '.' + el.className);
+                });
+                return bad.slice(0, 5);
+            })()""")
+            results["app_errors"] = app_errors
+            await apppage.locator(".hero.is-list").screenshot(
+                path=str(ROOT / "preview-mobile-app.png"))
+            await appctx.close()
+
+            # (b) 같은 페이지를 iPhone UA 로 — 같은 버튼의 href 가 App Store 로 바뀌는지
+            iosctx, iospage, ios_errors = await open_page(browser, user_agent=IOS_UA)
+            ios_apps = await iospage.eval_on_selector_all(".hero.is-list .app-open", GET_APP)
+            results["ios_app_btns"] = ios_apps
+            results["ios_app_ok"] = bool(ios_apps) and all([
+                ios_apps[0]["text"].endswith("IBK투자증권 앱 열기"),
+                ios_apps[0]["href"] == APPSTORE + "6612018102",
+                ios_apps[0]["target"] == "_blank",
+                "noopener" in ios_apps[0]["rel"],
+                ios_apps[0]["shown"],
+            ])
+            results["ios_overflow"] = await iospage.evaluate(
+                "document.documentElement.scrollWidth > window.innerWidth + 1")
+            results["ios_errors"] = ios_errors
+            await iosctx.close()
+
+            # (c) 청약 당일 mock — 복수 주관사('KB증권 · NH투자증권') 카드에 버튼 2개
+            brctx, brpage, br_errors = await open_page(browser, mutate=broker_day)
+            results["br_cards"] = await brpage.locator(".hero").count()
+            results["br_apps_by_card"] = await brpage.evaluate("""(() =>
+                [...document.querySelectorAll('.hero')].map(c =>
+                  [...c.querySelectorAll('.app-open')].map(a => ({
+                    text: a.textContent.replace(/\\s+/g, ' ').trim(),
+                    href: a.getAttribute('href'),
+                    target: a.getAttribute('target'),
+                    rel: a.getAttribute('rel') || '',
+                    h: Math.round(a.getBoundingClientRect().height),
+                    shown: !!(a.offsetWidth && a.offsetHeight)
+                  }))))()""")
+            by_card = results["br_apps_by_card"]
+            results["br_two_on_multi"] = (
+                len(by_card) == 2
+                and [b["text"] for b in by_card[0]] == ["📱KB증권 앱 열기", "📱NH투자증권 앱 열기"]
+                and by_card[0][0]["href"] == PLAY + "com.kbsec.mts.iplustarngm2"
+                and by_card[0][1]["href"] == PLAY + "com.wooriwm.txsmart")
+            results["br_one_on_single"] = (
+                len(by_card[1]) == 1
+                and by_card[1][0]["text"] == "📱IBK투자증권 앱 열기"
+                and by_card[1][0]["href"] == PLAY + "com.ibks.ione.mts")
+            results["br_links_ok"] = all(
+                a["target"] == "_blank" and "noopener" in a["rel"] and a["shown"] and a["h"] >= 36
+                and a["href"].startswith(PLAY)
+                for card in by_card for a in card)
+            results["br_overflow"] = await brpage.evaluate(
+                "document.documentElement.scrollWidth > window.innerWidth + 1")
+            results["br_clipped"] = await brpage.evaluate("""(() => {
+                const vw = window.innerWidth, bad = [];
+                document.querySelectorAll('.hero, .hero *').forEach(el => {
+                  if (el.closest('.sr-only')) return;
+                  const r = el.getBoundingClientRect();
+                  if (r.width && (r.left < -1 || r.right > vw + 1)) bad.push(el.tagName + '.' + el.className);
+                });
+                return bad.slice(0, 5);
+            })()""")
+            results["br_errors"] = br_errors
+            await brpage.screenshot(path=str(ROOT / "preview-mobile-app-multi.png"))
+
+            # 다크 모드에서도 같은 버튼이 보이고 가로 넘침이 없는지
+            dkctx, dkpage, dk_errors = await open_page(browser, color_scheme="dark")
+            results["dark_app_count"] = await dkpage.locator(".hero.is-list .app-open").count()
+            results["dark_app_h"] = round(await dkpage.evaluate(
+                "(() => { const e = document.querySelector('.hero .app-open');"
+                " return e ? e.getBoundingClientRect().height : 0; })()"))
+            results["dark_app_overflow"] = await dkpage.evaluate(
+                "document.documentElement.scrollWidth > window.innerWidth + 1")
+            results["dark_app_errors"] = dk_errors
+            await dkctx.close()
+            await brctx.close()
+
             await browser.close()
     finally:
         httpd.shutdown()
@@ -1044,6 +1189,27 @@ async def main():
                or (results["hero_kind"] == "empty" and bool(results["next_rows"])))
 
     ok = (results["events"] == 4
+          and "하나에어로다이내믹스" in results["app_hero_name"]
+          and results["listing_app_count"] == 1
+          and results["listing_app_ok"]
+          and results["listing_app_placed"]
+          and not results["app_overflow"]
+          and not results["app_clipped"]
+          and not results["app_errors"]
+          and results["ios_app_ok"]
+          and not results["ios_overflow"]
+          and not results["ios_errors"]
+          and results["br_cards"] == 2
+          and results["br_two_on_multi"]
+          and results["br_one_on_single"]
+          and results["br_links_ok"]
+          and not results["br_overflow"]
+          and not results["br_clipped"]
+          and not results["br_errors"]
+          and results["dark_app_count"] == 1
+          and results["dark_app_h"] >= 36
+          and not results["dark_app_overflow"]
+          and not results["dark_app_errors"]
           and results["tabs_visible"]
           and results["tab_count"] == 2
           and results["tab_labels"] == ["오늘 요약", "전체 일정"]

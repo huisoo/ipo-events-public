@@ -136,6 +136,7 @@ https://ipo-events-public.vercel.app   ← 클립보드 복사본에만(공유 �
 | 필드 | 공유문 라벨 | 예 | 출처·규칙 |
 | --- | --- | --- | --- |
 | `hasListing` | (버튼 활성 여부) | `true` | `false`면 오른쪽 버튼은 `오늘 상장 없음` 비활성 |
+| `brokers` | (앱 열기 버튼) | `IBK투자증권` | 상장 주관사(대표주관). 카드 하단 `📱 {증권사} 앱 열기` 버튼을 만드는 값 — **상장일마다 반드시 채웁니다**. 복수면 ` · `로 연결 |
 | `date` | `{M/DD} 상장` | `2026-11-20` | 상장일(ISO). 없으면 `listingDate` → `ipo.date` |
 | `ipoPrice` | 공모가 | `5,700원` | 확정 공모가 |
 | `openPrice` | 시초가 | `10,130원` | 상장일 시초가 |
@@ -151,6 +152,7 @@ https://ipo-events-public.vercel.app   ← 클립보드 복사본에만(공유 �
 "listing": {
   "hasListing": true, "date": "2026-11-20",
   "name": "하나에어로다이내믹스", "code": "271160", "market": "코스닥 · 벤처기업부",
+  "brokers": "IBK투자증권",
   "ipoPrice": "5,700원", "openPrice": "10,130원", "openChange": "+77.7%",
   "closePrice": "6,050원", "closeChange": "+6.14%", "lockupRate": "72.69%",
   "floatSummary": "17.30% (약 175억)",
@@ -164,6 +166,43 @@ https://ipo-events-public.vercel.app   ← 클립보드 복사본에만(공유 �
 
 상장 당일 07:30에는 시초가 전이라 `openPrice`·`closePrice`·`priceBand`를 비워 두고(그 줄이 빠짐),
 09:05·16:05 확인에서 확인된 값만 채웁니다.
+
+### 📱 주관사 앱 열기 버튼 (OS 자동 구분)
+
+상장 카드(3줄 요약 아래)와 청약 카드(주관·환불 줄 아래)에 **`📱 {증권사} 앱 열기`** 버튼이 붙습니다.
+주관사 문자열(`ipo.listing.brokers` · `ipo.subscribe[].brokers`)을 ` · `, `,` 기준으로 나눠
+매핑된 증권사마다 칩 하나를 만들고, 복수 주관사면 칩이 나란히(좁은 화면에서는 다음 줄로) 놓입니다.
+
+- **OS 판별**(`app.js`): `iPhone|iPad|iPod` UA 또는 터치 지원 Mac(`platform === 'MacIntel' && maxTouchPoints > 1`) → **App Store**,
+  그 외(Android·PC) → **Google Play**. 링크는 `target="_blank" rel="noopener"`.
+- 버튼은 `BROKER_APPS`에 들어 있는 증권사만 만듭니다(확인되지 않은 증권사는 버튼 없음 — 추정 링크를 만들지 않음).
+- 크기: 높이 38px(최소 36px 이상), 12px 굵은 글씨, `--blue-soft` 배경 · `--blue` 글자, 다크 모드 대응,
+  가로 스크롤 없음(390px 기준).
+
+현재 매핑(2026-11-20 스토어 페이지에서 앱 이름·개발자까지 확인):
+
+| 증권사 | Google Play 패키지 | App Store ID | 앱 |
+| --- | --- | --- | --- |
+| IBK투자증권 | `com.ibks.ione.mts` | `6612018102` | IBK투자증권 (대표MTS) |
+| 삼성증권 | `com.samsungpop.android.mpop` | `1150231646` | 삼성증권 mPOP |
+| 미래에셋증권 | `com.miraeasset.trade` | `1248716281` | 미래에셋증권 MAPS |
+| 한국투자증권 | `com.truefriend.neosmartarenewal` | `1621986905` | 한투-한국투자증권 |
+| KB증권 | `com.kbsec.mts.iplustarngm2` | `350742701` | KB M-able |
+| NH투자증권 | `com.wooriwm.txsmart` | `486312400` | 나무증권-NH투자증권 MTS |
+| 하나증권 | `com.hanasec.pro` | `6755097570` | 하나증권V-대표MTS(NEW) |
+| 신한투자증권 | `com.shinhaninvest.nsmts` | `1168512940` | 신한 SOL증권 |
+| 키움증권 | `com.kiwoom.heromts` | `1570370057` | 키움증권 영웅문S# |
+| 신영증권 | `com.shinyoung.mts` | `1619250855` | 신영증권 그린 |
+| 유진투자증권 | `com.eugenefn.smartchampion2` | `1080300592` | 유진투자증권 |
+| 대신증권 | `com.daishin` | `414850336` | 대신증권 CYBOS Touch |
+| 우리투자증권 | `com.wooriib.wonmts` | `6745938978` | 우리WON MTS(증권) |
+| DB증권 | `com.dbfi.xts` | `1603371564` | DB증권 MTS(알파증권) |
+| 한화투자증권 | `plus.steps.sapp` | `1200606784` | 한화투자증권 MTS |
+| BNK투자증권 | `com.bnkfn.mtsplus` | `1170374515` | BNK투자증권 |
+
+새 증권사를 넣을 때는 두 스토어 페이지(`https://play.google.com/store/apps/details?id=…`,
+`https://apps.apple.com/kr/app/id…`)를 실제로 열어 **앱 이름과 개발자가 그 증권사인지** 확인한 뒤 `app.js`의
+`BROKER_APPS`에 추가합니다.
 
 ### 전체 일정 데이터(`ipo.upcoming`)
 
@@ -255,6 +294,14 @@ python3 check_render.py
 상장 없는 날은 오른쪽 버튼이 `:disabled` + `오늘 상장 없음`(커서 default·점선·눌러도 복사 없음),
 청약·다음 청약까지 모두 없는 날은 왼쪽 버튼이 `오늘 청약 없음` 비활성으로 남는지도 검사합니다.
 
+**📱 주관사 앱 열기 버튼**도 함께 검사합니다. 오늘 상장 카드(`하나에어로다이내믹스` · 주관 IBK투자증권)에
+`📱 IBK투자증권 앱 열기`가 **3줄 요약 아래·다음 청약 띠 위**에 1개 있고, Android UA에서 `href`가
+`https://play.google.com/store/apps/details?id=com.ibks.ione.mts`인지, 같은 페이지를 **iPhone UA**로 열면
+`https://apps.apple.com/kr/app/id6612018102`로 바뀌는지, 청약 당일 mock(`KB증권 · NH투자증권`)에서
+카드마다 `📱 KB증권 앱 열기`·`📱 NH투자증권 앱 열기` 2개가 정상 링크로 뜨는지(단일 주관사 카드는 1개),
+모두 `_blank`/`noopener`·높이 36px 이상·가로 스크롤 없음·요소 잘림 없음인지, 다크 모드에서도 같은 버튼이
+보이고 38px을 유지하는지 확인합니다.
+
 ```bash
 python3 check_prod.py   # 배포 URL 검증 (같은 공유 바 항목 포함)
 ```
@@ -265,7 +312,7 @@ python3 check_prod.py   # 배포 URL 검증 (같은 공유 바 항목 포함)
 
 - **공모주**: `data.json`의 `ipo` 블록만 교체(`ipo.upcoming` 포함). 공유문에 나가는
   `ipo.subscribe[]`·`ipo.next`의 청약 정보 필드와 `ipo.listing`의 상장 정보 필드를 위 표대로 채우고,
-  확인 못 한 값은 빈 문자열로 둡니다(`ipo.listing`은 `hasListing`만 정확히).
+  확인 못 한 값은 빈 문자열로 둡니다(`ipo.listing`은 `hasListing`과 `brokers`만 정확히).
 - **이벤트**: `events` 배열에 객체 추가.
   - `expiresAt`: `YYYY-MM-DD`. **상시 이벤트는 `null`**. 기기 기준 오늘 날짜가 이 날짜를 지나면
     행이 화면에서 자동으로 빠지고, 접힘 목록 안내줄에 "N건 숨겼어요"로만 표시됩니다.
