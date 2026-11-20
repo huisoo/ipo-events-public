@@ -14,6 +14,14 @@ TERMS = ([ln.strip() for ln in _terms_file.read_text(encoding="utf-8").splitline
 ALWAYS_TERMS = ["야탑", "판교", "이매", "쌍둥이", "육아", "어린이집", "배송지"]
 
 
+async def opt_text(page, sel, default=""):
+    """없을 수 있는 요소 — 없으면 타임아웃 대신 기본값(청약일·상장일 공용)."""
+    loc = page.locator(sel)
+    if await loc.count() == 0:
+        return default
+    return (await loc.first.inner_text()).replace("\n", " ")
+
+
 async def main():
     res = {}
     async with async_playwright() as p:
@@ -43,11 +51,21 @@ async def main():
 
         # 1레벨 히어로
         res["hero"] = await page.locator(".hero").count()
+        res["hero_kind"] = await page.evaluate("""(() => {
+            const h = document.querySelector('.hero');
+            if (!h) return 'none';
+            if (h.classList.contains('is-list')) return 'listing';
+            if (h.classList.contains('is-empty')) return 'empty';
+            return 'subscribe';
+        })()""")
         res["hero_name"] = (await page.inner_text(".hero .hname")).replace("\n", " ")
-        res["verdict"] = (await page.inner_text(".hero .verdict")).replace("\n", " ")
-        res["deposit"] = (await page.inner_text(".hero .deposit")).replace("\n", " ")
+        res["verdict"] = await opt_text(page, ".hero .verdict")
+        res["deposit"] = await opt_text(page, ".hero .deposit")
+        res["listing_points"] = await page.locator(".hero .pts li").count()
         res["yt_rows"] = await page.eval_on_selector_all(".hero .yt-row", "els => els.length")
         res["next_dday"] = await page.inner_text(".hero-next .dday")
+        res["next_rows"] = await page.eval_on_selector_all(
+            ".hero-next .nk", "els => els.map(e => e.textContent.trim())")
         first_screen = await page.evaluate("""(() => {
             const n = document.querySelector('.hero-next');
             return { next_bottom: Math.round(n.getBoundingClientRect().bottom),
@@ -127,6 +145,10 @@ async def main():
         await desk.close()
         await browser.close()
 
+    # 청약일이면 유튜브 요약까지, 상장일이면 상장 포인트로 히어로를 검증
+    hero_ok = ((res["hero_kind"] == "subscribe" and res["yt_rows"] >= 2)
+               or (res["hero_kind"] == "listing" and res["listing_points"] >= 1))
+
     ok = (res["http_status"] == 200
           and "1분 요약" in res["title"]
           and res["robots"] and "noindex" not in res["robots"]
@@ -135,7 +157,8 @@ async def main():
           and not res["draft_badge_visible"]
           and not res["has_draft_word"]
           and res["hero"] == 1
-          and res["yt_rows"] >= 2
+          and hero_ok
+          and "다음 청약" in res["next_rows"]
           and res["next_dday"].startswith("D-")
           and res["next_bottom"] <= res["viewport_h"]
           and res["benefits_collapsed"]

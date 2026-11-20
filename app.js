@@ -254,8 +254,8 @@
       '</article>';
   }
 
-  /* 오늘 상장 카드 — 청약이 없는 날의 1레벨 */
-  function listingHero(l) {
+  /* 오늘 상장 카드 — 청약이 없는 날의 1레벨 (하단 띠는 청약 카드와 동일하게 다음 청약·다음 상장) */
+  function listingHero(l, ipo, today) {
     var badge = String(l.badge || '').replace(/^오늘\s*상장\s*/, '');
     var pts = (l.points && l.points.length)
       ? '<ul class="pts">' + l.points.map(function (p) { return '<li>' + esc(p) + '</li>'; }).join('') + '</ul>'
@@ -280,6 +280,7 @@
         '</div>' +
         (meta ? '<dl class="hmeta">' + meta + '</dl>' : '') +
         pts +
+        nextBand(ipo, today) +
       '</article>';
   }
 
@@ -310,7 +311,7 @@
     } else if (!(ipo.listing && ipo.listing.hasListing)) {
       html += emptyHero(ipo, today);
     }
-    if (ipo.listing && ipo.listing.hasListing) html += listingHero(ipo.listing);
+    if (ipo.listing && ipo.listing.hasListing) html += listingHero(ipo.listing, ipo, today);
 
     var side = '';
     (ipo.cancelled || []).forEach(function (c) {

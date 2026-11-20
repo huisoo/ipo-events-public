@@ -6,7 +6,8 @@ data.json 을 로컬 HTTP 로 띄워 확인합니다(파일 직접 열면 fetch 
 확인 항목
 - 콘솔 에러·가로 스크롤·요소 잘림·개인정보 문구(privacy_terms.txt 의 검사어)
 - UI 위계: 히어로(1레벨)가 접힌 아코디언(2레벨)보다 위, 첫 화면(844px) 안에
-  오늘 청약·상장 여부 / 균등·비례 결론 / 주관사별 최소증거금 / 유튜브 요약 / 다음 청약 D-day
+  오늘 청약·상장 여부 / (청약일) 균등·비례 결론·주관사별 최소증거금·유튜브 요약 /
+  다음 청약 D-day — 청약 없는 상장일에도 히어로는 상장 카드 + 다음 청약 띠로 검증
 - 2레벨: 기본 접힘, 머리말 '주관사 계좌가 없으신가요? · 신규 개설 혜택 N건', 탭하면 펼쳐짐
   (얇은 행 → 상세 조건·신청 방법·공식 링크)
 - 증권사 신규 개설 혜택 4건 렌더, 초대 코드 슬롯 0건(누락 0 / 복사 버튼 0)
@@ -49,6 +50,14 @@ def serve():
     httpd = socketserver.TCPServer(("127.0.0.1", PORT), handler)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     return httpd
+
+
+async def opt_text(page, sel, default=""):
+    """없을 수 있는 요소 — 없으면 타임아웃 대신 기본값(청약일·상장일 공용)."""
+    loc = page.locator(sel)
+    if await loc.count() == 0:
+        return default
+    return (await loc.first.inner_text()).replace("\n", " ")
 
 
 def test_events():
@@ -149,14 +158,25 @@ async def main():
             results["hero_name"] = await page.inner_text(".hero .hname")
             results["flags"] = await page.eval_on_selector_all(
                 ".hero .flag", "els => els.map(e => e.textContent.trim())")
-            results["verdict_label"] = await page.inner_text(".hero .vk")
+            # 청약일(청약 카드) / 상장일(상장 카드) / 둘 다 없는 날을 모두 견디도록
+            results["hero_kind"] = await page.evaluate("""(() => {
+                const h = document.querySelector('.hero');
+                if (!h) return 'none';
+                if (h.classList.contains('is-list')) return 'listing';
+                if (h.classList.contains('is-empty')) return 'empty';
+                return 'subscribe';
+            })()""")
+            results["verdict_label"] = await opt_text(page, ".hero .vk")
             results["verdict_pills"] = await page.eval_on_selector_all(
                 ".hero .vbig", "els => els.map(e => e.textContent.trim())")
-            results["deposit"] = (await page.inner_text(".hero .deposit")).replace("\n", " ")
+            results["deposit"] = await opt_text(page, ".hero .deposit")
+            results["listing_points"] = await page.locator(".hero .pts li").count()
             results["yt_rows"] = await page.eval_on_selector_all(
                 ".hero .yt-row", "els => els.map(e => e.textContent.replace(/\\s+/g,' ').trim())")
             results["next_line"] = (await page.inner_text(".hero-next")).replace("\n", " ")
             results["next_dday"] = await page.inner_text(".hero-next .dday")
+            results["next_rows"] = await page.eval_on_selector_all(
+                ".hero-next .nk", "els => els.map(e => e.textContent.trim())")
 
             # 위계: 히어로가 아코디언보다 위 + 히어로가 첫 화면 안에
             hierarchy = await page.evaluate("""(() => {
@@ -313,14 +333,21 @@ async def main():
     finally:
         httpd.shutdown()
 
+    # 청약일이면 결론·최소증거금·유튜브 요약, 상장일이면 상장 포인트를 확인
+    hero_ok = ((results["hero_kind"] == "subscribe"
+                and bool(results["verdict_pills"])
+                and results["deposit"].startswith("주관사별 최소증거금")
+                and len(results["yt_rows"]) >= 2)
+               or (results["hero_kind"] == "listing" and results["listing_points"] >= 1)
+               or (results["hero_kind"] == "empty" and bool(results["next_rows"])))
+
     ok = (results["events"] == 4
           and results["invite_missing"] == 0
           and results["invite_none"] == 4
           and results["copy_buttons"] == 0
           and results["hero_count"] == 1
-          and results["verdict_pills"]
-          and results["deposit"].startswith("주관사별 최소증거금")
-          and len(results["yt_rows"]) >= 2
+          and hero_ok
+          and "다음 청약" in results["next_rows"]
           and results["next_dday"].startswith("D-")
           and results["hierarchy_ok"]
           and not results["accordion_open_by_default"]
