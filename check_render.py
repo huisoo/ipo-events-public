@@ -117,7 +117,23 @@ def test_events():
     ]
 
 
-async def open_page(browser, inject=None, path="", init_script=None, **ctx_kw):
+def subscribe_day(body):
+    """청약일 화면 — 요약문이 '오늘 청약' 분기로 바뀌는지 보는 테스트 데이터."""
+    body = json.loads(json.dumps(body))
+    ipo = body.setdefault("ipo", {})
+    ipo["subscribe"] = [
+        {"name": "케이엠에프", "badge": "오늘 청약", "market": "코스닥",
+         "price": "확정 16,000원", "period": "11/20(금)~11/21(토)",
+         "refund": "11/25(화)", "brokers": "IBK투자증권"},
+        {"name": "신영스팩12호", "badge": "오늘 청약", "market": "코스닥",
+         "price": "확정 2,000원", "period": "11/20(금)~11/21(토)",
+         "refund": "11/25(화)", "brokers": "신영증권"},
+    ]
+    ipo["listing"] = {"hasListing": False}
+    return body
+
+
+async def open_page(browser, inject=None, path="", init_script=None, mutate=None, **ctx_kw):
     ctx_args = dict(
         viewport={"width": 390, "height": 844},
         device_scale_factor=2,
@@ -138,11 +154,14 @@ async def open_page(browser, inject=None, path="", init_script=None, **ctx_kw):
     if init_script:
         await page.add_init_script(init_script)
 
-    if inject:
+    if inject or mutate:
         async def handler(route):
             resp = await route.fetch()
             body = await resp.json()
-            body["events"] = body.get("events", []) + inject
+            if inject:
+                body["events"] = body.get("events", []) + inject
+            if mutate:
+                body = mutate(body)
             await route.fulfill(status=200, response=resp,
                                 body=json.dumps(body, ensure_ascii=False))
         await page.route("**/data.json*", handler)
@@ -508,6 +527,20 @@ async def main():
             results["reject_errors"] = r_errors
             await rctx.close()
 
+            # ── 2.6 청약일 요약 — '오늘 청약' 분기 ─────────────
+            vctx, vpage, v_errors = await open_page(browser, mutate=subscribe_day)
+            await vpage.wait_for_timeout(250)
+            await vpage.locator("#share [data-share='copy']").click()
+            await vpage.wait_for_timeout(350)
+            vclip = await vpage.evaluate("navigator.clipboard.readText()")
+            results["sub_clipboard"] = vclip
+            results["sub_lines"] = len(vclip.split("\n"))
+            results["sub_line2"] = vclip.split("\n")[1] if len(vclip.split("\n")) > 1 else ""
+            results["sub_last"] = vclip.split("\n")[-1]
+            results["sub_has_next"] = "다음 청약" in vclip
+            results["sub_errors"] = v_errors
+            await vctx.close()
+
             # ── 3. 다크 모드 ──────────────────────────────
             dark, dpage, dark_errors = await open_page(browser, color_scheme="dark")
             await dpage.screenshot(path=str(ROOT / "preview-mobile-dark.png"), full_page=True)
@@ -621,6 +654,12 @@ async def main():
           and results["share_fallback_clipboard"]
           and "복사" in results["share_fallback_toast"]
           and results["stub_share_type"] == "function"
+          and results["sub_lines"] == 4
+          and results["sub_line2"].startswith("• 오늘 청약 케이엠에프 16,000원")
+          and results["sub_line2"].endswith("외 1건")
+          and not results["sub_has_next"]
+          and results["sub_last"] == SITE_URL
+          and not results["sub_errors"]
           and bool(results["shared_payload"])
           and results["shared_payload"].get("url") == SITE_URL
           and results["shared_payload"].get("title") == "오늘의 공모주 1분 요약"
