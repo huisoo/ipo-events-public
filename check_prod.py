@@ -67,6 +67,24 @@ async def main():
         res["privacy_hits"] = [t for t in TERMS + ALWAYS_TERMS if t in body]
         res["invite_words"] = any(w in body for w in ("초대 코드", "초대코드", "추천인"))
         res["notice_count"] = await page.locator("#notice-list li").count()
+
+        # 하단 응원 카드(3레벨)
+        res["support_visible"] = await page.locator("#support").is_visible()
+        res["support_title"] = (await page.inner_text("#support .sup-t")).strip()
+        res["support_href"] = await page.get_attribute("#support .sup-btn", "href")
+        res["support_target"] = await page.get_attribute("#support .sup-btn", "target")
+        res["support_rel"] = await page.get_attribute("#support .sup-btn", "rel")
+        res["support_above_footer"] = await page.evaluate("""(() => {
+            const s = document.querySelector('#support').getBoundingClientRect();
+            const f = document.querySelector('#foot').getBoundingClientRect();
+            return s.bottom <= f.top + 1;
+        })()""")
+        await page.locator("#support").scroll_into_view_if_needed()
+        await page.wait_for_timeout(200)
+        await page.locator("#support").screenshot(path=str(OUT / "support-prod-mobile.png"))
+        await page.locator("#foot").scroll_into_view_if_needed()
+        await page.wait_for_timeout(150)
+        await page.screenshot(path=str(OUT / "preview-prod-mobile-bottom.png"))
         res["doc_width"] = await page.evaluate("document.documentElement.scrollWidth")
         res["viewport_width"] = await page.evaluate("window.innerWidth")
         res["console_errors"] = errors
@@ -126,6 +144,11 @@ async def main():
           and res["events"] == 4
           and not res["privacy_hits"]
           and not res["invite_words"]
+          and res["support_visible"]
+          and res["support_href"] == "https://qr.kakaopay.com/Ej7j2Gwco"
+          and res["support_target"] == "_blank"
+          and "noopener" in (res["support_rel"] or "")
+          and res["support_above_footer"]
           and not res["console_errors"]
           and res["doc_width"] == res["viewport_width"]
           and not res["desktop_h_overflow"])

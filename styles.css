@@ -447,6 +447,39 @@ h1 em{
 }
 .ev-link i{font-style:normal; opacity:.7}
 
+/* ── 3레벨 · 운영 응원 (조용한 카드) ─────── */
+.support{
+  margin-top:14px; padding:12px 14px 13px;
+  background:var(--bg2);
+  border:1px dashed var(--line2);
+  border-radius:14px;
+}
+@media (prefers-color-scheme: dark){ .support{background:#1b1715} }
+.sup-t{
+  margin:0; display:flex; align-items:center; gap:5px;
+  font-size:12px; font-weight:800; letter-spacing:-.02em; line-height:1.35;
+  color:var(--ink2);
+}
+.sup-ico{
+  flex:none; display:inline-flex; align-items:center; justify-content:center;
+  width:18px; height:18px; border-radius:6px;
+  background:var(--sun-soft); font-size:10.5px;
+}
+.sup-n{margin:3px 0 0; font-size:10.5px; line-height:1.55; color:var(--ink3)}
+.sup-btn{
+  display:flex; align-items:center; justify-content:center; gap:4px;
+  margin-top:9px; min-height:38px; padding:8px 12px;
+  border:1px solid var(--line2); border-radius:10px;
+  background:var(--card); color:var(--ink2);
+  font-size:11.5px; font-weight:800; letter-spacing:-.02em;
+  text-decoration:none;
+  -webkit-tap-highlight-color:transparent;
+  transition:background .15s ease, border-color .15s ease;
+}
+.sup-btn i{font-style:normal; font-size:10px; color:var(--ink3)}
+.sup-btn:active{background:var(--line)}
+.sup-btn:focus-visible{outline:2px solid var(--blue); outline-offset:2px}
+
 /* ── 푸터 고지 ───────────────────────────── */
 .foot{
   margin-top:14px; padding:13px 14px 14px;

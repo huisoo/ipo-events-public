@@ -222,7 +222,7 @@ async def main():
             results["clipped"] = await page.evaluate("""
                 (() => {
                   const vw = window.innerWidth, bad = [];
-                  document.querySelectorAll('.hero, .hero *', )
+                  document.querySelectorAll('.hero, .hero *, .support, .support *')
                     .forEach(el => {
                       if (el.closest('.sr-only')) return;
                       const r = el.getBoundingClientRect();
@@ -235,6 +235,31 @@ async def main():
                 })()
             """)
             results["errors"] = errors
+
+            # ── 하단 응원 카드(3레벨) ──────────────────────────
+            sup = page.locator("#support")
+            results["support_visible"] = await sup.is_visible()
+            results["support_title"] = (await page.inner_text("#support .sup-t")).strip()
+            results["support_note"] = (await page.inner_text("#support .sup-n")).strip()
+            sup_a = page.locator("#support .sup-btn")
+            results["support_btn_text"] = (await sup_a.inner_text()).strip()
+            results["support_href"] = await sup_a.get_attribute("href")
+            results["support_target"] = await sup_a.get_attribute("target")
+            results["support_rel"] = await sup_a.get_attribute("rel")
+            results["support_links"] = await page.locator("#support a").count()
+            results["support_above_footer"] = await page.evaluate("""(() => {
+                const s = document.querySelector('#support').getBoundingClientRect();
+                const f = document.querySelector('#foot').getBoundingClientRect();
+                return s.bottom <= f.top + 1;
+            })()""")
+            results["support_btn_h"] = round(await page.evaluate(
+                "document.querySelector('#support .sup-btn').getBoundingClientRect().height"))
+            await sup.scroll_into_view_if_needed()
+            await page.wait_for_timeout(200)
+            await sup.screenshot(path=str(ROOT / "preview-mobile-support.png"))
+            await page.locator("#foot").scroll_into_view_if_needed()
+            await page.wait_for_timeout(150)
+            await page.screenshot(path=str(ROOT / "preview-mobile-bottom.png"))
             await ctx.close()
 
             # ── 2. 만료/오늘/상시/코드보유 테스트 주입 ────────────
@@ -314,6 +339,15 @@ async def main():
           and results["note_mentions_hidden"]
           and results["clipboard"] == "HUI1234"
           and not results["errors"]
+          and results["support_visible"]
+          and results["support_title"].endswith("커피 한 잔 응원하기")
+          and results["support_href"] == "https://qr.kakaopay.com/Ej7j2Gwco"
+          and results["support_target"] == "_blank"
+          and "noopener" in (results["support_rel"] or "")
+          and "noreferrer" in (results["support_rel"] or "")
+          and results["support_links"] == 1
+          and results["support_above_footer"]
+          and results["support_btn_h"] >= 36
           and not results["inject_errors"]
           and not results["dark_errors"]
           and not results["desktop_errors"]

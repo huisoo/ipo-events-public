@@ -4,6 +4,7 @@
  *   1레벨  .hero      오늘의 공모주 1분 요약 (오늘 청약·상장 → 균등·비례 결론 →
  *                     주관사별 최소증거금 → 유튜브 요약 → 다음 청약 D-day)
  *   2레벨  .benefits  주관사 신규 개설 혜택 (기본 접힘 아코디언 + 얇은 행)
+ *   3레벨  .support   커피 한 잔 응원하기 (푸터 위 조용한 카드, 카카오페이 링크)
  */
 (function () {
   'use strict';
@@ -463,6 +464,7 @@
 
     $('loading').hidden = true;
     $('main').hidden = false;
+    $('support').hidden = false;
     $('foot').hidden = false;
   }
 
