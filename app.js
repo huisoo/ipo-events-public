@@ -114,6 +114,7 @@
     '대신증권':     { play: 'com.daishin',                       app: '414850336' },   /* 대신증권 CYBOS Touch */
     '우리투자증권': { play: 'com.wooriib.wonmts',                app: '6745938978' },  /* 우리WON MTS(증권) */
     'DB증권':       { play: 'com.dbfi.xts',                      app: '1603371564' },  /* DB증권 MTS(알파증권) */
+    'DB금융투자':   { play: 'com.dbfi.xts',                      app: '1603371564' },  /* DB증권의 옛 이름 표기 */
     '한화투자증권': { play: 'plus.steps.sapp',                   app: '1200606784' },  /* 한화투자증권 MTS */
     'BNK투자증권':  { play: 'com.bnkfn.mtsplus',                 app: '1170374515' }   /* BNK투자증권 */
   };
