@@ -284,6 +284,42 @@ h1 em{
 .nrow.is-sub{padding-left:1px}
 .nrow.is-sub .nd{font-size:10px; color:var(--ink3)}
 
+/* 오늘 요약 공유 — 히어로 아래, 2레벨 아코디언 위 */
+.share{
+  margin:0 0 12px; padding:0 2px;
+  display:grid; gap:6px;
+}
+.share-lab{
+  font-size:10px; font-weight:700; letter-spacing:0; color:var(--ink3);
+}
+.share-lab b{font-weight:800; color:var(--ink2)}
+.share-btns{display:grid; grid-template-columns:1fr 1fr; gap:6px}
+.share-btn{
+  -webkit-appearance:none; appearance:none;
+  display:flex; align-items:center; justify-content:center; gap:5px;
+  min-height:44px; padding:10px 8px;
+  font:inherit; font-size:12px; font-weight:800; letter-spacing:-.02em;
+  color:var(--ink2); background:var(--card);
+  border:1px solid var(--line2); border-radius:11px;
+  cursor:pointer; white-space:nowrap; overflow:hidden;
+  -webkit-tap-highlight-color:transparent;
+  transition:background .15s ease, border-color .15s ease, transform .1s ease;
+}
+.share-btn .ico{flex:none; font-size:13px; line-height:1}
+.share-btn.is-primary{
+  color:var(--sun); background:var(--sun-soft);
+  border-color:rgba(217,128,23,.34);
+}
+.share-btn:active{transform:scale(.985)}
+.share-btn:focus-visible{outline:2px solid var(--blue); outline-offset:2px}
+.share-btn.done{
+  color:var(--green); background:var(--green-soft); border-color:var(--green);
+}
+@media (prefers-color-scheme: dark){
+  .share-btn{background:#1f1a17}
+  .share-btn.is-primary{background:var(--sun-soft); border-color:rgba(255,176,89,.34)}
+}
+
 /* 오늘 상장 포인트 */
 .pts{
   margin:9px 0 13px; padding:0; list-style:none;

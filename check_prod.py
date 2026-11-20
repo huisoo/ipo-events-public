@@ -5,6 +5,7 @@ from pathlib import Path
 from playwright.async_api import async_playwright
 
 URL = "https://ipo-events-public.vercel.app/"
+SITE_URL = "https://ipo-events-public.vercel.app"
 OUT = Path(__file__).resolve().parent
 UA = ("Mozilla/5.0 (Linux; Android 14; SM-S911N) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
@@ -29,7 +30,8 @@ async def main():
         ctx = await browser.new_context(
             viewport={"width": 390, "height": 844}, device_scale_factor=2,
             is_mobile=True, has_touch=True, user_agent=UA,
-            locale="ko-KR", timezone_id="Asia/Seoul")
+            locale="ko-KR", timezone_id="Asia/Seoul",
+            permissions=["clipboard-read", "clipboard-write"])
         page = await ctx.new_page()
         errors = []
         page.on("console", lambda m: errors.append(f"console.{m.type}: {m.text}")
@@ -87,6 +89,44 @@ async def main():
         res["notice_count"] = await page.locator("#notice-list li").count()
 
         # 상단 2탭
+        # 오늘 요약 공유 바 (.share) — 히어로 아래
+        res["share_visible"] = await page.locator("#share").is_visible()
+        res["share_btns"] = await page.eval_on_selector_all(
+            "#share .share-btn", "els => els.map(e => e.textContent.replace(/\\s+/g,' ').trim())")
+        res["share_btn_h"] = await page.eval_on_selector_all(
+            "#share .share-btn", "els => els.map(e => Math.round(e.getBoundingClientRect().height))")
+        res["share_pos"] = await page.evaluate("""(() => {
+            const r = s => document.querySelector(s).getBoundingClientRect();
+            return { hero: Math.round(r('#sec-ipo').bottom), share: Math.round(r('#share').top),
+                     foot: Math.round(r('#ipo-foot').top),
+                     benefits: Math.round(r('#sec-events').top) };
+        })()""")
+        _p = res["share_pos"]
+        res["share_placed_ok"] = (_p["hero"] <= _p["share"]
+                                  and _p["share"] <= _p["foot"]
+                                  and _p["foot"] <= _p["benefits"])
+        await page.locator("#share").screenshot(path=str(OUT / "preview-prod-mobile-share.png"))
+
+        await page.locator("#share [data-share='copy']").click()
+        await page.wait_for_timeout(350)
+        clip = await page.evaluate("navigator.clipboard.readText()")
+        res["share_clipboard"] = clip
+        res["share_lines"] = len(clip.split("\n"))
+        res["share_clip_head"] = clip.split("\n")[0]
+        res["share_clip_last"] = clip.split("\n")[-1]
+        res["share_copy_toast"] = await page.inner_text("#toast")
+        res["share_copy_label"] = (await page.inner_text("#share [data-share='copy']")).strip()
+        res["share_privacy_hits"] = [t for t in TERMS + ALWAYS_TERMS if t in clip]
+
+        # 공유하기 — 헤드리스에는 navigator.share 가 없어 요약 복사로 폴백
+        res["share_native"] = await page.evaluate("typeof navigator.share")
+        await page.evaluate("navigator.clipboard.writeText('')")
+        await page.locator("#share [data-share='share']").click()
+        await page.wait_for_timeout(400)
+        res["share_fallback_toast"] = await page.inner_text("#toast")
+        res["share_fallback_clipboard"] = (
+            await page.evaluate("navigator.clipboard.readText()")) == clip
+
         res["tabs_visible"] = await page.locator("#tabs").is_visible()
         res["tab_labels"] = await page.eval_on_selector_all(
             "#tabs .tab", "els => els.map(e => e.textContent.trim())")
@@ -183,6 +223,13 @@ async def main():
         await dpage.wait_for_timeout(300)
         await dpage.screenshot(path=str(OUT / "preview-prod-mobile-dark.png"), full_page=True)
         res["dark_ok"] = await dpage.locator(".ev").count()
+        res["dark_share_visible"] = await dpage.locator("#share").is_visible()
+        res["dark_share_btns"] = await dpage.eval_on_selector_all(
+            "#share .share-btn", "els => els.map(e => Math.round(e.getBoundingClientRect().height))")
+        await dpage.locator("#share").scroll_into_view_if_needed()
+        await dpage.wait_for_timeout(150)
+        await dpage.locator("#share").screenshot(
+            path=str(OUT / "preview-prod-mobile-share-dark.png"))
         await dpage.locator("#tab-schedule").click()
         await dpage.wait_for_timeout(300)
         res["dark_sch_visible"] = await dpage.locator("#panel-schedule").is_visible()
@@ -200,6 +247,7 @@ async def main():
         await dp.wait_for_selector("#main:not([hidden])", timeout=15000)
         await dp.wait_for_timeout(300)
         res["desktop_hero"] = await dp.locator(".hero").count()
+        res["desktop_share_visible"] = await dp.locator("#share").is_visible()
         res["desktop_events"] = await dp.locator("#ev-list .ev").count()
         res["desktop_h_overflow"] = await dp.evaluate(
             "document.documentElement.scrollWidth > window.innerWidth + 1")
@@ -230,6 +278,26 @@ async def main():
                or (res["hero_kind"] == "listing" and res["listing_points"] >= 1))
 
     ok = (res["http_status"] == 200
+          # 오늘 요약 공유 바
+          and res["share_visible"]
+          and len(res["share_btns"]) == 2
+          and "오늘 요약 복사" in res["share_btns"][0]
+          and res["share_btns"][1].endswith("공유하기")
+          and min(res["share_btn_h"]) >= 40
+          and res["share_placed_ok"]
+          and res["share_native"] == "undefined"
+          and 3 <= res["share_lines"] <= 5
+          and res["share_clip_head"].startswith("📈 직장인 1분 공모주 요약")
+          and res["share_clip_last"] == SITE_URL
+          and "• 오늘 청약" in res["share_clipboard"]
+          and not res["share_privacy_hits"]
+          and "복사" in res["share_copy_toast"]
+          and res["share_copy_label"] == "복사됐어요"
+          and res["share_fallback_clipboard"]
+          and "복사" in res["share_fallback_toast"]
+          and res["dark_share_visible"]
+          and min(res["dark_share_btns"]) >= 40
+          and res["desktop_share_visible"]
           and "1분 요약" in res["title"]
           and res["robots"] and "noindex" not in res["robots"]
           and "index" in res["robots"]

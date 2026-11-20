@@ -6,6 +6,8 @@
  *   2레벨  .benefits  주관사 신규 개설 혜택 (기본 접힘 아코디언 + 얇은 행)
  *   3레벨  .support   커피 한 잔 응원하기 (푸터 위 조용한 카드, 카카오페이 링크)
  *
+ * 오늘 요약 탭 히어로 아래  .share  오늘 요약 복사 · 공유하기 (카톡 단톡방 공유용 3~5줄)
+ *
  * 상단 탭  .tabs  오늘 요약(#panel-today) | 전체 일정(#panel-schedule, data.json ipo.upcoming)
  */
 (function () {
@@ -315,6 +317,13 @@
     }
     if (ipo.listing && ipo.listing.hasListing) html += listingHero(ipo.listing, ipo, today);
 
+    return html;
+  }
+
+  /* 히어로 아래(공유 버튼 다음) — 철회 종목과 출처 */
+  function ipoFoot(ipo) {
+    if (!ipo) return '';
+    var html = '';
     var side = '';
     (ipo.cancelled || []).forEach(function (c) {
       side += smallRow('off', c.badge || '청약 취소', c.name, esc(c.body));
@@ -554,6 +563,7 @@
     }
 
     $('ipo-body').innerHTML = ipoSection(d.ipo, today);
+    $('ipo-foot').innerHTML = ipoFoot(d.ipo);
     $('schedule-body').innerHTML = scheduleSection(d.ipo, today);
 
     /* 2레벨: 개설 혜택 — 기본 접힘, 머리말에 건수만 */
@@ -577,9 +587,12 @@
       esc(d.ipo && d.ipo.source ? d.ipo.source.label : '38커뮤니케이션') + '</a>' +
       (d.updatedLabel ? ' · ' + esc(d.updatedLabel) + ' 기준' : '');
 
+    setShare(d);
+
     $('loading').hidden = true;
     $('main').hidden = false;
     $('tabs').hidden = false;
+    $('share').hidden = false;
     $('support').hidden = false;
     $('foot').hidden = false;
     setTab(tabFromUrl(), { silent: true });
@@ -645,6 +658,127 @@
     $('loading').hidden = true;
     $('error').hidden = false;
   }
+
+  /* ── 오늘 요약 공유 · 복사 ─────────────────
+   * 카톡 단톡방에 그대로 붙여넣는 3~5줄 텍스트 + 링크.
+   *   오늘 청약(있으면) / 오늘 상장 / 철회 한 줄 / 다음 청약(청약 없는 날만) / URL
+   */
+  var SITE_URL = 'https://ipo-events-public.vercel.app';
+  var shareText = '';
+  var sharePayload = null;
+
+  /* 상장 카드의 대표 시세 — 현재가(없으면 시초) + 등락 */
+  function listingQuote(l) {
+    var p = has(l.earlyPrice) ? l.earlyPrice : (has(l.openPrice) ? l.openPrice : '');
+    var c = has(l.earlyPrice) ? l.earlyChange : (has(l.openPrice) ? l.openChange : '');
+    if (!p) return '';
+    return p + (has(c) ? '(' + c + ')' : '');
+  }
+
+  function summaryBody(d) {
+    var ipo = d.ipo || {};
+    var subs = ipo.subscribe || [];
+    var listing = (ipo.listing && ipo.listing.hasListing) ? ipo.listing : null;
+    var day = shortDay(ipo.date || d.date);
+    var lines = ['📈 직장인 1분 공모주 요약' + (day ? ' · ' + day : '')];
+
+    if (subs.length) {
+      var s = subs[0];
+      var line = '• 오늘 청약 ' + s.name;
+      var price = String(s.price || '').replace(/^확정\s*/, '');
+      if (price) line += ' ' + price;
+      if (has(s.period)) line += ' (' + s.period + ')';
+      if (subs.length > 1) line += ' 외 ' + (subs.length - 1) + '건';
+      lines.push(line);
+      if (listing) {
+        var q = listingQuote(listing);
+        lines.push('• 오늘 상장 ' + listing.name + (q ? ' ' + q : ''));
+      }
+    } else {
+      var head = '• 오늘 청약 없음';
+      if (listing) {
+        var q2 = listingQuote(listing);
+        head += ' · 상장 ' + listing.name + (q2 ? ' ' + q2 : '');
+      }
+      lines.push(head);
+    }
+
+    var cancel = (ipo.cancelled || [])[0];
+    if (cancel && has(cancel.name)) {
+      lines.push('• 참고 ' + cancel.name + ' ' + (cancel.badge || '청약 취소'));
+    }
+
+    /* 다음 청약 — 오늘 청약이 없는 날의 대체 줄 */
+    if (!subs.length && ipo.next && has(ipo.next.name)) {
+      var n = ipo.next;
+      var nl = '• 다음 청약 ' + n.name;
+      if (has(n.period)) nl += ' ' + n.period;
+      if (has(n.price)) nl += ' · ' + n.price;
+      if (has(n.brokers)) nl += ' · ' + n.brokers;
+      lines.push(nl);
+    }
+    return lines.join('\n');
+  }
+
+  function setShare(d) {
+    var body = summaryBody(d);
+    shareText = body + '\n' + SITE_URL;
+    sharePayload = { title: '오늘의 공모주 1분 요약', text: body, url: SITE_URL };
+  }
+
+  /* 버튼 라벨을 잠깐 바꿔 복사 피드백 */
+  function flashLabel(btn, label) {
+    if (!btn) return;
+    if (!btn.dataset.label) btn.dataset.label = btn.innerHTML;
+    btn.innerHTML = label;
+    btn.classList.add('done');
+    clearTimeout(btn._labelTimer);
+    btn._labelTimer = setTimeout(function () {
+      btn.innerHTML = btn.dataset.label;
+      btn.classList.remove('done');
+    }, 1800);
+  }
+
+  /* 공유 시트를 못 쓰는 환경 → 요약 복사로 폴백 */
+  function shareFallback(btn, msg) {
+    copy(shareText).then(function (ok) {
+      toast(ok ? (msg || '공유 기능이 없는 환경이라 요약을 복사했어요')
+        : '공유를 지원하지 않는 환경이에요. 오늘 요약 복사 버튼을 눌러 주세요', ok ? 'ok' : '');
+      if (ok) flashLabel(btn, '복사됐어요');
+    });
+  }
+
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest ? e.target.closest('[data-share]') : null;
+    if (!btn || !shareText) return;
+    var kind = btn.getAttribute('data-share');
+
+    if (kind === 'copy') {
+      copy(shareText).then(function (ok) {
+        if (!ok) { toast('복사가 안 됐어요. 길게 눌러 복사해 주세요'); return; }
+        toast('요약을 복사했어요 · 카톡에 붙여넣기', 'ok');
+        flashLabel(btn, '복사됐어요');
+      });
+      return;
+    }
+
+    if (kind === 'share') {
+      if (!navigator.share) { shareFallback(btn); return; }
+      var p;
+      try {
+        p = navigator.share(sharePayload);
+      } catch (err) {
+        shareFallback(btn);
+        return;
+      }
+      if (p && p.then) {
+        p.then(function () { /* 공유 시트로 넘겼어요 */ }, function (err) {
+          if (err && err.name === 'AbortError') return;  /* 사용자가 닫음 — 조용히 */
+          shareFallback(btn, '공유가 안 돼서 요약을 복사했어요');
+        });
+      }
+    }
+  });
 
   /* ── 코드 복사 ─────────────────────────── */
   var toastTimer = null;
