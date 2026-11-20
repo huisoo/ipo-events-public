@@ -1,5 +1,5 @@
 {
- "updated_at": "2026-11-18T23:37:29+09:00",
+ "updated_at": "2026-11-20T12:37:29+09:00",
  "channels": [
   {
    "name": "공모주한잔",
@@ -51,41 +51,41 @@
    "channelId": "UCstq1xNCuEIR43dM3CMop3g",
    "channelUrl": "https://www.youtube.com/@공모주투자의법칙",
    "latest": {
-    "videoId": "wEkS9VIyHxs",
-    "title": "[공모주 경쟁률] 유캐스트 공모주 11/18일 1일차 실시간 경쟁률 LIVE",
-    "url": "https://www.youtube.com/watch?v=wEkS9VIyHxs",
-    "published": "2026-11-18T08:38:24+00:00"
+    "videoId": "pqI-jhdtBE8",
+    "title": "2026년 11월20일 하나에어로다이내믹스 상장일(멘트는 타채널에서)",
+    "url": "https://www.youtube.com/watch?v=pqI-jhdtBE8",
+    "published": "2026-11-19T22:46:47+00:00"
    },
    "videos": [
+    {
+     "videoId": "pqI-jhdtBE8",
+     "title": "2026년 11월20일 하나에어로다이내믹스 상장일(멘트는 타채널에서)",
+     "url": "https://www.youtube.com/watch?v=pqI-jhdtBE8",
+     "published": "2026-11-19T22:46:47+00:00"
+    },
+    {
+     "videoId": "K2VUAVmGYFo",
+     "title": "[비례배정 LIVE] 유캐스트 공모주 11/19일 2일차 예상비례배정 LIVE",
+     "url": "https://www.youtube.com/watch?v=K2VUAVmGYFo",
+     "published": "2026-11-19T09:01:37+00:00"
+    },
+    {
+     "videoId": "dETN_ji3i-U",
+     "title": "[공모주 경쟁률] 유캐스트 공모주 11/19일 2일차 실시간 경쟁률 LIVE",
+     "url": "https://www.youtube.com/watch?v=dETN_ji3i-U",
+     "published": "2026-11-19T07:42:59+00:00"
+    },
+    {
+     "videoId": "U1H89M2B5yI",
+     "title": "[공모주 상장] 하나에어로다이내믹스 11/20일 상장 - 100억대 마지막 희망! 저렴해보이는 공모가도 한몫하기를",
+     "url": "https://www.youtube.com/watch?v=U1H89M2B5yI",
+     "published": "2026-11-18T23:30:03+00:00"
+    },
     {
      "videoId": "wEkS9VIyHxs",
      "title": "[공모주 경쟁률] 유캐스트 공모주 11/18일 1일차 실시간 경쟁률 LIVE",
      "url": "https://www.youtube.com/watch?v=wEkS9VIyHxs",
      "published": "2026-11-18T08:38:24+00:00"
-    },
-    {
-     "videoId": "Of_fTRKNxaE",
-     "title": "[비례배정 LIVE] 유캐스트 공모주 11/18일 1일차 예상비례배정 LIVE",
-     "url": "https://www.youtube.com/watch?v=Of_fTRKNxaE",
-     "published": "2026-11-18T08:31:22+00:00"
-    },
-    {
-     "videoId": "zMv8YWehkgM",
-     "title": "[상장 LIVE] 에이엘로봇 공모주 11/18일 상장일 주가흐름 LIVE",
-     "url": "https://www.youtube.com/watch?v=zMv8YWehkgM",
-     "published": "2026-11-18T06:45:43+00:00"
-    },
-    {
-     "videoId": "CP0BitQUqz8",
-     "title": "[상장 LIVE] 옵토닉스 공모주 11/17일 상장일 주가흐름 LIVE",
-     "url": "https://www.youtube.com/watch?v=CP0BitQUqz8",
-     "published": "2026-11-17T11:31:59+00:00"
-    },
-    {
-     "videoId": "6kO_QxLx4cE",
-     "title": "[공모주] 유캐스트 분석과 종합점수 - 하단으로 확정된 공모가, 수급이 여전히 약한데..?",
-     "url": "https://www.youtube.com/watch?v=6kO_QxLx4cE",
-     "published": "2026-11-17T09:03:01+00:00"
     }
    ]
   }
@@ -101,14 +101,6 @@
     "price_band": "19,000~23,000",
     "competition": "",
     "brokers": "유진투자증권,신영증권"
-   },
-   {
-    "name": "아델",
-    "period": "2026.11.23~11.24",
-    "price_fixed": "-",
-    "price_band": "18,000~25,000",
-    "competition": "",
-    "brokers": "삼성증권,미래에셋증권"
    },
    {
     "name": "케이엠에프",
@@ -241,10 +233,6 @@
   ]
  },
  "listings": [
-  {
-   "date": "11/20",
-   "name": "하나에어로다이내"
-  },
   {
    "date": "11/24",
    "name": "엠비디"
