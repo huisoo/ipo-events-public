@@ -13,7 +13,7 @@
 (Cloudflare Pages 기본 주소 `https://ipo-events-public.pages.dev`도 그대로 동작하는 별칭입니다. 공유·OG·canonical 기준은 `https://ipo.mydon.kr`.)
 
 - 기준 배포는 **Cloudflare Pages**(`huisoo/ipo-events-public` GitHub 연동, `main` 푸시 시 자동 배포)입니다. Cloudflare Web Analytics 스크립트는 Pages가 HTML에 자동 삽입합니다.
-- 이전 Vercel 배포(`ipo-events-public.vercel.app`)는 기존 공유 링크가 깨지지 않도록 당분간 그대로 둡니다.
+- 이전 Vercel 배포(`ipo-events-public.vercel.app`)는 기존 공유 링크가 깨지지 않도록 주소만 유지하고, `vercel.json` 의 호스트 기반 `redirects` 규칙으로 모든 경로를 `https://ipo.mydon.kr/:path*` 로 308 리다이렉트합니다(Cloudflare Pages 는 `vercel.json` 을 읽지 않으므로 `ipo.mydon.kr`·`pages.dev` 에는 영향 없음).
 - `_headers`의 `/data.json` 60초 캐시 설정은 Cloudflare Pages에서만 적용됩니다.
 
 ## 디자인 기준 (국내 핀테크 톤)

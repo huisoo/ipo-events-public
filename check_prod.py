@@ -14,6 +14,7 @@ from check_render import (expected_copy, expected_listing_copy, IOS_UA, DESKTOP_
 
 URL = "https://ipo.mydon.kr/"
 SITE_URL = "https://ipo.mydon.kr"
+VERCEL = "https://ipo-events-public.vercel.app"
 ORIGIN = "https://ipo-events-public.pages.dev"  # Pages 원본(_headers 가 그대로 적용되는 쪽)
 OUT = Path(__file__).resolve().parent
 TODAY = dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).date()
@@ -59,6 +60,15 @@ async def main():
             "(() => { const h = document.querySelector('.hero');"
             " return h ? h.className : 'none'; })()")
         await page.screenshot(path=str(OUT / "preview-prod-mobile-live.png"))
+
+        # 이전 공유 링크(Vercel) — ipo.mydon.kr 로 영구 리다이렉트되는지(vercel.json)
+        vresp = await ctx.request.get(VERCEL, max_redirects=0)
+        res["vercel_status"] = vresp.status
+        res["vercel_location"] = vresp.headers.get("location", "")
+        res["vercel_deep_status"] = (await ctx.request.get(
+            VERCEL + "/?tab=schedule", max_redirects=0)).status
+        res["vercel_deep_location"] = (await ctx.request.get(
+            VERCEL + "/?tab=schedule", max_redirects=0)).headers.get("location", "")
 
         # 수집일을 기준으로 한 평일 화면 — 아래 검사 내역은 모두 이 페이지에서 읽습니다
         # (다음 청약 D-day·상장 히어로 등 날짜에 따라 달라지는 값을 요일과 무관하게 검증).
@@ -848,6 +858,11 @@ async def main():
     # 어느 확인이 깨졌는지 바로 보입니다(조건 자체는 예전 and 체인과 같습니다).
     _conds = [
         'res["http_status"] == 200',
+        # 이전 Vercel 주소는 ipo.mydon.kr 로 영구 리다이렉트(308/301)
+        'res["vercel_status"] in (301, 308)',
+        'res["vercel_location"].rstrip("/") == "https://ipo.mydon.kr"',
+        'res["vercel_deep_status"] in (301, 308)',
+        'res["vercel_deep_location"].startswith("https://ipo.mydon.kr/")',
         'res["share_visible"]',
         'res["share_label"].startswith("단톡방에")',
         '"상장" in res["share_label"]',
