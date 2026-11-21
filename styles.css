@@ -668,7 +668,7 @@ h1 em{font-style:normal; color:inherit}
 .foot ul{margin:7px 0 0; padding:0 0 0 11px; display:grid; gap:3px}
 .foot li{
   list-style:none; position:relative;
-  font-size:11px; line-height:1.6; color:var(--ink3);
+  font-size:11.5px; line-height:1.6; color:var(--ink2);
 }
 .foot li::before{
   content:""; position:absolute; left:-8px; top:.7em;
