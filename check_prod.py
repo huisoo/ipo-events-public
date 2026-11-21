@@ -3,6 +3,7 @@
 공유·복사 기대값은 로컬 검증(check_render.py)과 같은 규칙 함수로 계산합니다.
 """
 import asyncio
+import datetime as dt
 from pathlib import Path
 
 from playwright.async_api import async_playwright
@@ -89,12 +90,14 @@ async def main():
         })()""")
         res.update(first_screen)
 
-        # 2레벨 접힘
-        res["benefits_collapsed"] = not await page.locator("#sec-events").evaluate("el => el.open")
-        res["ben_head"] = (await page.inner_text("#sec-events .ben-txt")).replace("\n", " ")
-        res["events"] = await page.locator("#ev-list .ev").count()
-        res["event_ids"] = await page.eval_on_selector_all("#ev-list .ev", "els => els.map(e => e.dataset.id)")
-        res["ev_note"] = (await page.locator("#ev-note").text_content()).strip()
+        # 2레벨 — 혜택 탭으로 가는 한 줄 배너 (상세는 혜택 탭)
+        res["ben_link_visible"] = await page.locator("#ben-link").is_visible()
+        res["ben_link_text"] = (await page.inner_text("#ben-link")).replace("\n", " ")
+        res["ben_link_href"] = await page.get_attribute("#ben-link", "href")
+        res["ben_link_count"] = (await page.inner_text("#ben-count")).strip()
+        res["today_has_no_detail"] = await page.evaluate(
+            "!document.querySelector('#panel-today .bf')"
+            " && !document.querySelector('#panel-today details.benefits')")
 
         body = await page.evaluate("document.body.textContent")
         res["has_draft_word"] = "초안" in body
@@ -102,7 +105,7 @@ async def main():
         res["invite_words"] = any(w in body for w in ("초대 코드", "초대코드", "추천인"))
         res["notice_count"] = await page.locator("#notice-list li").count()
 
-        # 상단 2탭
+        # 상단 3탭
         # 청약·상장 정보 공유 바 (.share) — 히어로 아래 2버튼 고정
         res["share_visible"] = await page.locator("#share").is_visible()
         res["share_label"] = (await page.inner_text("#share .share-lab")).strip()
@@ -132,7 +135,7 @@ async def main():
             const r = s => document.querySelector(s).getBoundingClientRect();
             return { hero: Math.round(r('#sec-ipo').bottom), share: Math.round(r('#share').top),
                      foot: Math.round(r('#ipo-foot').top),
-                     benefits: Math.round(r('#sec-events').top) };
+                     benefits: Math.round(r('#ben-link').top) };
         })()""")
         _p = res["share_pos"]
         res["share_placed_ok"] = (_p["hero"] <= _p["share"]
@@ -196,10 +199,23 @@ async def main():
         res["tab_labels"] = await page.eval_on_selector_all(
             "#tabs .tab", "els => els.map(e => e.textContent.trim())")
         res["tab_default_today"] = await page.evaluate("""(() => {
-            const t = document.querySelector('#tab-today'), s = document.querySelector('#tab-schedule');
+            const t = document.querySelector('#tab-today'), s = document.querySelector('#tab-schedule'),
+                  b = document.querySelector('#tab-benefits');
             return t.classList.contains('is-on') && !s.classList.contains('is-on')
+                && !b.classList.contains('is-on')
                 && !document.querySelector('#panel-today').hidden
-                && document.querySelector('#panel-schedule').hidden;
+                && document.querySelector('#panel-schedule').hidden
+                && document.querySelector('#panel-benefits').hidden;
+        })()""")
+        res["tab_row"] = await page.evaluate("""(() => {
+            const tabs = [...document.querySelectorAll('#tabs .tab')];
+            const b = tabs.map(e => e.getBoundingClientRect());
+            return { three: b.length === 3,
+                     same_row: b.length === 3
+                         && Math.max(...b.map(r => r.top)) - Math.min(...b.map(r => r.top)) <= 1,
+                     equal_w: b.length === 3
+                         && Math.max(...b.map(r => r.width)) - Math.min(...b.map(r => r.width)) <= 2,
+                     fit: tabs.every(e => e.scrollWidth <= e.clientWidth + 1) };
         })()""")
 
         # 하단 응원 카드(3레벨)
@@ -224,14 +240,91 @@ async def main():
         res["console_errors"] = errors
 
         await page.screenshot(path=str(OUT / "preview-prod-mobile.png"), full_page=True)
-        await page.locator("#sec-events > summary").click()
+        await page.locator("#ben-link").screenshot(
+            path=str(OUT / "preview-prod-mobile-ben-link.png"))
+
+        # ── 혜택 탭 ─────────────────────────────────────
+        await page.locator("#ben-link").click()
         await page.wait_for_timeout(350)
-        res["accordion_opens"] = await page.locator("#sec-events").evaluate("el => el.open")
-        await page.locator("#ev-list .ev").first.locator("summary").click()
+        res["ben_link_switch"] = await page.evaluate("""(() => {
+            const b = document.querySelector('#tab-benefits');
+            return b.classList.contains('is-on') && b.getAttribute('aria-selected') === 'true'
+                && !document.querySelector('#panel-benefits').hidden
+                && document.querySelector('#panel-today').hidden;
+        })()""")
+        res["ben_link_url_ok"] = "tab=benefits" in page.url
+        res["bf_visible"] = await page.locator("#panel-benefits").is_visible()
+        res["bf_note"] = (await page.locator("#bf-note").text_content()).strip()
+        res["bf_chips"] = await page.eval_on_selector_all(
+            "#bf-chips .bf-chip",
+            """els => els.map(e => ({ id: e.dataset.bf, text: e.textContent.trim(),
+                                      on: e.classList.contains('is-on'),
+                                      pressed: e.getAttribute('aria-pressed') }))""")
+        res["bf_chip_row"] = await page.evaluate("""(() => {
+            const c = [...document.querySelectorAll('#bf-chips .bf-chip')];
+            const b = c.map(e => e.getBoundingClientRect());
+            return { count: c.length,
+                     fit: c.every(e => e.scrollWidth <= e.clientWidth + 1),
+                     one_row: b.length > 0
+                         && Math.max(...b.map(r => r.top)) - Math.min(...b.map(r => r.top)) <= 1 };
+        })()""")
+        res["bf_cards"] = await page.eval_on_selector_all(
+            "#bf-list .bf",
+            r"""els => els.map(e => ({
+                id: e.dataset.id, cat: e.dataset.cat,
+                prov: e.querySelector('.bf-prov')?.textContent.trim() || '',
+                title: e.querySelector('.bf-title')?.textContent.trim(),
+                amt: e.querySelector('.bf-amt')?.textContent.trim(),
+                dday: e.querySelector('.bf-dd')?.textContent.trim(),
+                meta: [...e.querySelectorAll('.bf-meta .bf-row')]
+                    .map(r => r.textContent.replace(/\s+/g,' ').trim()),
+                link: e.querySelector('.bf-link')?.getAttribute('href') || '',
+                link_target: e.querySelector('.bf-link')?.getAttribute('target') || '',
+                link_text: e.querySelector('.bf-link')?.textContent.trim() || '',
+                terms: e.querySelectorAll('.bf-more li').length
+            }))""")
+        bc = res["bf_cards"]
+        res["bf_count"] = len(bc)
+        res["bf_cats"] = sorted({c["cat"] for c in bc})
+        res["bf_securities"] = [c["id"] for c in bc if c["cat"] == "securities"]
+        res["bf_simple"] = [c["id"] for c in bc if c["cat"] == "simple"]
+        res["bf_all_fields"] = all(
+            c["prov"] and c["title"] and c["amt"] and c["dday"]
+            and any(k.startswith("마감") for k in c["meta"])
+            and c["link"].startswith("https://") and c["link_target"] == "_blank"
+            and c["link_text"].endswith("↗")
+            for c in bc)
+        res["bf_ddays"] = [c["dday"] for c in bc]
+        res["bf_links"] = [c["link"] for c in bc]
+        res["bf_links_unique"] = len(set(res["bf_links"])) == len(bc)
+        res["bf_privacy_hits"] = [t for t in TERMS + ALWAYS_TERMS
+                                  if t in await page.evaluate("document.body.innerText")]
+        await page.screenshot(path=str(OUT / "preview-prod-mobile-benefits.png"), full_page=True)
+        await page.screenshot(path=str(OUT / "preview-prod-mobile-benefits-first.png"))
+        res["bf_clipped"] = await page.evaluate("""(() => {
+            const vw = window.innerWidth, bad = [];
+            document.querySelectorAll('#panel-benefits .bf, #panel-benefits .bf *, #panel-benefits .bf-chip')
+              .forEach(el => {
+                const r = el.getBoundingClientRect();
+                if (r.width && (r.left < -1 || r.right > vw + 1)) {
+                  bad.push(el.tagName + '.' + el.className + ' ' +
+                           Math.round(r.left) + '~' + Math.round(r.right));
+                }
+              });
+            return bad.slice(0, 5);
+        })()""")
+        await page.locator("#bf-chips [data-bf='securities']").click()
         await page.wait_for_timeout(250)
-        res["row_opens"] = await page.locator("#ev-list .ev").first.evaluate("el => el.open")
-        await page.locator("#sec-events").screenshot(
-            path=str(OUT / "preview-prod-mobile-events.png"))
+        res["bf_filter_securities"] = await page.eval_on_selector_all(
+            "#bf-list .bf", "els => els.map(e => e.dataset.cat)")
+        await page.locator("#bf-chips [data-bf='simple']").click()
+        await page.wait_for_timeout(250)
+        res["bf_filter_simple"] = await page.eval_on_selector_all(
+            "#bf-list .bf", "els => els.map(e => e.dataset.cat)")
+        await page.locator("#bf-chips [data-bf='all']").click()
+        await page.wait_for_timeout(250)
+        res["bf_chip_counts"] = await page.eval_on_selector_all(
+            "#bf-chips .bf-chip b", "els => els.map(e => e.textContent.trim())")
 
         # ── 전체 일정 탭 ────────────────────────────────
         await page.locator("#tab-schedule").click()
@@ -311,6 +404,13 @@ async def main():
         res["dark_sch_overflow"] = await dpage.evaluate(
             "document.documentElement.scrollWidth > window.innerWidth + 1")
         await dpage.screenshot(path=str(OUT / "preview-prod-mobile-schedule-dark.png"), full_page=True)
+        await dpage.locator("#tab-benefits").click()
+        await dpage.wait_for_timeout(300)
+        res["dark_bf_visible"] = await dpage.locator("#panel-benefits").is_visible()
+        res["dark_bf_cards"] = await dpage.locator("#bf-list .bf").count()
+        res["dark_bf_overflow"] = await dpage.evaluate(
+            "document.documentElement.scrollWidth > window.innerWidth + 1")
+        await dpage.screenshot(path=str(OUT / "preview-prod-mobile-benefits-dark.png"), full_page=True)
         await dark.close()
 
         # 데스크톱 폭에서도 확인
@@ -324,7 +424,7 @@ async def main():
         res["desktop_share_visible"] = await dp.locator("#share").is_visible()
         res["desktop_share_labels"] = await dp.eval_on_selector_all(
             "#share .share-btn .lbl", "els => els.map(e => e.textContent.trim())")
-        res["desktop_events"] = await dp.locator("#ev-list .ev").count()
+        res["desktop_ben_link"] = await dp.locator("#ben-link").is_visible()
         res["desktop_h_overflow"] = await dp.evaluate(
             "document.documentElement.scrollWidth > window.innerWidth + 1")
         await dp.screenshot(path=str(OUT / "preview-prod-desktop.png"))
@@ -334,6 +434,12 @@ async def main():
         res["desktop_sch_overflow"] = await dp.evaluate(
             "document.documentElement.scrollWidth > window.innerWidth + 1")
         await dp.screenshot(path=str(OUT / "preview-prod-desktop-schedule.png"), full_page=True)
+        await dp.locator("#tab-benefits").click()
+        await dp.wait_for_timeout(300)
+        res["desktop_bf_cards"] = await dp.locator("#bf-list .bf").count()
+        res["desktop_bf_overflow"] = await dp.evaluate(
+            "document.documentElement.scrollWidth > window.innerWidth + 1")
+        await dp.screenshot(path=str(OUT / "preview-prod-desktop-benefits.png"), full_page=True)
         await desk.close()
 
         # ?tab=schedule 딥링크
@@ -347,6 +453,16 @@ async def main():
         res["deeplink_schedule"] = await lp.locator("#panel-schedule").is_visible()
         res["deeplink_cards"] = await lp.locator("#sch-subscribe .sc").count()
         await deepl.close()
+        deeplb, lpb, _ = await browser.new_context(
+            viewport={"width": 390, "height": 844}, device_scale_factor=2, is_mobile=True,
+            has_touch=True, user_agent=UA, locale="ko-KR", timezone_id="Asia/Seoul")
+        bp = await deeplb.new_page()
+        await bp.goto(URL + "?tab=benefits", wait_until="networkidle", timeout=45000)
+        await bp.wait_for_selector("#main:not([hidden])", timeout=15000)
+        await bp.wait_for_timeout(300)
+        res["deeplink_benefits"] = await bp.locator("#panel-benefits").is_visible()
+        res["deeplink_bf_cards"] = await bp.locator("#bf-list .bf").count()
+        await deeplb.close()
 
         # 주관사 앱 열기 — iPhone UA 에서는 같은 버튼이 App Store 로 바뀌는지
         iosctx = await browser.new_context(
@@ -383,6 +499,21 @@ async def main():
     # 청약일이면 유튜브 요약까지, 상장일이면 상장 포인트로 히어로를 검증
     hero_ok = ((res["hero_kind"] == "subscribe" and res["yt_rows"] >= 2)
                or (res["hero_kind"] == "listing" and res["listing_points"] >= 1))
+
+    kst_today = dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).date()
+
+    def _live(items):
+        out = []
+        for b in items or []:
+            exp = (b or {}).get("expiresAt")
+            if exp and dt.date.fromisoformat(str(exp)[:10]) < kst_today:
+                continue
+            out.append(b)
+        return out
+
+    live_b = _live(prod_data.get("benefits"))
+    sec_b = [b for b in live_b if (b.get("category") or "securities") != "simple"]
+    simple_b = [b for b in live_b if b.get("category") == "simple"]
 
     ok = (res["http_status"] == 200
           # 청약·상장 정보 공유 바 — 2버튼 고정
@@ -464,15 +595,47 @@ async def main():
           and "다음 청약" in res["next_rows"]
           and res["next_dday"].startswith("D-")
           and res["next_bottom"] <= res["viewport_h"]
-          and res["benefits_collapsed"]
-          and res["accordion_opens"]
-          and res["row_opens"]
-          and res["events"] == 4
+          # 오늘 요약 — 혜택 상세 없이 한 줄 배너 (상세는 혜택 탭)
+          and res["today_has_no_detail"]
+          and res["ben_link_visible"]
+          and res["ben_link_text"].startswith("🎁 증권사 개설·현금성 혜택")
+          and res["ben_link_text"].endswith("보기 →")
+          and res["ben_link_href"] == "?tab=benefits"
+          and res["ben_link_count"] == str(len(sec_b))
+          and res["ben_link_switch"]
+          and res["ben_link_url_ok"]
           and res["tabs_visible"]
-          and res["tab_labels"] == ["오늘 요약", "전체 일정"]
+          and res["tab_labels"] == ["오늘 요약", "전체 일정", "혜택"]
           and res["tab_default_today"]
+          and res["tab_row"]["three"] and res["tab_row"]["same_row"]
+          and res["tab_row"]["equal_w"] and res["tab_row"]["fit"]
           and res["tab_switch_on"]
           and res["tab_url_has_query"]
+          # 혜택 탭 — 칩 3개 · 카드 필수 필드 · 카테고리 필터
+          and res["bf_visible"]
+          and [c["id"] for c in res["bf_chips"]] == ["all", "securities", "simple"]
+          and res["bf_chips"][0]["on"]
+          and res["bf_chip_row"]["count"] == 3
+          and res["bf_chip_row"]["fit"] and res["bf_chip_row"]["one_row"]
+          and res["bf_chip_counts"] == [str(len(live_b)), str(len(sec_b)), str(len(simple_b))]
+          and res["bf_count"] == len(live_b)
+          and len(res["bf_securities"]) == len(sec_b) >= 4
+          and len(res["bf_simple"]) == len(simple_b) >= 3
+          and res["bf_cats"] == ["securities", "simple"]
+          and res["bf_all_fields"]
+          and res["bf_links_unique"]
+          and all(d.startswith("D-") or d in ("오늘 마감", "상시") for d in res["bf_ddays"])
+          and res["bf_filter_securities"] == ["securities"] * len(sec_b)
+          and res["bf_filter_simple"] == ["simple"] * len(simple_b)
+          and not res["bf_clipped"]
+          and not res["bf_privacy_hits"]
+          and res["dark_bf_visible"]
+          and res["dark_bf_cards"] == len(live_b)
+          and not res["dark_bf_overflow"]
+          and res["desktop_bf_cards"] == len(live_b)
+          and not res["desktop_bf_overflow"]
+          and res["deeplink_benefits"]
+          and res["deeplink_bf_cards"] == len(live_b)
           and res["sch_counts"]["subscribe"] >= 10
           and res["sch_counts"]["listing"] >= 1
           and res["sch_first"] and res["sch_first"]["dday"].startswith("D-")

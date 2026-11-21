@@ -42,6 +42,8 @@
       aria-controls="panel-today" data-tab="today">오늘 요약</button>
     <button type="button" class="tab" id="tab-schedule" role="tab" aria-selected="false"
       aria-controls="panel-schedule" data-tab="schedule">전체 일정</button>
+    <button type="button" class="tab" id="tab-benefits" role="tab" aria-selected="false"
+      aria-controls="panel-benefits" data-tab="benefits">혜택</button>
   </div>
 
   <div class="state" id="loading">오늘의 공모주를 정리하고 있어요…</div>
@@ -72,26 +74,27 @@
       <!-- 철회 종목 · 출처 — 공유 버튼 아래 -->
       <div id="ipo-foot"></div>
 
-      <!-- 2레벨 · 주관사 신규 개설 혜택 (기본 접힘) -->
-      <details class="benefits" id="sec-events">
-        <summary class="ben-sum">
-          <span class="ben-txt">
-            <span class="ben-t">주관사 계좌가 없으신가요?</span>
-            <span class="ben-n">신규 개설 혜택 <b><span id="ev-count">0</span>건</b></span>
-          </span>
-          <span class="ben-chev" aria-hidden="true"></span>
-        </summary>
-        <div class="ben-body">
-          <h2 class="sr-only">증권사 신규 개설 혜택</h2>
-          <p class="ben-note" id="ev-note"></p>
-          <div class="ev-list" id="ev-list"></div>
-        </div>
-      </details>
+      <!-- 2레벨 · 혜택 탭으로 가는 한 줄 배너 (혜택 상세는 혜택 탭에 모아 둡니다) -->
+      <a class="ben-link" id="ben-link" href="?tab=benefits" data-tab="benefits"
+        aria-label="증권사 개설·현금성 혜택 전체 보기 (혜택 탭)">
+        <span class="ben-link-ico" aria-hidden="true">🎁</span>
+        <span class="ben-link-txt">증권사 개설·현금성 혜택 <b><span id="ben-count">0</span>건</b> 보기</span>
+        <span class="ben-link-arrow" aria-hidden="true">→</span>
+      </a>
     </section>
 
     <section class="panel" id="panel-schedule" role="tabpanel" aria-labelledby="tab-schedule" hidden>
       <h2 class="sr-only">전체 일정 · 청약 예정 · 상장 예정</h2>
       <div id="schedule-body"></div>
+    </section>
+
+    <section class="panel" id="panel-benefits" role="tabpanel" aria-labelledby="tab-benefits" hidden>
+      <div class="bf-head">
+        <h2 class="bf-h">🎁 지금 챙길 혜택</h2>
+        <p class="bf-n" id="bf-note"></p>
+      </div>
+      <div class="bf-chips" id="bf-chips" role="group" aria-label="혜택 분류 필터"></div>
+      <div class="bf-list" id="bf-list"></div>
     </section>
   </main>
 

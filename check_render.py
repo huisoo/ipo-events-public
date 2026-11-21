@@ -30,8 +30,12 @@ data.json 을 로컬 HTTP 로 띄워 확인합니다(파일 직접 열면 fetch 
   preview-desktop.png / preview-toast.png / preview-mobile-schedule*.png /
   preview-mobile-share.png / preview-mobile-share-dark.png / preview-mobile-share-full.png /
   preview-mobile-share-off.png (양쪽 비활성)
-- 상단 2탭: 기본 '오늘 요약', 탭하면 '전체 일정'(?tab=schedule) — 두 탭 모두 390px·다크·
-  데스크톱에서 가로 스크롤·잘림 없이 렌더
+- 상단 3탭: 기본 '오늘 요약', '전체 일정'(?tab=schedule) · '혜택'(?tab=benefits) —
+  390px에서 3탭이 한 줄(같은 폭·잘림 없음), 다크·데스크톱에서도 가로 스크롤 없이 렌더
+- 오늘 요약 하단 한 줄 배너(.ben-link): 증권사·금융 혜택 N건 · 누르면 혜택 탭 전환 · 혜택 상세는 없음
+- 혜택 탭: 칩 3개(전체·증권사·금융·간편 이벤트·설문, 건수 포함) 즉시 필터링,
+  카드마다 카테고리·D-day·혜택명·핵심 금액·대상·마감·기간·공식 링크(_blank)·
+  '유의사항·신청 방법' 펼침, 만료 숨김(테스트 주입), 개인정보 문구 0건
 """
 import asyncio
 import datetime as dt
@@ -110,49 +114,53 @@ async def opt_text(page, sel, default=""):
 
 
 def test_events():
-    """만료/오늘/상시/코드보유 상태를 함께 확인할 테스트 항목."""
+    """만료/오늘/상시/링크 유무를 함께 확인할 테스트 혜택 항목."""
     return [
         {
             "id": "test-expired",
-            "type": "테스트",
-            "title": "만료된 테스트 항목",
-            "provider": "테스트증권 · 계좌",
+            "category": "simple",
+            "title": "만료된 테스트 혜택",
+            "provider": "테스트기관",
             "benefit": "이 카드는 화면에 나오면 안 됩니다",
+            "target": "누구나",
             "period": "2026.10.01~11.01",
             "expiresAt": "2026-11-01",
-            "invite": {"status": "none"},
-            "link": {"label": "x", "url": "https://example.com/"},
+            "link": {"label": "자세히 보기", "url": "https://example.com/"},
         },
         {
             "id": "test-today",
-            "type": "테스트",
-            "title": "오늘까지 유효한 테스트 항목",
-            "provider": "테스트증권 · 계좌",
+            "category": "simple",
+            "title": "오늘까지 유효한 테스트 혜택",
+            "provider": "테스트기관",
             "benefit": "오늘 마감 항목은 노출되어야 합니다",
+            "target": "누구나",
             "period": f"{TODAY.isoformat()} 까지",
             "expiresAt": TODAY.isoformat(),
-            "invite": {"status": "none"},
-            "link": {"label": "x", "url": "https://example.com/"},
+            "link": {"label": "자세히 보기", "url": "https://example.com/"},
         },
         {
             "id": "test-always",
-            "type": "테스트",
-            "title": "상시 테스트 항목",
-            "provider": "테스트증권 · 계좌",
+            "category": "securities",
+            "title": "상시 테스트 혜택",
+            "provider": "테스트증권",
             "benefit": "expiresAt 이 null 이면 상시로 노출됩니다",
+            "target": "신규 고객",
             "period": "상시",
             "expiresAt": None,
-            "invite": {"status": "none"},
+            "terms": ["상시 항목의 유의사항입니다."],
         },
         {
-            "id": "test-ready",
-            "type": "테스트",
-            "title": "코드가 들어온 테스트 항목",
-            "provider": "테스트증권 · 계좌",
-            "benefit": "복사 버튼이 동작해야 합니다",
+            "id": "test-link",
+            "category": "securities",
+            "title": "공식 링크가 있는 테스트 혜택",
+            "provider": "테스트증권",
+            "benefit": "공식 링크 버튼이 새 탭으로 열려야 합니다",
+            "target": "신규 고객",
             "period": "상시",
             "expiresAt": None,
-            "invite": {"status": "ready", "code": "HUI1234"},
+            "howTo": "앱에서 이벤트 신청",
+            "terms": ["신청해야 지급됩니다."],
+            "link": {"label": "자세히 보기", "url": "https://example.com/event"},
         },
     ]
 
@@ -459,7 +467,7 @@ async def open_page(browser, inject=None, path="", init_script=None, mutate=None
             resp = await route.fetch()
             body = await resp.json()
             if inject:
-                body["events"] = body.get("events", []) + inject
+                body["benefits"] = body.get("benefits", []) + inject
             if mutate:
                 body = mutate(body)
             await route.fulfill(status=200, response=resp,
@@ -511,7 +519,7 @@ async def main():
             # 위계: 히어로가 아코디언보다 위 + 히어로가 첫 화면 안에
             hierarchy = await page.evaluate("""(() => {
                 const hero = document.querySelector('#sec-ipo').getBoundingClientRect();
-                const ben = document.querySelector('#sec-events').getBoundingClientRect();
+                const ben = document.querySelector('#ben-link').getBoundingClientRect();
                 const next = document.querySelector('.hero-next').getBoundingClientRect();
                 return {
                     hero_top: Math.round(hero.top), hero_bottom: Math.round(hero.bottom),
@@ -573,7 +581,7 @@ async def main():
                 const r = s => document.querySelector(s).getBoundingClientRect();
                 return { hero: Math.round(r('#sec-ipo').bottom), share: Math.round(r('#share').top),
                          foot: Math.round(r('#ipo-foot').top),
-                         benefits: Math.round(r('#sec-events').top) };
+                         benefits: Math.round(r('#ben-link').top) };
             })()""")
             pos = results["share_pos"]
             results["share_placed_ok"] = (pos["hero"] <= pos["share"]
@@ -659,56 +667,161 @@ async def main():
             results["share_fallback_label"] = (
                 await page.inner_text("#share-sub .lbl")).strip()
 
-            # ── 상단 2탭: 기본은 오늘 요약, ?tab=schedule 로 전체 일정 ──
+            # ── 상단 3탭: 기본은 오늘 요약, ?tab=schedule / ?tab=benefits ──
             results["tabs_visible"] = await page.locator("#tabs").is_visible()
             results["tab_labels"] = await page.eval_on_selector_all(
                 "#tabs .tab", "els => els.map(e => e.textContent.trim())")
             results["tab_count"] = await page.locator("#tabs .tab").count()
             results["tab_default_today"] = await page.evaluate("""(() => {
-                const t = document.querySelector('#tab-today'), s = document.querySelector('#tab-schedule');
+                const t = document.querySelector('#tab-today'), s = document.querySelector('#tab-schedule'),
+                      b = document.querySelector('#tab-benefits');
                 return t.classList.contains('is-on') && t.getAttribute('aria-selected') === 'true'
-                    && !s.classList.contains('is-on')
+                    && !s.classList.contains('is-on') && !b.classList.contains('is-on')
                     && !document.querySelector('#panel-today').hidden
-                    && document.querySelector('#panel-schedule').hidden;
+                    && document.querySelector('#panel-schedule').hidden
+                    && document.querySelector('#panel-benefits').hidden;
             })()""")
             results["tab_height"] = round(await page.evaluate(
                 "document.querySelector('#tabs .tab').getBoundingClientRect().height"))
+            # 390px 한 줄에 3탭 — 같은 줄 · 같은 폭 · 글자 잘림 없음
+            results["tab_row"] = await page.evaluate("""(() => {
+                const tabs = [...document.querySelectorAll('#tabs .tab')];
+                const b = tabs.map(e => e.getBoundingClientRect());
+                return { three: b.length === 3,
+                         same_row: b.length === 3
+                             && Math.max(...b.map(r => r.top)) - Math.min(...b.map(r => r.top)) <= 1,
+                         equal_w: b.length === 3
+                             && Math.max(...b.map(r => r.width)) - Math.min(...b.map(r => r.width)) <= 2,
+                         fit: tabs.every(e => e.scrollWidth <= e.clientWidth + 1) };
+            })()""")
+            # 오늘 요약 탭에는 혜택 상세가 없고, 한 줄 배너만 있습니다
+            results["today_has_no_detail"] = await page.evaluate(
+                "!document.querySelector('#panel-today .bf') && !document.querySelector('#panel-today .bf-list')")
+            results["today_has_no_accordion"] = await page.evaluate(
+                "!document.querySelector('#panel-today details.benefits')")
 
-            # 2레벨: 기본 접힘 → 탭하면 펼침
-            results["accordion_open_by_default"] = await page.locator("#sec-events").evaluate(
-                "el => el.open")
-            results["ev_visible_before"] = await page.locator("#ev-list .ev").first.is_visible()
-            results["ben_head"] = (await page.inner_text("#sec-events .ben-txt")).replace("\n", " ")
-
-            # 이벤트 수·초대 코드 0건
-            results["events"] = await page.locator("#ev-list .ev").count()
-            results["invite_missing"] = await page.locator(".ev-code.is-pending").count()
-            results["invite_none"] = await page.locator(".ev-code.is-none").count()
-            results["copy_buttons"] = await page.locator(".ev-code .copy").count()
-            results["always_badges"] = await page.locator(".ev-dday.is-always").count()
-            results["ev_note"] = (await page.locator("#ev-note").text_content()).strip()
-            results["event_ids"] = await page.eval_on_selector_all(
-                "#ev-list .ev", "els => els.map(e => e.dataset.id)")
+            # 2레벨: 혜택 탭으로 가는 한 줄 배너 — 증권사·금융 혜택 건수
+            results["ben_link_visible"] = await page.locator("#ben-link").is_visible()
+            results["ben_link_text"] = (await page.inner_text("#ben-link")).replace("\n", " ")
+            results["ben_link_href"] = await page.get_attribute("#ben-link", "href")
+            results["ben_link_tab"] = await page.get_attribute("#ben-link", "data-tab")
+            results["ben_link_count"] = (await page.inner_text("#ben-count")).strip()
+            results["ben_link_pos"] = await page.evaluate("""(() => {
+                const r = s => document.querySelector(s).getBoundingClientRect();
+                return { foot: Math.round(r('#ipo-foot').bottom),
+                         ben: Math.round(r('#ben-link').top),
+                         support: Math.round(r('#support').top) };
+            })()""")
+            _bl = results["ben_link_pos"]
+            results["ben_link_placed"] = (_bl["foot"] <= _bl["ben"] <= _bl["support"])
 
             await page.screenshot(path=str(ROOT / "preview-mobile.png"), full_page=True)
             await page.screenshot(path=str(ROOT / "preview-mobile-first-screen.png"))
+            await page.locator("#ben-link").screenshot(path=str(ROOT / "preview-mobile-ben-link.png"))
 
-            # 아코디언 펼치기 → 얇은 행 → 행 상세 펼치기
-            await page.locator("#sec-events > summary").click()
-            await page.wait_for_timeout(300)
-            results["accordion_open_after_click"] = await page.locator("#sec-events").evaluate(
-                "el => el.open")
-            results["ev_visible_after"] = await page.locator("#ev-list .ev").first.is_visible()
-            first_row = page.locator("#ev-list .ev").first
-            results["row_summary"] = (await first_row.locator("summary").inner_text()).replace("\n", " ")
-            await first_row.locator("summary").click()
+            # 배너를 탭하면 혜택 탭으로 전환 (URL ?tab=benefits)
+            await page.locator("#ben-link").click()
+            await page.wait_for_timeout(350)
+            results["ben_link_switch"] = await page.evaluate("""(() => {
+                const b = document.querySelector('#tab-benefits');
+                return b.classList.contains('is-on') && b.getAttribute('aria-selected') === 'true'
+                    && !document.querySelector('#panel-benefits').hidden
+                    && document.querySelector('#panel-today').hidden;
+            })()""")
+            results["ben_link_url_ok"] = "tab=benefits" in page.url
+
+            # ── 혜택 탭 — 필터 칩 · 카드 ──────────────────
+            results["bf_visible"] = await page.locator("#panel-benefits").is_visible()
+            results["bf_note"] = (await page.locator("#bf-note").text_content()).strip()
+            results["bf_chips"] = await page.eval_on_selector_all(
+                "#bf-chips .bf-chip",
+                """els => els.map(e => ({ id: e.dataset.bf, text: e.textContent.trim(),
+                                          on: e.classList.contains('is-on'),
+                                          pressed: e.getAttribute('aria-pressed') }))""")
+            results["bf_chip_row"] = await page.evaluate("""(() => {
+                const c = [...document.querySelectorAll('#bf-chips .bf-chip')];
+                const b = c.map(e => e.getBoundingClientRect());
+                return { count: c.length,
+                         fit: c.every(e => e.scrollWidth <= e.clientWidth + 1),
+                         one_row: b.length > 0
+                             && Math.max(...b.map(r => r.top)) - Math.min(...b.map(r => r.top)) <= 1 };
+            })()""")
+            results["bf_cards"] = await page.eval_on_selector_all(
+                "#bf-list .bf",
+                """els => els.map(e => ({
+                    id: e.dataset.id, cat: e.dataset.cat,
+                    prov: e.querySelector('.bf-prov')?.textContent.trim() || '',
+                    title: e.querySelector('.bf-title')?.textContent.trim(),
+                    amt: e.querySelector('.bf-amt')?.textContent.trim(),
+                    dday: e.querySelector('.bf-dd')?.textContent.trim(),
+                    meta: [...e.querySelectorAll('.bf-meta .bf-row')]
+                        .map(r => r.textContent.replace(/\\s+/g,' ').trim()),
+                    link: e.querySelector('.bf-link')?.getAttribute('href') || '',
+                    link_target: e.querySelector('.bf-link')?.getAttribute('target') || '',
+                    link_rel: e.querySelector('.bf-link')?.getAttribute('rel') || '',
+                    link_text: e.querySelector('.bf-link')?.textContent.trim() || '',
+                    terms: e.querySelectorAll('.bf-more li').length,
+                    how: e.querySelector('.bf-how')?.textContent.trim() || ''
+                }))""")
+            cards = results["bf_cards"]
+            results["bf_count"] = len(cards)
+            results["bf_cats"] = sorted({c["cat"] for c in cards})
+            results["bf_securities"] = [c["id"] for c in cards if c["cat"] == "securities"]
+            results["bf_simple"] = [c["id"] for c in cards if c["cat"] == "simple"]
+            results["bf_all_fields"] = all(
+                c["prov"] and c["title"] and c["amt"] and c["dday"] and len(c["meta"]) >= 1
+                and c["link"].startswith("https://") and c["link_target"] == "_blank"
+                and c["link_text"].endswith("↗")
+                and any(k.startswith("마감") for k in c["meta"])
+                for c in cards)
+            results["bf_ddays"] = [c["dday"] for c in cards]
+            results["bf_links_unique"] = len({c["link"] for c in cards}) == len(cards)
+            await page.screenshot(path=str(ROOT / "preview-mobile-benefits.png"), full_page=True)
+            await page.screenshot(path=str(ROOT / "preview-mobile-benefits-first.png"))
+            await page.locator("#bf-list .bf").first.screenshot(
+                path=str(ROOT / "preview-mobile-benefit-card.png"))
+
+            # 유의사항·신청 방법 펼치기
+            first_card = page.locator("#bf-list .bf").first
+            await first_card.locator(".bf-more > summary").click()
             await page.wait_for_timeout(200)
-            results["row_detail_visible"] = await first_row.evaluate("el => el.open")
-            results["row_has_terms"] = await first_row.locator(".ev-terms").count() > 0
-            results["row_has_howto"] = (await first_row.locator(".ev-code.is-none").count()) > 0
-            results["row_has_link"] = (await first_row.locator(".ev-link").count()) > 0
-            await page.locator("#sec-events").screenshot(
-                path=str(ROOT / "preview-mobile-events.png"))
+            results["bf_terms_open"] = await first_card.locator(".bf-more").evaluate("el => el.open")
+            results["bf_terms_items"] = await first_card.locator(".bf-more li").count()
+            results["bf_terms_text"] = (await first_card.locator(".bf-more").inner_text()).replace("\n", " ")
+            await page.locator("#bf-list .bf").first.screenshot(
+                path=str(ROOT / "preview-mobile-benefit-card-open.png"))
+            await first_card.locator(".bf-more > summary").click()
+            await page.wait_for_timeout(150)
+
+            # 필터 칩 — 카테고리별 즉시 필터링 + 건수 일치
+            async def chip_filter(cat):
+                await page.locator(f"#bf-chips [data-bf='{cat}']").click()
+                await page.wait_for_timeout(200)
+                return await page.eval_on_selector_all(
+                    "#bf-list .bf", "els => els.map(e => e.dataset.cat)")
+
+            results["bf_filter_securities"] = await chip_filter("securities")
+            results["bf_filter_simple"] = await chip_filter("simple")
+            results["bf_filter_all"] = await chip_filter("all")
+            results["bf_chip_counts"] = await page.eval_on_selector_all(
+                "#bf-chips .bf-chip b", "els => els.map(e => e.textContent.trim())")
+            results["bf_scroll_top"] = await page.evaluate(
+                "document.documentElement.scrollWidth")
+            await page.locator("#support").scroll_into_view_if_needed()
+            await page.wait_for_timeout(150)
+            await page.screenshot(path=str(ROOT / "preview-mobile-benefits-bottom.png"))
+            results["bf_clipped"] = await page.evaluate("""(() => {
+                const vw = window.innerWidth, bad = [];
+                document.querySelectorAll('#panel-benefits .bf, #panel-benefits .bf *, #panel-benefits .bf-chip')
+                  .forEach(el => {
+                    const r = el.getBoundingClientRect();
+                    if (r.width && (r.left < -1 || r.right > vw + 1)) {
+                      bad.push(el.tagName + '.' + el.className + ' ' +
+                               Math.round(r.left) + '~' + Math.round(r.right));
+                    }
+                  });
+                return bad.slice(0, 5);
+            })()""")
 
             results["no_invite_words"] = not await page.evaluate(
                 "['초대 코드','초대코드','추천인','본인 초대'].some(t => document.body.innerText.includes(t))")
@@ -840,30 +953,26 @@ async def main():
 
             # ── 2. 만료/오늘/상시/코드보유 테스트 주입 ────────────
             ctx2, page2, errors2 = await open_page(browser, inject=test_events())
-            await page2.locator("#sec-events > summary").click()
-            await page2.wait_for_timeout(250)
-            results["inject_events"] = await page2.locator("#ev-list .ev").count()
+            await page2.locator("#tab-benefits").click()
+            await page2.wait_for_timeout(300)
+            results["inject_cards"] = await page2.locator("#bf-list .bf").count()
             results["inject_ids"] = await page2.eval_on_selector_all(
-                "#ev-list .ev", "els => els.map(e => e.dataset.id)")
+                "#bf-list .bf", "els => els.map(e => e.dataset.id)")
             body = await page2.evaluate("document.body.textContent")
-            results["expired_hidden"] = "만료된 테스트 항목" not in body
-            results["today_shown"] = "오늘까지 유효한 테스트 항목" in body
-            results["always_shown"] = "상시 테스트 항목" in body
+            results["expired_hidden"] = "만료된 테스트 혜택" not in body
+            results["today_shown"] = "오늘까지 유효한 테스트 혜택" in body
+            results["always_shown"] = "상시 테스트 혜택" in body
             results["note_mentions_hidden"] = "1건은 자동으로 숨겼어요" in await page2.locator(
-                "#ev-note").text_content()
+                "#bf-note").text_content()
             results["inject_errors"] = errors2
             results["ready_dday"] = await page2.locator(
-                ".ev[data-id='test-today'] .ev-dday").inner_text()
-
-            # 코드가 들어온 항목의 복사 경로
-            ready = page2.locator(".ev[data-id='test-ready']")
-            await ready.locator("summary").click()
-            await page2.wait_for_timeout(150)
-            await ready.locator(".copy").click()
-            await page2.wait_for_timeout(350)
-            results["copy_toast"] = await page2.inner_text("#toast")
-            results["clipboard"] = await page2.evaluate("navigator.clipboard.readText()")
-            await page2.screenshot(path=str(ROOT / "preview-toast.png"))
+                ".bf[data-id='test-today'] .bf-dd").inner_text()
+            # 공식 링크 카드 — 새 탭 링크 + 유의사항·신청 방법
+            link_card = page2.locator(".bf[data-id='test-link']")
+            results["inject_link_href"] = await link_card.locator(".bf-link").get_attribute("href")
+            results["inject_link_target"] = await link_card.locator(".bf-link").get_attribute("target")
+            results["inject_link_how"] = (await link_card.locator(".bf-how").text_content()).strip()
+            await link_card.screenshot(path=str(ROOT / "preview-mobile-benefit-inject.png"))
             await ctx2.close()
 
             # ── 2.5 공유 시트(navigator.share) 경로 ──────────
@@ -1040,6 +1149,13 @@ async def main():
             results["dark_sch_overflow"] = await dpage.evaluate(
                 "document.documentElement.scrollWidth > window.innerWidth + 1")
             await dpage.screenshot(path=str(ROOT / "preview-mobile-schedule-dark.png"), full_page=True)
+            await dpage.locator("#tab-benefits").click()
+            await dpage.wait_for_timeout(300)
+            results["dark_bf_visible"] = await dpage.locator("#panel-benefits").is_visible()
+            results["dark_bf_cards"] = await dpage.locator("#bf-list .bf").count()
+            results["dark_bf_overflow"] = await dpage.evaluate(
+                "document.documentElement.scrollWidth > window.innerWidth + 1")
+            await dpage.screenshot(path=str(ROOT / "preview-mobile-benefits-dark.png"), full_page=True)
             await dark.close()
 
             # ── 4. 데스크톱 1280 ──────────────────────────────
@@ -1048,7 +1164,7 @@ async def main():
                 is_mobile=False, has_touch=False, device_scale_factor=1,
                 permissions=[])
             results["desktop_hero"] = await dp.locator(".hero").count()
-            results["desktop_events"] = await dp.locator("#ev-list .ev").count()
+            results["desktop_ben_link"] = await dp.locator("#ben-link").is_visible()
             results["desktop_share_visible"] = await dp.locator("#share").is_visible()
             results["desktop_share_labels"] = await dp.eval_on_selector_all(
                 "#share .share-btn .lbl", "els => els.map(e => e.textContent.trim())")
@@ -1067,6 +1183,12 @@ async def main():
             results["desktop_sch_overflow"] = await dp.evaluate(
                 "document.documentElement.scrollWidth > window.innerWidth + 1")
             await dp.screenshot(path=str(ROOT / "preview-desktop-schedule.png"), full_page=True)
+            await dp.locator("#tab-benefits").click()
+            await dp.wait_for_timeout(300)
+            results["desktop_bf_cards"] = await dp.locator("#bf-list .bf").count()
+            results["desktop_bf_overflow"] = await dp.evaluate(
+                "document.documentElement.scrollWidth > window.innerWidth + 1")
+            await dp.screenshot(path=str(ROOT / "preview-desktop-benefits.png"), full_page=True)
             await desk.close()
 
             # ── 5. ?tab=schedule 딥링크 ──────────────────────
@@ -1074,6 +1196,12 @@ async def main():
             results["deeplink_schedule"] = await lpage.locator("#panel-schedule").is_visible()
             results["deeplink_cards"] = await lpage.locator("#sch-subscribe .sc").count()
             await deepl.close()
+            deepl2, lpage2, _ = await open_page(browser, path="?tab=benefits")
+            results["deeplink_benefits"] = await lpage2.locator("#panel-benefits").is_visible()
+            results["deeplink_bf_cards"] = await lpage2.locator("#bf-list .bf").count()
+            results["deeplink_bf_chip"] = " ".join(
+                (await lpage2.inner_text("#bf-chips .bf-chip.is-on")).split())
+            await deepl2.close()
 
             # ── 6. 주관사 앱 열기 버튼 — OS 자동 구분 (상장 · 청약 카드) ────────
             # (a) 실제 데이터 — 오늘 상장(하나에어로다이내믹스, 대표주관 IBK투자증권), Android UA
@@ -1239,7 +1367,21 @@ async def main():
                or (results["hero_kind"] == "listing" and results["listing_points"] >= 1)
                or (results["hero_kind"] == "empty" and bool(results["next_rows"])))
 
-    ok = (results["events"] == 4
+    def _live(items):
+        out = []
+        for b in items or []:
+            exp = (b or {}).get("expiresAt")
+            if exp and dt.date.fromisoformat(str(exp)[:10]) < TODAY:
+                continue
+            out.append(b)
+        return out
+
+    live_benefits = _live(DATA.get("benefits"))
+    sec_benefits = [b for b in live_benefits if (b.get("category") or "securities") != "simple"]
+    simple_benefits = [b for b in live_benefits if b.get("category") == "simple"]
+    inj_live = _live(test_events())
+
+    ok = (True
           and "하나에어로다이내믹스" in results["app_hero_name"]
           and results["listing_app_count"] == 1
           and results["listing_app_ok"]
@@ -1264,8 +1406,12 @@ async def main():
           and not results["dark_app_overflow"]
           and not results["dark_app_errors"]
           and results["tabs_visible"]
-          and results["tab_count"] == 2
-          and results["tab_labels"] == ["오늘 요약", "전체 일정"]
+          and results["tab_count"] == 3
+          and results["tab_labels"] == ["오늘 요약", "전체 일정", "혜택"]
+          and results["tab_row"]["three"]
+          and results["tab_row"]["same_row"]
+          and results["tab_row"]["equal_w"]
+          and results["tab_row"]["fit"]
           and results["tab_default_today"]
           and results["tab_height"] >= 40
           and results["tab_switch_on"]
@@ -1408,29 +1554,66 @@ async def main():
           and results["desktop_share_fit"]
           and not results["stub_errors"]
           and not results["reject_errors"]
-          and results["invite_missing"] == 0
-          and results["invite_none"] == 4
-          and results["copy_buttons"] == 0
           and results["hero_count"] == 1
           and hero_ok
           and "다음 청약" in results["next_rows"]
           and results["next_dday"].startswith("D-")
           and results["hierarchy_ok"]
-          and not results["accordion_open_by_default"]
-          and not results["ev_visible_before"]
-          and results["accordion_open_after_click"]
-          and results["ev_visible_after"]
-          and results["row_detail_visible"]
-          and results["row_has_terms"]
-          and results["row_has_howto"]
-          and results["row_has_link"]
           and results["no_invite_words"]
-          and results["inject_events"] == 7
+          # 오늘 요약 — 혜택 상세는 없고 한 줄 배너만
+          and results["today_has_no_detail"]
+          and results["today_has_no_accordion"]
+          and results["ben_link_visible"]
+          and results["ben_link_text"].startswith("🎁 증권사 개설·현금성 혜택")
+          and results["ben_link_text"].endswith("보기 →")
+          and results["ben_link_href"] == "?tab=benefits"
+          and results["ben_link_tab"] == "benefits"
+          and results["ben_link_count"] == str(len(sec_benefits))
+          and results["ben_link_placed"]
+          and results["ben_link_switch"]
+          and results["ben_link_url_ok"]
+          # 혜택 탭 — 칩 3개 · 카드 필수 필드 · 카테고리 필터
+          and results["bf_visible"]
+          and [c["id"] for c in results["bf_chips"]] == ["all", "securities", "simple"]
+          and results["bf_chips"][0]["on"] and results["bf_chips"][0]["pressed"] == "true"
+          and results["bf_chips"][1]["pressed"] == "false"
+          and results["bf_chip_row"]["count"] == 3
+          and results["bf_chip_row"]["fit"] and results["bf_chip_row"]["one_row"]
+          and results["bf_chip_counts"] == [str(len(live_benefits)),
+                                            str(len(sec_benefits)), str(len(simple_benefits))]
+          and results["bf_count"] == len(live_benefits)
+          and len(results["bf_securities"]) == len(sec_benefits) >= 4
+          and len(results["bf_simple"]) == len(simple_benefits) >= 3
+          and results["bf_cats"] == ["securities", "simple"]
+          and results["bf_all_fields"]
+          and results["bf_links_unique"]
+          and all(d.startswith("D-") or d in ("오늘 마감", "상시") for d in results["bf_ddays"])
+          and results["bf_terms_open"] and results["bf_terms_items"] >= 1
+          and results["bf_filter_securities"] == ["securities"] * len(sec_benefits)
+          and results["bf_filter_simple"] == ["simple"] * len(simple_benefits)
+          and results["bf_filter_all"] == (["securities"] * len(sec_benefits)
+                                           + ["simple"] * len(simple_benefits))
+          and not results["bf_clipped"]
+          and results["bf_scroll_top"] == results["viewport_width"]
+          # 주입 — 만료 숨김 · 오늘/상시 노출 · 링크 카드
+          and results["inject_cards"] == len(live_benefits) + len(inj_live)
           and results["expired_hidden"]
           and results["today_shown"]
           and results["always_shown"]
           and results["note_mentions_hidden"]
-          and results["clipboard"] == "HUI1234"
+          and results["inject_link_href"].startswith("https://example.com/")
+          and results["inject_link_target"] == "_blank"
+          and "앱에서 이벤트 신청" in results["inject_link_how"]
+          # 다크 · 데스크톱 · 딥링크
+          and results["dark_bf_visible"]
+          and results["dark_bf_cards"] == len(live_benefits)
+          and not results["dark_bf_overflow"]
+          and results["desktop_ben_link"]
+          and results["desktop_bf_cards"] == len(live_benefits)
+          and not results["desktop_bf_overflow"]
+          and results["deeplink_benefits"]
+          and results["deeplink_bf_cards"] == len(live_benefits)
+          and results["deeplink_bf_chip"] == f"전체 {len(live_benefits)}"
           and not results["errors"]
           and results["support_visible"]
           and results["support_title"].endswith("커피 한 잔 응원하기")

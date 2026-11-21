@@ -11,6 +11,8 @@
  *                                   공유 시트 없음·오류면 링크까지 복사로 폴백)
  *
  * 상단 탭  .tabs  오늘 요약(#panel-today) | 전체 일정(#panel-schedule, data.json ipo.upcoming)
+ *                   | 혜택(#panel-benefits, data.json benefits[] — 증권사·금융 / 간편 이벤트·설문)
+ * 오늘 요약 하단  .ben-link  '증권사 개설·현금성 혜택 N건 보기 →' 한 줄 배너 (혜택 탭으로 전환)
  */
 (function () {
   'use strict';
@@ -555,108 +557,101 @@
     return html;
   }
 
-  /* ── 2레벨 · 증권사 신규 개설 혜택 ────────── */
-
-  /*
-   * 신청 방법 블록 — 초대 코드가 없는 이벤트는 방법만 한 줄로 보여 줍니다.
-   * 코드/배포상 세 가지로 구분합니다.
-   *   ready   : 본인 코드·링크가 data.json 에 들어가 복사할 수 있음
-   *   missing : 슬롯만 있고 본인 코드가 아직 없음 → '본인 초대 코드 입력 필요'
-   *   none    : 초대 코드가 필요 없는 이벤트(계좌개설만) → 복사 버튼 없음
+  /* ── 혜택 탭 · 증권사·금융 / 간편 이벤트·설문 ──────────
+   *
+   * data.json benefits[] 한 배열을 category 로 나눠 보여 줍니다.
+   *   securities : 증권사 신규 개설·거래 혜택, 금융 이벤트
+   *   simple     : 블로그·본인인증 없이 웹 폼으로 참여하는 경품·기프티콘·설문
+   * 마감일(expiresAt)이 지난 항목은 자동으로 숨기고, 남은 건수를 칩과 머리말에 적습니다.
+   * 카드 하나에 혜택명 · 핵심 금액/조건 · 대상 · 마감(D-day) · 유의사항·신청 방법 · 공식 링크.
    */
-  function inviteState(ev) {
-    var inv = ev.invite || {};
-    if (inv.status === 'none') return 'none';
-    if (inv.status === 'ready' && (has(inv.code) || has(inv.url))) return 'ready';
-    if (!inv.status && has(ev.code) && !/여기에|입력|미정|TBD/i.test(ev.code)) return 'ready';
-    return 'missing';
+  var BF_CATS = [
+    { id: 'all', label: '전체' },
+    { id: 'securities', label: '증권사·금융' },
+    { id: 'simple', label: '간편 이벤트·설문' }
+  ];
+  var BF_LABEL = { securities: '증권사·금융', simple: '간편 이벤트·설문' };
+  var bfFilter = 'all';
+  var bfLive = [];
+
+  function benefitCat(ev) {
+    return ev && ev.category === 'simple' ? 'simple' : 'securities';
   }
 
-  function inviteBlock(ev) {
-    var inv = ev.invite || {};
-    var state = inviteState(ev);
-    var howto = has(inv.howTo)
-      ? '<span class="howto">' + esc(inv.howTo) + '</span>'
-      : '';
-
-    if (state === 'none') {
-      return '<div class="ev-code is-none">' +
-          '<span class="inv-state">신청 방법</span>' +
-          howto +
-        '</div>';
-    }
-    if (state === 'missing') {
-      return '<div class="ev-code is-pending">' +
-          '<span class="inv-state">본인 초대 코드 입력 필요</span>' +
-          '<code class="code-text">아직 등록 전</code>' +
-          '<button type="button" class="copy" data-pending="1" data-copy=""' +
-            ' aria-label="' + esc(ev.title) + ' 초대 코드는 아직 등록 전">복사</button>' +
-          howto +
-        '</div>';
-    }
-    var text = inv.code || inv.url;
-    return '<div class="ev-code is-ready">' +
-        '<span class="inv-state">내 초대 코드</span>' +
-        '<code class="code-text">' + esc(text) + '</code>' +
-        '<button type="button" class="copy" data-pending="0" data-copy="' + esc(text) + '"' +
-          ' aria-label="' + esc(ev.title) + ' 초대 코드 복사">복사</button>' +
-        howto +
-      '</div>';
-  }
-
-  /* 얇은 한 줄 + 탭하면 상세 조건·공식 링크 */
-  function eventRow(ev, today) {
+  function benefitCard(ev, today) {
     var always = !parseDay(ev.expiresAt);
-    var dd = always ? null : dday(ev.expiresAt, today);
-    var badge = always
-      ? '<span class="ev-dday is-always">상시</span>'
-      : (dd ? '<span class="ev-dday ' + dd.cls + '">' + dd.text + '</span>' : '');
-
-    var prov = has(ev.provider) ? String(ev.provider).split('·')[0].trim() : (ev.type || '');
-
+    var dd = always ? { text: '상시', cls: 'is-always' } : dday(ev.expiresAt, today);
+    var cat = benefitCat(ev);
     var terms = (ev.terms && ev.terms.length)
-      ? '<div class="ev-terms"><span class="k">유의사항</span><ul>' +
-          ev.terms.map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') +
-        '</ul></div>'
+      ? '<ul>' + ev.terms.map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') + '</ul>'
       : '';
 
-    return '<details class="ev" data-id="' + esc(ev.id) + '" data-expires="' + esc(ev.expiresAt || 'always') + '">' +
-        '<summary class="ev-sum">' +
-          '<span class="ev-prov">' + esc(prov) + '</span>' +
-          '<span class="ev-ben">' + esc(ev.benefit || ev.title) + '</span>' +
-          (ev.sample ? '<span class="ev-sample">샘플</span>' : '') +
-          badge +
-          '<span class="ev-chev" aria-hidden="true"></span>' +
-        '</summary>' +
-        '<div class="ev-body">' +
-          '<h3 class="ev-title">' + esc(ev.title) + '</h3>' +
-          (has(ev.provider) ? '<div class="ev-prov-full">' + esc(ev.provider) + '</div>' : '') +
-          '<div class="ev-benefit">' +
-            '<span class="k">혜택</span>' +
-            '<b>' + esc(ev.benefit) + '</b>' +
-            (has(ev.benefitNote) ? '<span class="note">' + esc(ev.benefitNote) + '</span>' : '') +
-          '</div>' +
-          '<div class="ev-deadline">' +
-            '<span class="k">마감</span>' +
-            '<span class="val">' + esc(always ? '상시 진행' : (longDay(ev.expiresAt) || '미정')) + '</span>' +
-            (has(ev.period) ? '<span class="per">' + esc(ev.period) + '</span>' : '') +
-          '</div>' +
-          terms +
-          inviteBlock(ev) +
-          (ev.link && ev.link.url
-            ? '<a class="ev-link" href="' + esc(ev.link.url) + '" target="_blank" rel="noopener">' +
-              esc(ev.link.label || '이벤트 자세히') + '<i aria-hidden="true">›</i></a>'
+    return '<article class="bf" data-id="' + esc(ev.id) + '" data-cat="' + cat + '"' +
+        ' data-expires="' + esc(ev.expiresAt || 'always') + '">' +
+        '<div class="bf-top">' +
+          '<span class="bf-cat is-' + cat + '">' + esc(BF_LABEL[cat]) + '</span>' +
+          '<span class="bf-dd ' + esc(dd.cls) + '">' + esc(dd.text) + '</span>' +
+        '</div>' +
+        (has(ev.provider) ? '<div class="bf-prov">' + esc(ev.provider) + '</div>' : '') +
+        '<h3 class="bf-title">' + esc(ev.title) + '</h3>' +
+        '<p class="bf-amt">' + esc(ev.benefit) + '</p>' +
+        (has(ev.benefitNote) ? '<p class="bf-note">' + esc(ev.benefitNote) + '</p>' : '') +
+        '<div class="bf-meta">' +
+          (has(ev.target)
+            ? '<div class="bf-row"><span class="bf-k">대상</span>' +
+              '<span class="bf-v">' + esc(ev.target) + '</span></div>'
+            : '') +
+          '<div class="bf-row"><span class="bf-k">마감</span>' +
+            '<span class="bf-v">' + esc(always ? '상시 진행' : (longDay(ev.expiresAt) || '미정')) +
+            '</span></div>' +
+          (has(ev.period)
+            ? '<div class="bf-row"><span class="bf-k">기간</span>' +
+              '<span class="bf-v is-per">' + esc(ev.period) + '</span></div>'
             : '') +
         '</div>' +
-      '</details>';
+        ((terms || has(ev.howTo))
+          ? '<details class="bf-more"><summary><span>유의사항·신청 방법</span>' +
+              '<span class="bf-chev" aria-hidden="true"></span></summary>' +
+              '<div class="bf-body">' +
+                (has(ev.howTo) ? '<p class="bf-how"><span class="bf-k">신청</span>' +
+                  esc(ev.howTo) + '</p>' : '') +
+                terms +
+              '</div></details>'
+          : '') +
+        (ev.link && ev.link.url
+          ? '<a class="bf-link" href="' + esc(ev.link.url) + '" target="_blank" rel="noopener">' +
+            esc(ev.link.label || '자세히 보기') + '<i aria-hidden="true">↗</i></a>'
+          : '') +
+      '</article>';
+  }
+
+  /* 칩(필터)과 카드 목록 — 칩을 누르면 같은 데이터로 즉시 다시 그립니다 */
+  function benefitsBody(live, today) {
+    var counts = { all: live.length, securities: 0, simple: 0 };
+    live.forEach(function (ev) { counts[benefitCat(ev)] += 1; });
+
+    $('bf-chips').innerHTML = BF_CATS.map(function (c) {
+      var on = bfFilter === c.id;
+      return '<button type="button" class="bf-chip' + (on ? ' is-on' : '') + '"' +
+          ' data-bf="' + c.id + '" aria-pressed="' + (on ? 'true' : 'false') + '">' +
+          esc(c.label) + '<b>' + counts[c.id] + '</b></button>';
+    }).join('');
+
+    var list = live.filter(function (ev) {
+      return bfFilter === 'all' || benefitCat(ev) === bfFilter;
+    });
+    $('bf-list').innerHTML = list.length
+      ? list.map(function (ev) { return benefitCard(ev, today); }).join('')
+      : '<div class="empty">지금 챙길 혜택이 없어요.</div>';
   }
 
   /* ── 렌더 ─────────────────────────────── */
   function render(d) {
     var today = todayDay();
-    var allEvents = d.events || [];
+    var allEvents = d.benefits || [];
     var liveEvents = allEvents.filter(function (ev) { return !isExpired(ev, today); });
     var hiddenEvents = allEvents.length - liveEvents.length;
+    var liveSec = liveEvents.filter(function (ev) { return benefitCat(ev) === 'securities'; }).length;
     var title = '오늘의 공모주 1분 요약';
     document.title = title + (d.date ? ' · ' + shortDay(d.date) : '');
 
@@ -673,18 +668,15 @@
     $('ipo-foot').innerHTML = ipoFoot(d.ipo);
     $('schedule-body').innerHTML = scheduleSection(d.ipo, today);
 
-    /* 2레벨: 개설 혜택 — 기본 접힘, 머리말에 건수만 */
-    $('ev-count').textContent = liveEvents.length;
-    var needCode = liveEvents.filter(function (ev) { return inviteState(ev) === 'missing'; }).length;
+    /* 2레벨: 혜택 탭으로 가는 한 줄 배너 — 증권사·금융 혜택 건수만 적습니다 */
+    $('ben-count').textContent = liveSec;
     var note = [];
-    if (d.eventsAsOf) note.push(shortDay(d.eventsAsOf) + ' 확인 기준이에요.');
-    if (needCode) note.push('초대 링크 ' + needCode + '곳은 본인 초대 코드를 넣어야 열려요.');
-    note.push('가입 전 혜택·한도·마감일을 꼭 확인하세요.');
-    if (hiddenEvents) note.push('기간이 끝난 이벤트 ' + hiddenEvents + '건은 자동으로 숨겼어요.');
-    $('ev-note').textContent = note.join(' ');
-    $('ev-list').innerHTML = liveEvents.length
-      ? liveEvents.map(function (ev) { return eventRow(ev, today); }).join('')
-      : '<div class="empty">지금 챙길 이벤트가 없어요.</div>';
+    if (d.benefitsAsOf) note.push(shortDay(d.benefitsAsOf) + ' 확인 기준이에요.');
+    note.push('가입·응모 전 공식 페이지에서 혜택·마감일을 확인하세요.');
+    if (hiddenEvents) note.push('기간이 끝난 혜택 ' + hiddenEvents + '건은 자동으로 숨겼어요.');
+    $('bf-note').textContent = note.join(' ');
+    bfLive = liveEvents;
+    benefitsBody(liveEvents, today);
 
     var notices = d.notice || [];
     $('notice-list').innerHTML = notices.map(function (n) { return '<li>' + esc(n) + '</li>'; }).join('');
@@ -705,8 +697,8 @@
     setTab(tabFromUrl(), { silent: true });
   }
 
-  /* ── 탭 (오늘 요약 · 전체 일정) ───────────── */
-  var TABS = ['today', 'schedule'];
+  /* ── 탭 (오늘 요약 · 전체 일정 · 혜택) ──────── */
+  var TABS = ['today', 'schedule', 'benefits'];
 
   function tabFromUrl() {
     var q = (location.search.match(/[?&]tab=([a-zA-Z]+)/) || [])[1];
@@ -726,7 +718,7 @@
       panel.hidden = !on;
     });
     if (!(opts && opts.silent)) {
-      var url = location.pathname + (name === 'schedule' ? '?tab=schedule' : '');
+      var url = location.pathname + (name === 'today' ? '' : '?tab=' + name);
       try { history.replaceState(null, '', url); } catch (e) { /* file:// 등 */ }
     }
     if (!(opts && opts.noScroll)) {
@@ -741,6 +733,18 @@
     if (TABS.indexOf(name) < 0) return;
     e.preventDefault();
     setTab(name);
+  });
+
+  /* 혜택 탭 필터 칩 — 누르면 같은 데이터로 즉시 다시 그립니다 */
+  document.addEventListener('click', function (e) {
+    var chip = e.target.closest ? e.target.closest('[data-bf]') : null;
+    if (!chip) return;
+    var id = chip.getAttribute('data-bf');
+    if (!BF_CATS.some(function (c) { return c.id === id; })) return;
+    e.preventDefault();
+    if (bfFilter === id) return;
+    bfFilter = id;
+    benefitsBody(bfLive, todayDay());
   });
 
   document.addEventListener('keydown', function (e) {
