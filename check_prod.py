@@ -70,7 +70,7 @@ async def main():
         res["verdict"] = await opt_text(page, ".hero .verdict")
         res["deposit"] = await opt_text(page, ".hero .deposit")
         res["listing_points"] = await page.locator(".hero .pts li").count()
-        # 주관사 앱 열기 — Android(기본) UA 에서는 intent:// 직접 실행(미설치 시 Play 폴백)
+        # 주관사 앱 열기 — Android(기본) UA: 확인된 앱은 intent://(미설치 시 Play 폴백), 아니면 Play 스토어
         res["app_btns"] = await page.eval_on_selector_all(
             ".hero .app-open",
             """els => els.map(e => ({ text: e.textContent.replace(/\\s+/g, ' ').trim(),
@@ -432,14 +432,19 @@ async def main():
           and res["dark_share_grid"]["fit"]
           and res["desktop_share_visible"]
           and res["desktop_share_labels"] == ["청약 정보 공유", "상장 정보 공유"]
-          # 주관사 앱 열기 — Android 는 intent://(Play 폴백·같은 창), iPhone UA 는 App Store, 데스크톱은 Play
+          # 주관사 앱 열기 — Android: BROWSABLE 딥링크가 확인된 앱만 intent://(같은 창, Play 폴백),
+          # 확인 안 된 앱은 Play 스토어 앱 페이지(새 탭). iPhone UA 는 App Store, 데스크톱은 Play
           and (res["app_btns"] and all(
-              b["href"].startswith("intent://launch#Intent;package=")
-              and "package=com.ibks.ione.mts" in b["href"]
-              and ";S.browser_fallback_url=" + PLAY_ENC in b["href"]
-              and b["href"].endswith(";end")
-              and not b["target"] and b["h"] >= 36
+              (b["href"].startswith("intent://")
+               and ";S.browser_fallback_url=" + PLAY_ENC in b["href"]
+               and b["href"].endswith(";end")
+               and not b["target"] and b["h"] >= 36)
+              or (b["href"].startswith("https://play.google.com/store/apps/details?id=")
+                  and b["target"] == "_blank" and "noopener" in b["rel"] and b["h"] >= 36)
               for b in res["app_btns"]))
+          and all("com.ibks.ione.mts" not in b["href"] or b["href"].startswith(
+              "https://play.google.com/store/apps/details?id=")
+              for b in res["app_btns"])
           and (res["ios_app_btns"] and all(
               b["href"].startswith("https://apps.apple.com/kr/app/id")
               for b in res["ios_app_btns"]))

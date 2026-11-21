@@ -96,16 +96,22 @@
 
   /* ── 주관사 앱 열기 (OS 자동 구분) ───────────
    * 증권사 공식 MTS 의 스토어 ID — 앱 이름·개발자를 스토어 페이지에서 확인한 것만.
-   *   play : Google Play 패키지명 / app : App Store 숫자 ID
+   *   play  : Google Play 패키지명 / app : App Store 숫자 ID
+   *   scheme(+host) : Android 앱이 BROWSABLE 로 선언한 커스텀 스킴 — 앱 매니페스트에서 확인한 것만
+   *   site  : 앱이 https 앱 링크(App Links)로 등록한 주소 — 사이트가 assetlinks.json 으로 공개한 것만
+   * 셋 다 없는 앱은 억지 intent 를 만들지 않고 Play 스토어 앱 페이지로 보냅니다.
+   *   앱 미설치 시에도 Play 스토어가 열리니, “앱이 있으면 열고 없으면 설치” 동작은 그대로입니다.
    * 확인되지 않은 증권사는 넣지 않습니다(버튼도 만들지 않음).
    */
   var BROKER_APPS = {
-    'IBK투자증권':  { play: 'com.ibks.ione.mts',                 app: '6612018102' },  /* IBK투자증권 (대표MTS) */
-    '삼성증권':     { play: 'com.samsungpop.android.mpop',       app: '1150231646' },  /* 삼성증권 mPOP */
+    'IBK투자증권':  { play: 'com.ibks.ione.mts',                 app: '6612018102' },  /* IBK투자증권 (대표MTS) — BROWSABLE 딥링크·앱 링크 확인 안 됨 */
+    '삼성증권':     { play: 'com.samsungpop.android.mpop',       app: '1150231646',
+                      site: 'https://www.samsungpop.com/' },                          /* mPOP — www.samsungpop.com 앱 링크 */
     '미래에셋증권': { play: 'com.miraeasset.trade',              app: '1248716281' },  /* 미래에셋증권 MAPS */
     '한국투자증권': { play: 'com.truefriend.neosmartarenewal',    app: '1621986905' },  /* 한투-한국투자증권 */
     'KB증권':       { play: 'com.kbsec.mts.iplustarngm2',        app: '350742701' },   /* KB M-able */
-    'NH투자증권':   { play: 'com.wooriwm.txsmart',               app: '486312400' },   /* 나무증권-NH투자증권 MTS */
+    'NH투자증권':   { play: 'com.wooriwm.txsmart',               app: '486312400',
+                      scheme: 'txsmart', host: 'txrun' },                             /* 나무증권 — txsmart://txrun (BROWSABLE) */
     '하나증권':     { play: 'com.hanasec.pro',                   app: '6755097570' },  /* 하나증권V-대표MTS(NEW) */
     '신한투자증권': { play: 'com.shinhaninvest.nsmts',            app: '1168512940' },  /* 신한 SOL증권 */
     '키움증권':     { play: 'com.kiwoom.heromts',                app: '1570370057' },  /* 키움증권 영웅문S# */
@@ -113,8 +119,10 @@
     '유진투자증권': { play: 'com.eugenefn.smartchampion2',        app: '1080300592' },  /* 유진투자증권 */
     '대신증권':     { play: 'com.daishin',                       app: '414850336' },   /* 대신증권 CYBOS Touch */
     '우리투자증권': { play: 'com.wooriib.wonmts',                app: '6745938978' },  /* 우리WON MTS(증권) */
-    'DB증권':       { play: 'com.dbfi.xts',                      app: '1603371564' },  /* DB증권 MTS(알파증권) */
-    'DB금융투자':   { play: 'com.dbfi.xts',                      app: '1603371564' },  /* DB증권의 옛 이름 표기 */
+    'DB증권':       { play: 'com.dbfi.xts',                      app: '1603371564',
+                      site: 'https://m.dbsec.co.kr/' },                                /* 알파증권 — m.dbsec.co.kr 앱 링크 */
+    'DB금융투자':   { play: 'com.dbfi.xts',                      app: '1603371564',
+                      site: 'https://m.dbsec.co.kr/' },                                /* DB증권의 옛 이름 표기 */
     '한화투자증권': { play: 'plus.steps.sapp',                   app: '1200606784' },  /* 한화투자증권 MTS */
     'BNK투자증권':  { play: 'com.bnkfn.mtsplus',                 app: '1170374515' }   /* BNK투자증권 */
   };
@@ -131,21 +139,37 @@
     return /Android/i.test(navigator.userAgent || '');
   }
 
-  /* 설치된 앱은 intent:// 로 바로 열고, 없으면 S.browser_fallback_url(Play 스토어)로 보냅니다. */
-  function androidIntentUrl(pkg) {
-    var fallback = 'https://play.google.com/store/apps/details?id=' + pkg;
-    return 'intent://launch#Intent;package=' + pkg +
-      ';action=android.intent.action.MAIN' +
-      ';category=android.intent.category.LAUNCHER' +
-      ';S.browser_fallback_url=' + encodeURIComponent(fallback) + ';end';
+  function playUrl(pkg) {
+    return 'https://play.google.com/store/apps/details?id=' + pkg;
+  }
+
+  /* Android 크롬은 웹 링크로 앱을 열 때 CATEGORY_BROWSABLE 을 강제하므로,
+     MAIN/LAUNCHER 만 선언한 앱은 intent:// 로 열리지 않고 바로 폴백(Play 스토어)으로 떨어집니다.
+     그래서 BROWSABLE 로 확인된 스킴(또는 앱이 등록한 https 앱 링크)만 intent:// 로 실행하고,
+     확인되지 않은 앱은 Play 스토어 앱 페이지로 바로 보냅니다. */
+  function androidIntentUrl(a) {
+    var fallback = playUrl(a.play);
+    var intent = '';
+    if (a.scheme) {
+      intent = 'intent://' + (a.host || '') + '/#Intent' +
+        ';scheme=' + a.scheme +
+        ';package=' + a.play +
+        ';S.browser_fallback_url=' + encodeURIComponent(fallback) + ';end';
+    } else if (a.site) {
+      intent = 'intent://' + String(a.site).replace(/^https?:\/\//, '') + '#Intent' +
+        ';scheme=https' +
+        ';package=' + a.play +
+        ';S.browser_fallback_url=' + encodeURIComponent(fallback) + ';end';
+    }
+    return intent || fallback;
   }
 
   function brokerAppUrl(name) {
     var a = BROKER_APPS[name];
     if (!a) return '';
     if (isIOS()) return 'https://apps.apple.com/kr/app/id' + a.app;
-    if (isAndroid()) return androidIntentUrl(a.play);
-    return 'https://play.google.com/store/apps/details?id=' + a.play;
+    if (isAndroid()) return androidIntentUrl(a);
+    return playUrl(a.play);
   }
 
   /* brokers 문자열('KB증권 · NH투자증권') → 📱 {증권사} 앱 열기 칩(매핑된 증권사만) */
@@ -158,8 +182,10 @@
       var url = brokerAppUrl(name);
       if (!url) return;
       seen[name] = 1;
-      /* Android intent:// 는 같은 창에서 열어야 빈 새 탭이 남지 않고 앱/폴백으로 넘어갑니다. */
-      var blank = isAndroid() ? '' : ' target="_blank" rel="noopener"';
+      /* Android intent:// 는 같은 창에서 열어야 빈 새 탭이 남지 않고 앱/폴백으로 넘어갑니다.
+         스토어·App Store 링크는 새 탭으로 열어 원래 페이지를 남겨 둡니다. */
+      var blank = (isAndroid() && url.indexOf('intent://') === 0)
+        ? '' : ' target="_blank" rel="noopener"';
       out += '<a class="app-open" href="' + esc(url) + '"' + blank +
         ' aria-label="' + esc(name) + ' 앱 열기">' +
         '<span class="ico" aria-hidden="true">📱</span>' + esc(name) + ' 앱 열기</a>';

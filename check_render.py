@@ -65,13 +65,23 @@ APPSTORE = "https://apps.apple.com/kr/app/id"
 PLAY_ENC = "https%3A%2F%2Fplay.google.com%2Fstore%2Fapps%2Fdetails"
 
 
-def intent_url(pkg):
-    """app.js 의 androidIntentUrl 과 같은 규칙 — Android UA 의 기대 href."""
+def play_url(pkg):
+    """앱 BROWSABLE 딥링크를 확인하지 못한 증권사 — Play 스토어 앱 페이지."""
+    return PLAY + pkg
+
+
+def intent_url(pkg, scheme, host=""):
+    """app.js 의 androidIntentUrl 과 같은 규칙 — 앱이 BROWSABLE 로 선언한 스킴."""
     from urllib.parse import quote
-    return ("intent://launch#Intent;package=" + pkg
-            + ";action=android.intent.action.MAIN"
-            + ";category=android.intent.category.LAUNCHER"
+    return ("intent://" + host + "/#Intent;scheme=" + scheme + ";package=" + pkg
             + ";S.browser_fallback_url=" + quote(PLAY + pkg, safe="") + ";end")
+
+
+def app_link_intent(site, pkg):
+    """사이트 assetlinks 로 확인된 https 앱 링크 — scheme=https 로 열고 미설치 시 Play."""
+    from urllib.parse import quote
+    return ("intent://" + re.sub(r"^https?://", "", site) + "#Intent;scheme=https;package="
+            + pkg + ";S.browser_fallback_url=" + quote(PLAY + pkg, safe="") + ";end")
 
 # 개인정보 검사어 — 저장소에 올리지 않는 로컬 파일(privacy_terms.txt)에서 한 줄에 하나씩 읽습니다.
 _TERMS_FILE = ROOT / "privacy_terms.txt"
@@ -1081,16 +1091,13 @@ async def main():
                 ".hero.is-list .app-open", GET_APP)
             results["listing_app_btns"] = listing_apps
             results["listing_app_count"] = len(listing_apps)
-            # Android UA — intent:// 로 앱 직접 실행(미설치 시 Play 스토어 폴백), 같은 창에서 열기
+            # Android UA — IBK투자증권은 BROWSABLE 딥링크가 확인되지 않아 Play 스토어 앱 페이지로
             results["listing_app_ok"] = bool(listing_apps) and all([
                 listing_apps[0]["text"].startswith("📱"),
                 listing_apps[0]["text"].endswith("IBK투자증권 앱 열기"),
-                listing_apps[0]["href"] == intent_url("com.ibks.ione.mts"),
-                listing_apps[0]["href"].startswith("intent://"),
-                listing_apps[0]["href"].find("package=com.ibks.ione.mts") >= 0,
-                ";S.browser_fallback_url=" + PLAY_ENC in listing_apps[0]["href"],
-                listing_apps[0]["href"].endswith(";end"),
-                not listing_apps[0]["target"],
+                listing_apps[0]["href"] == play_url("com.ibks.ione.mts"),
+                listing_apps[0]["target"] == "_blank",
+                "noopener" in listing_apps[0]["rel"],
                 listing_apps[0]["h"] >= 36,
                 listing_apps[0]["shown"],
             ])
@@ -1170,22 +1177,29 @@ async def main():
                     shown: !!(a.offsetWidth && a.offsetHeight)
                   }))))()""")
             by_card = results["br_apps_by_card"]
+            # KB증권은 Play 스토어로, NH투자증권은 앱 매니페스트에서 확인한 txsmart://txrun 로
             results["br_two_on_multi"] = (
                 len(by_card) == 2
                 and [b["text"] for b in by_card[0]] == ["📱KB증권 앱 열기", "📱NH투자증권 앱 열기"]
-                and by_card[0][0]["href"] == intent_url("com.kbsec.mts.iplustarngm2")
-                and by_card[0][1]["href"] == intent_url("com.wooriwm.txsmart"))
+                and by_card[0][0]["href"] == play_url("com.kbsec.mts.iplustarngm2")
+                and by_card[0][0]["target"] == "_blank"
+                and by_card[0][1]["href"] == intent_url("com.wooriwm.txsmart", "txsmart", "txrun"))
             results["br_one_on_single"] = (
                 len(by_card[1]) == 1
                 and by_card[1][0]["text"] == "📱IBK투자증권 앱 열기"
-                and by_card[1][0]["href"] == intent_url("com.ibks.ione.mts"))
-            # Android intent:// 는 같은 창( target 없음 )에서 열고, 패키지·Play 폴백을 함께 싣습니다
+                and by_card[1][0]["href"] == play_url("com.ibks.ione.mts")
+                and by_card[1][0]["target"] == "_blank")
+            # 확인된 앱은 intent://(같은 창) + Play 폴백, 확인 안 된 앱은 Play 스토어(새 탭)
             results["br_links_ok"] = all(
                 a["shown"] and a["h"] >= 36
-                and a["href"].startswith("intent://launch#Intent;package=")
-                and ";S.browser_fallback_url=" + PLAY_ENC in a["href"]
-                and a["href"].endswith(";end")
-                and not a["target"]
+                and (
+                    (a["href"].startswith("intent://")
+                     and ";S.browser_fallback_url=" + PLAY_ENC in a["href"]
+                     and a["href"].endswith(";end")
+                     and not a["target"])
+                    or (a["href"].startswith(PLAY)
+                        and a["target"] == "_blank" and "noopener" in a["rel"])
+                )
                 for card in by_card for a in card)
             results["br_overflow"] = await brpage.evaluate(
                 "document.documentElement.scrollWidth > window.innerWidth + 1")
