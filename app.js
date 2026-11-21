@@ -620,10 +620,11 @@
       rows: rows,
       count: rows.length,
       missing: noPrice,   /* 공모가를 못 읽어 계산에서 뺀 건수 */
+      spacOut: picked.length - scoped.length,   /* 스팩 제외로 뺀 건수 */
       total: rows.reduce(function (n, r) { return n + r.dep.amount; }, 0),
       peak: peak,
       monthLabel: '이번 달 (' + (today.getMonth() + 1) + '월)',
-      allLabel: '전체 예정 (' + cashSpan(all) + ')'
+      allLabel: '전체 예정' + (cashSpan(all) ? ' (' + cashSpan(all) + ')' : '')
     };
   }
 
@@ -663,6 +664,7 @@
         '<div class="cash-sum">' +
           '<span>단순 합계 <b id="cash-total">' + wonShort(plan.total) + '</b></span>' +
           '<span>청약 <b id="cash-count">' + plan.count + '</b>건' +
+            (plan.spacOut ? ' · 스팩 ' + plan.spacOut + '건 제외' : '') +
             (plan.missing ? ' · 공모가 미정 ' + plan.missing + '건 제외' : '') + '</span>' +
         '</div>' +
         '<div class="cash-chips" id="cash-chips" role="group" aria-label="필요 금액 범위와 스팩">' +

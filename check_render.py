@@ -239,9 +239,10 @@ def cash_plan(ipo, today, range_=None, no_spac=True):
     return {
         "range": rng, "rows": rows, "count": len(rows),
         "missing": sum(1 for it in picked if not cash_deposit(it)),
+        "spac_out": len(picked) - len(scoped),
         "total": sum(r[1]["amount"] for r in rows), "peak": peak,
         "month_label": f"이번 달 ({today.month}월)",
-        "all_label": f"전체 예정 ({cash_span(allitems)})",
+        "all_label": "전체 예정" + (f" ({cash_span(allitems)})" if cash_span(allitems) else ""),
     }
 
 
