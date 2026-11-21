@@ -883,7 +883,7 @@
     var liveEvents = allEvents.filter(function (ev) { return !isExpired(ev, today); });
     var hiddenEvents = allEvents.length - liveEvents.length;
     var liveSec = liveEvents.filter(function (ev) { return benefitCat(ev) === 'securities'; }).length;
-    var title = '오늘의 공모주 1분 요약';
+    var title = '마이돈 — 오늘의 공모주 1분 요약';
     document.title = title + (d.date ? ' · ' + shortDay(d.date) : '');
 
     $('dateline').textContent = d.dateLabel || shortDay(d.date);

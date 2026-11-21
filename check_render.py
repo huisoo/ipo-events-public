@@ -658,6 +658,22 @@ async def main():
             # ── 1. 실제 데이터 그대로 (모바일) ─────────────────────
             ctx, page, errors = await open_page(browser)
             results["title"] = await page.title()
+            results["brand"] = (await page.inner_text(".brand")).replace("\n", " ").strip()
+            results["brand_nowrap"] = await page.evaluate(
+                "getComputedStyle(document.querySelector('.brand')).whiteSpace")
+            results["brand_text_lines"] = await page.evaluate("""(() => {
+                const b = document.querySelector('.brand');
+                const t = [...b.childNodes].find(n => n.nodeType === 3 && n.textContent.trim());
+                const r = document.createRange();
+                r.selectNodeContents(t);
+                return r.getClientRects().length;
+            })()""")
+            results["og_title"] = await page.get_attribute("meta[property='og:title']", "content")
+            results["og_site_name"] = await page.get_attribute("meta[property='og:site_name']", "content")
+            results["tw_title"] = await page.get_attribute("meta[name='twitter:title']", "content")
+            results["css_href"] = await page.get_attribute(
+                "link[rel='stylesheet'][href*='styles.css']", "href")
+            results["js_src"] = await page.get_attribute("script[src*='app.js']", "src")
             results["h1"] = (await page.inner_text("h1")).replace("\n", " ")
             results["dateline"] = await page.inner_text("#dateline")
             results["hero_count"] = await page.locator(".hero").count()
@@ -1656,6 +1672,16 @@ async def main():
     # 어느 확인이 깨졌는지 바로 보입니다(조건 자체는 예전 and 체인과 같습니다).
     _conds = [
         'True',
+        # 브랜드·공유 제목: 마이돈 키워드와 캐시 버스터가 그대로 실렸는지
+        'results["brand"] == "마이돈 · 공모주"',
+        'results["brand_nowrap"] == "nowrap"',
+        'results["brand_text_lines"] == 1',
+        'results["title"].startswith("마이돈 — 오늘의 공모주 1분 요약")',
+        'results["og_title"] == "마이돈 — 오늘의 공모주 1분 요약"',
+        'results["tw_title"] == "마이돈 — 오늘의 공모주 1분 요약"',
+        'results["og_site_name"] == "마이돈"',
+        '"?v=" in (results["css_href"] or "")',
+        '"?v=" in (results["js_src"] or "")',
         '"하나에어로다이내믹스" in results["app_hero_name"]',
         'results["listing_app_count"] == 1',
         'results["listing_app_ok"]',

@@ -2,3 +2,11 @@
 # data.json 은 07:30·16:05 하루 2회 갱신되므로 60초만 캐시하고 재검증한다.
 /data.json
   Cache-Control: public, max-age=60, must-revalidate
+
+# styles.css·app.js 는 배포 직후 반영되도록 60초만 캐시한다.
+# (기본값 14400초 = 4시간이라 디자인 수정이 브라우저에 늦게 떴다. index.html 에 ?v= 쿼리 버전을 붙여 함께 무효화한다.)
+/styles.css
+  Cache-Control: public, max-age=60, must-revalidate
+
+/app.js
+  Cache-Control: public, max-age=60, must-revalidate

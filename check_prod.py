@@ -53,6 +53,19 @@ async def main():
         await page.wait_for_timeout(400)
 
         res["title"] = await page.title()
+        res["brand"] = (await page.inner_text(".brand")).replace("\n", " ").strip()
+        res["brand_nowrap"] = await page.evaluate(
+            "getComputedStyle(document.querySelector('.brand')).whiteSpace")
+        res["og_title"] = await page.get_attribute("meta[property='og:title']", "content")
+        res["og_site_name"] = await page.get_attribute("meta[property='og:site_name']", "content")
+        res["css_href"] = await page.get_attribute(
+            "link[rel='stylesheet'][href*='styles.css']", "href")
+        res["js_src"] = await page.get_attribute("script[src*='app.js']", "src")
+        # 배포 후 캐시 헤더 — styles.css·app.js 는 60초 캐시(_headers)
+        res["css_cache_control"] = (await page.request.get(SITE_URL + "/styles.css")).headers.get(
+            "cache-control", "")
+        res["js_cache_control"] = (await page.request.get(SITE_URL + "/app.js")).headers.get(
+            "cache-control", "")
         res["h1"] = (await page.inner_text("h1")).replace("\n", " ")
         res["dateline"] = await page.inner_text("#dateline")
         res["updated"] = await page.inner_text("#updated")
@@ -648,6 +661,18 @@ async def main():
         'not res["ios_h_overflow"]',
         'res["desktop_app_btns"] and all( b["href"].startswith("https://play.google.com/store/apps/details?id=") and b["target"] == "_blank" and "noopener" in b["rel"] for b in res["desktop_app_btns"])',
         '"1분 요약" in res["title"]',
+        # 마이돈 브랜드·공유 제목·캐시 버스터가 라이브에 실렸는지
+        'res["brand"] == "마이돈 · 공모주"',
+        'res["brand_nowrap"] == "nowrap"',
+        'res["title"].startswith("마이돈 — 오늘의 공모주 1분 요약")',
+        'res["og_title"] == "마이돈 — 오늘의 공모주 1분 요약"',
+        'res["og_site_name"] == "마이돈"',
+        '"?v=" in (res["css_href"] or "")',
+        '"?v=" in (res["js_src"] or "")',
+        '"max-age=60" in res["css_cache_control"]',
+        '"must-revalidate" in res["css_cache_control"]',
+        '"max-age=60" in res["js_cache_control"]',
+        '"must-revalidate" in res["js_cache_control"]',
         'res["robots"]',
         '"noindex" not in res["robots"]',
         '"index" in res["robots"]',
