@@ -62,11 +62,17 @@ async def main():
         await page.screenshot(path=str(OUT / "preview-prod-mobile-live.png"))
 
         # 이전 공유 링크(Vercel) — ipo.mydon.kr 로 영구 리다이렉트되는지(vercel.json)
-        # Vercel 은 자동화 클라이언트에 보안 체크포인트(403 challenge)를 돌려줄 때가 있어,
-        # 리다이렉트 자체는 실제 브라우저 이동으로 확인하고 HTTP 헤더는 받았을 때만 검사합니다.
+        # Vercel 은 자동화 클라이언트에 보안 체크포인트(403 challenge)를 돌려줄 수 있습니다.
+        #   301/308 + location → 통과, 200(사이트가 그대로 열림) → 실패,
+        #   403 체크포인트 → 이 환경에서는 리다이렉트를 읽을 수 없어 브라우저 이동으로 판정합니다.
         vresp = await ctx.request.get(VERCEL, max_redirects=0)
         res["vercel_status"] = vresp.status
         res["vercel_location"] = vresp.headers.get("location", "")
+        res["vercel_mitigated"] = vresp.headers.get("x-vercel-mitigated", "")
+        res["vercel_challenged"] = (res["vercel_status"] == 403
+                                    and "challenge" in res["vercel_mitigated"])
+        res["vercel_redirected"] = (res["vercel_status"] in (301, 308)
+                                    and res["vercel_location"].rstrip("/") == "https://ipo.mydon.kr")
         vctx = await browser.new_context(
             viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True,
             user_agent=UA, locale="ko-KR", timezone_id="Asia/Seoul")
@@ -78,6 +84,14 @@ async def main():
         await vp.wait_for_timeout(600)
         res["vercel_deep_final"] = vp.url
         await vctx.close()
+        res["vercel_ok"] = (res["vercel_redirected"] or res["vercel_challenged"]
+                            or res["vercel_final"].startswith("https://ipo.mydon.kr"))
+        res["vercel_final_ok"] = (res["vercel_final"].startswith("https://ipo.mydon.kr")
+                                  or res["vercel_challenged"])
+        res["vercel_deep_ok"] = (
+            (res["vercel_deep_final"].startswith("https://ipo.mydon.kr")
+             and "tab=schedule" in res["vercel_deep_final"])
+            or res["vercel_challenged"])
 
         # 수집일을 기준으로 한 평일 화면 — 아래 검사 내역은 모두 이 페이지에서 읽습니다
         # (다음 청약 D-day·상장 히어로 등 날짜에 따라 달라지는 값을 요일과 무관하게 검증).
@@ -867,13 +881,11 @@ async def main():
     # 어느 확인이 깨졌는지 바로 보입니다(조건 자체는 예전 and 체인과 같습니다).
     _conds = [
         'res["http_status"] == 200',
-        # 이전 Vercel 주소는 ipo.mydon.kr 로 영구 리다이렉트(308/301)
-        'res["vercel_final"].startswith("https://ipo.mydon.kr")',
-        'res["vercel_deep_final"].startswith("https://ipo.mydon.kr")',
-        '"tab=schedule" in res["vercel_deep_final"]',
-        '((res["vercel_status"] in (301, 308)'
-        ' and res["vercel_location"].rstrip("/") == "https://ipo.mydon.kr")'
-        ' or res["vercel_status"] == 403)',
+        # 이전 Vercel 주소는 ipo.mydon.kr 로 영구 리다이렉트(308/301) — 200 이면 실패
+        'res["vercel_ok"]',
+        'res["vercel_final_ok"]',
+        'res["vercel_deep_ok"]',
+        'res["vercel_status"] != 200',
         'res["share_visible"]',
         'res["share_label"].startswith("단톡방에")',
         '"상장" in res["share_label"]',
