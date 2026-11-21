@@ -174,9 +174,21 @@ https://ipo-events-public.vercel.app   ← 클립보드 복사본에만(공유 �
 매핑된 증권사마다 칩 하나를 만들고, 복수 주관사면 칩이 나란히(좁은 화면에서는 다음 줄로) 놓입니다.
 
 - **OS 판별**(`app.js`) — 기기별로 여는 방식이 다릅니다.
-  - **Android** (`/Android/i.test(navigator.userAgent)`): `intent://launch#Intent;package={Play 패키지};action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;S.browser_fallback_url={Play 스토어 URL(URL 인코딩)};end` — 설치된 증권사 앱을 바로 열고, 미설치면 `browser_fallback_url` 로 **Play 스토어**에 보냅니다(같은 창, `target` 없음 — 빈 새 탭 방지).
+  - **Android** (`/Android/i.test(navigator.userAgent)`): 앱이 **BROWSABLE 로 공개한 딥링크가 확인된 경우에만** `intent://{host}/#Intent;scheme={스킴};package={Play 패키지};S.browser_fallback_url={Play 스토어 URL(URL 인코딩)};end` 로 앱을 열고(같은 창 — `target` 없음 — 빈 새 탭 방지), 미설치면 `browser_fallback_url` 로 Play 스토어로 갑니다. 확인된 딥링크가 없으면 억지 intent 를 만들지 않고 **Play 스토어 앱 페이지**(`target="_blank" rel="noopener"`)로 바로 보냅니다.
+    - 크롬은 웹 링크로 앱을 열 때 `CATEGORY_BROWSABLE` 을 강제하기 때문에, `MAIN/LAUNCHER` 만 선언한 앱은 `intent://` 로 열리지 않고 바로 폴백으로 떨어진다(예전 `action=MAIN;category=LAUNCHER` 방식이 항상 Play 스토어로 가던 이유).
+    - 앱이 `data android:host` 를 함께 선언했으면 **host 까지 맞춰야** 한다(예: 나무증권 `txsmart://txrun` — `txsmart://` 만으로는 매칭 안 됨).
   - **iOS** (`iPhone|iPad|iPod` UA 또는 터치 지원 Mac): **App Store** `https://apps.apple.com/kr/app/id{App Store ID}` (`target="_blank" rel="noopener"`).
   - **Desktop(그 외)**: **Google Play** `https://play.google.com/store/apps/details?id={Play 패키지}` (`target="_blank" rel="noopener"`).
+
+BROWSABLE 딥링크가 확인된 앱(2026-11-21 기준 — 근거는 `handoffs/…/evidence.md`):
+
+| 증권사 | 값 | 출처 |
+| --- | --- | --- |
+| NH투자증권 | `scheme: 'txsmart'`, `host: 'txrun'` | 나무증권 APK 8.53 `AndroidManifest.xml` 의 BROWSABLE 인텐트 필터 |
+| 삼성증권 | `site: 'https://www.samsungpop.com/'` (https 앱 링크, `scheme=https` intent) | Digital Asset Links — `com.samsungpop.android.mpop` 위임 공개 |
+| DB증권 / DB금융투자 | `site: 'https://m.dbsec.co.kr/'` (https 앱 링크) | Digital Asset Links — `com.dbfi.xts` 위임 공개 |
+
+나머지 증권사는 위 근거를 확인하지 못해 Play 스토어로 보냅니다. 딥링크를 확인하면 `BROKER_APPS` 의 `scheme`/`host`(또는 `site`)만 채우면 되고, **추측값은 넣지 않습니다**.
 - 버튼은 `BROKER_APPS`에 들어 있는 증권사만 만듭니다(확인되지 않은 증권사는 버튼 없음 — 추정 링크를 만들지 않음).
 - 크기: 높이 38px(최소 36px 이상), 12px 굵은 글씨, `--blue-soft` 배경 · `--blue` 글자, 다크 모드 대응,
   가로 스크롤 없음(390px 기준).
@@ -298,13 +310,13 @@ python3 check_render.py
 
 **📱 주관사 앱 열기 버튼**도 함께 검사합니다. 오늘 상장 카드(`하나에어로다이내믹스` · 주관 IBK투자증권)에
 `📱 IBK투자증권 앱 열기`가 **3줄 요약 아래·다음 청약 띠 위**에 1개 있고,
-- **Android UA**: `href`가 `intent://`로 시작하고 `package=com.ibks.ione.mts`·
-  `S.browser_fallback_url=https%3A%2F%2Fplay.google.com%2F...`를 포함하며 `;end`로 끝날 것(같은 창 — `target` 없음)
+- **Android UA**: 확인된 딥링크가 없는 IBK투자증권이므로 `href`가 `https://play.google.com/store/apps/details?id=com.ibks.ione.mts`(`_blank`/`noopener` — 새 탭)
 - **iPhone UA**: `https://apps.apple.com/kr/app/id6612018102`
 - **Desktop UA**: `https://play.google.com/store/apps/details?id=com.ibks.ione.mts` (`_blank`/`noopener`)
 
 로 바뀌는지, 청약 당일 mock(`KB증권 · NH투자증권`)에서
-카드마다 `📱 KB증권 앱 열기`·`📱 NH투자증권 앱 열기` 2개가 정상 링크(intent://)로 뜨는지(단일 주관사 카드는 1개),
+카드마다 `📱 KB증권 앱 열기`(Play 스토어)·`📱 NH투자증권 앱 열기`(`intent://txrun/#Intent;scheme=txsmart;package=com.wooriwm.txsmart;…;end`) 2개가 뜨는지(단일 주관사 카드는 1개),
+`intent://` 는 `S.browser_fallback_url`(Play 인코딩)·`;end`·`target` 없음을, 스토어 링크는 `target="_blank"`·`noopener` 를 지키는지,
 모두 높이 36px 이상·가로 스크롤 없음·요소 잘림 없음인지, 다크 모드에서도 같은 버튼이
 보이고 38px을 유지하는지 확인합니다.
 
