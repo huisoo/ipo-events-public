@@ -489,6 +489,65 @@ html[data-theme="dark"] .share-btn.done{background:var(--green-soft); color:var(
 }
 .ben-link-arrow svg{width:16px; height:16px; display:block}
 
+/* ── 2.5레벨 · 블로그 배너 퍼가기 (오늘 요약 맨 아래 · 기본 접힘) ────
+   이미지(banner.png)는 scripts/generate_banner.py 가 매일 다시 만들므로
+   이 블록은 코드·주소만 고정입니다. 이모지 없이 인라인 SVG 아이콘만 씁니다. */
+.banner-embed{margin-top:14px}
+.be-toggle{
+  -webkit-appearance:none; appearance:none;
+  display:flex; align-items:center; gap:8px;
+  width:100%; min-height:44px; padding:12px 14px;
+  font:inherit; font-size:13px; font-weight:600; letter-spacing:-.02em;
+  color:var(--ink2); background:var(--card);
+  border:1px solid var(--line); border-radius:14px;
+  cursor:pointer; text-align:left;
+  -webkit-tap-highlight-color:transparent;
+  transition:background .15s ease, border-color .15s ease;
+}
+.be-toggle:hover{background:var(--sunken); border-color:var(--line2)}
+.be-toggle:active{background:var(--sunken)}
+.be-toggle:focus-visible{outline:2px solid var(--blue); outline-offset:2px}
+.be-ico{flex:none; display:inline-flex; width:16px; height:16px; color:var(--ink3)}
+.be-ico svg{width:16px; height:16px; display:block}
+.be-txt{flex:1; min-width:0}
+.be-arrow{flex:none; display:inline-flex; width:16px; height:16px; color:var(--ink3); transition:transform .18s ease}
+.be-arrow svg{width:16px; height:16px; display:block}
+.be-toggle[aria-expanded="true"] .be-arrow{transform:rotate(180deg)}
+
+.be-body{margin-top:8px; padding:14px; display:grid; gap:10px;
+  background:var(--card); border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow)}
+.be-n{margin:0; font-size:11.5px; line-height:1.55; color:var(--ink3)}
+.be-prev{display:block; overflow:hidden; border:1px solid var(--line); border-radius:10px; background:var(--sunken)}
+.be-prev img{display:block; width:100%; height:auto}
+.be-meta{display:flex; align-items:center; justify-content:space-between; gap:8px;
+  margin-top:-2px; font-size:10.5px; color:var(--ink3)}
+.be-meta a{color:var(--ink2); text-decoration:underline; text-underline-offset:2px}
+.be-row{display:grid; grid-template-columns:1fr 1fr; gap:8px}
+.be-btn{
+  -webkit-appearance:none; appearance:none;
+  display:flex; align-items:center; justify-content:center;
+  width:100%; min-height:44px; padding:10px 8px;
+  font:inherit; font-size:12.5px; font-weight:600; letter-spacing:-.02em;
+  color:var(--ink2); background:var(--card);
+  border:1px solid var(--line2); border-radius:10px;
+  cursor:pointer; white-space:nowrap; overflow:hidden;
+  -webkit-tap-highlight-color:transparent;
+  transition:background .15s ease, border-color .15s ease, transform .1s ease;
+}
+.be-btn.is-primary{color:#ffffff; background:var(--blue); border-color:var(--blue); font-weight:700}
+.be-btn:active{transform:scale(.99)}
+.be-btn.is-primary:active{background:var(--blue-deep); border-color:var(--blue-deep)}
+.be-btn:focus-visible{outline:2px solid var(--blue); outline-offset:2px}
+.be-btn.done{color:var(--green); background:var(--green-soft); border-color:transparent}
+html[data-theme="dark"] .be-btn.is-primary{background:var(--blue); border-color:var(--blue); color:#0d1117}
+html[data-theme="dark"] .be-btn.done{background:var(--green-soft); color:var(--green)}
+.be-code{margin:0; padding:10px 12px; overflow:hidden;
+  background:var(--sunken); border:1px solid var(--line); border-radius:10px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:10.5px; line-height:1.6; color:var(--ink2);
+  white-space:pre-wrap; word-break:break-all}
+.be-tip{margin:0; font-size:11px; line-height:1.55; color:var(--ink3)}
+
 /* ── 혜택 탭 (증권사·금융 | 간편 이벤트·설문) ──── */
 .bf-head{margin:2px 2px 12px}
 .bf-h{margin:0; font-size:18px; font-weight:700; letter-spacing:-.03em; line-height:1.3; color:var(--ink)}

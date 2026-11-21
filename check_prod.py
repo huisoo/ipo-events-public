@@ -10,7 +10,8 @@ from playwright.async_api import async_playwright
 
 from check_render import (expected_copy, expected_listing_copy, IOS_UA, DESKTOP_UA,  # 공유문 기대값 규칙 공유
                           cash_plan, cash_peak_text, cash_row_text, short_day, won_short,
-                          week_preview, next_monday, mdd, DARK_PREF)
+                          week_preview, next_monday, mdd, DARK_PREF,
+                          BANNER_URL, BANNER_HTML, png_size)
 
 URL = "https://ipo.mydon.kr/"
 SITE_URL = "https://ipo.mydon.kr"
@@ -129,6 +130,18 @@ async def main():
         # 버스터 URL 로 받은 파일이 실제 배포본과 같은 바이트인지
         res["css_matches_origin"] = (await _css.text()) == (await _o_css.text())
         res["js_matches_origin"] = (await _js.text()) == (await _o_js.text())
+        # 배너 이미지 — 블로그에 퍼가는 정적 파일 (200 · PNG 800×280 · 60초 캐시)
+        _bn = await page.request.get(SITE_URL + "/banner.png")
+        res["banner_status"] = _bn.status
+        res["banner_type"] = _bn.headers.get("content-type", "")
+        res["banner_cache_control"] = _bn.headers.get("cache-control", "")
+        _bb = await _bn.body()
+        res["banner_size"] = ((int.from_bytes(_bb[16:20], "big"), int.from_bytes(_bb[20:24], "big"))
+                              if len(_bb) > 24 and _bb[:8] == b"\x89PNG\r\n\x1a\n" else None)
+        _obn = await page.request.get(ORIGIN + "/banner.png")
+        res["origin_banner_status"] = _obn.status
+        res["origin_banner_cache_control"] = _obn.headers.get("cache-control", "")
+        res["local_banner_size"] = png_size(OUT / "banner.png")
         res["h1"] = (await page.inner_text("h1")).replace("\n", " ")
         res["dateline"] = await page.inner_text("#dateline")
         res["updated"] = await page.inner_text("#updated")
@@ -337,6 +350,68 @@ async def main():
         res["doc_width"] = await page.evaluate("document.documentElement.scrollWidth")
         res["viewport_width"] = await page.evaluate("window.innerWidth")
         res["console_errors"] = errors
+
+        # 배너 퍼가기 — 배포 전(미반영)이면 여기서 예외를 잡고 아래 조건이 FAIL 로 남습니다.
+        res["be_visible"] = await page.locator("#banner-embed").count() > 0
+        try:
+            # ── 블로그 배너 퍼가기 (오늘 요약 맨 아래 · 접힘) ────────────
+            await page.locator("#tab-today").click()
+            await page.wait_for_timeout(250)
+            res["be_visible"] = await page.locator("#banner-embed").is_visible()
+            res["be_closed"] = {
+                "expanded": await page.get_attribute("#be-toggle", "aria-expanded"),
+                "body_hidden": await page.evaluate("document.querySelector('#be-body').hidden"),
+                "label": (await page.inner_text("#be-toggle .be-txt")).strip(),
+            }
+            await page.locator("#banner-embed").scroll_into_view_if_needed()
+            await page.wait_for_timeout(150)
+            await page.click("#be-toggle")
+            await page.wait_for_timeout(600)
+            res["be_open"] = {
+                "expanded": await page.get_attribute("#be-toggle", "aria-expanded"),
+                "body_hidden": await page.evaluate("document.querySelector('#be-body').hidden"),
+            }
+            res["be_img"] = await page.evaluate("""(() => {
+                const i = document.querySelector('.be-prev img');
+                if (!i) return null;
+                const r = i.getBoundingClientRect();
+                return { nw: i.naturalWidth, nh: i.naturalHeight, complete: i.complete,
+                         src: i.getAttribute('src'), w: Math.round(r.width) };
+            })()""")
+            res["be_preview_href"] = await page.get_attribute(".be-prev", "href")
+            res["be_code"] = (await page.inner_text("#be-code")).strip()
+            res["be_meta"] = (await page.inner_text(".be-meta")).replace("\n", " ").strip()
+            res["be_buttons"] = await page.eval_on_selector_all(
+                "#banner-embed .be-btn", "els => els.map(e => e.textContent.trim())")
+            await page.evaluate("navigator.clipboard.writeText('')")
+            await page.click("#be-copy-html")
+            await page.wait_for_timeout(250)
+            res["be_clip_html"] = await page.evaluate("navigator.clipboard.readText()")
+            res["be_toast_html"] = (await page.inner_text("#toast")).strip()
+            await page.evaluate("navigator.clipboard.writeText('')")
+            await page.click("#be-copy-url")
+            await page.wait_for_timeout(250)
+            res["be_clip_url"] = await page.evaluate("navigator.clipboard.readText()")
+            res["be_toast_url"] = (await page.inner_text("#toast")).strip()
+            await page.locator("#banner-embed").screenshot(
+                path=str(OUT / "preview-prod-mobile-banner.png"))
+            res["be_overflow"] = await page.evaluate(
+                "document.documentElement.scrollWidth > window.innerWidth + 1")
+            res["be_clipped"] = await page.evaluate("""(() => {
+                const vw = window.innerWidth, bad = [];
+                document.querySelectorAll('#banner-embed, #banner-embed *').forEach(el => {
+                    const r = el.getBoundingClientRect();
+                    if (r.width && (r.left < -1 || r.right > vw + 1)) {
+                        bad.push(el.tagName + '.' + el.className + ' ' +
+                                 Math.round(r.left) + '~' + Math.round(r.right));
+                    }
+                });
+                return bad.slice(0, 5);
+            })()""")
+            res["be_emoji"] = await page.evaluate(
+                "/[\\u{1F300}-\\u{1FAFF}\\u{2600}-\\u{27BF}]/u.test(document.querySelector('#banner-embed').textContent)")
+        except Exception as e:  # noqa: BLE001 — 미배포·구버전 페이지
+            res["be_error"] = f"{type(e).__name__}: {e}"
 
         await page.screenshot(path=str(OUT / "preview-prod-mobile.png"), full_page=True)
         await page.locator("#ben-link").screenshot(
@@ -677,6 +752,26 @@ async def main():
         })()""")
         await dpage.locator("#support").screenshot(
             path=str(OUT / "preview-prod-mobile-support-dark.png"))
+        try:
+            # 배너 퍼가기 — 다크 모드에서도 같은 카드
+            await dpage.locator("#tab-today").click()
+            await dpage.wait_for_timeout(250)
+            await dpage.click("#be-toggle")
+            await dpage.wait_for_timeout(500)
+            res["dark_be_visible"] = await dpage.locator("#be-body").is_visible()
+            res["dark_be_img"] = await dpage.evaluate("""(() => {
+                const i = document.querySelector('.be-prev img');
+                return i ? [i.naturalWidth, i.naturalHeight] : null;
+            })()""")
+            res["dark_be_card_bg"] = await dpage.evaluate(
+                "getComputedStyle(document.querySelector('#be-body')).backgroundColor")
+            res["dark_be_overflow"] = await dpage.evaluate(
+                "document.documentElement.scrollWidth > window.innerWidth + 1")
+            await dpage.locator("#banner-embed").scroll_into_view_if_needed()
+            await dpage.locator("#banner-embed").screenshot(
+                path=str(OUT / "preview-prod-mobile-banner-dark.png"))
+        except Exception as e:  # noqa: BLE001
+            res["dark_be_error"] = f"{type(e).__name__}: {e}"
         await dark.close()
 
         # 데스크톱 폭에서도 확인
@@ -705,6 +800,19 @@ async def main():
         await dp.locator(".site-head").screenshot(
             path=str(OUT / "preview-prod-desktop-header.png"))
         await dp.screenshot(path=str(OUT / "preview-prod-desktop.png"))
+        try:
+            res["desktop_be_visible"] = await dp.locator("#banner-embed").is_visible()
+            await dp.locator("#banner-embed").scroll_into_view_if_needed()
+            await dp.click("#be-toggle")
+            await dp.wait_for_timeout(500)
+            res["desktop_be_img_w"] = round(await dp.evaluate(
+                "document.querySelector('.be-prev img').getBoundingClientRect().width"))
+            res["desktop_be_overflow"] = await dp.evaluate(
+                "document.documentElement.scrollWidth > window.innerWidth + 1")
+            await dp.locator("#banner-embed").screenshot(
+                path=str(OUT / "preview-prod-desktop-banner.png"))
+        except Exception as e:  # noqa: BLE001
+            res["desktop_be_error"] = f"{type(e).__name__}: {e}"
         await dp.locator("#tab-schedule").click()
         await dp.wait_for_timeout(300)
         res["desktop_sch_cards"] = await dp.locator("#sch-subscribe .sc").count()
@@ -1121,6 +1229,41 @@ async def main():
         'res["support_target"] == "_blank"',
         '"noopener" in (res["support_rel"] or "")',
         'res["support_above_footer"]',
+        # ── 블로그 배너 퍼가기 (banner.png + 오늘 요약 맨 아래 접힘) ──────
+        'res["banner_status"] == 200',
+        '"image/png" in res["banner_type"]',
+        '"must-revalidate" in res["banner_cache_control"]',
+        'res["banner_size"] == (800, 280)',
+        'res["local_banner_size"] == res["banner_size"]',
+        'res["origin_banner_status"] == 200',
+        '"max-age=60" in res["origin_banner_cache_control"]',
+        '"must-revalidate" in res["origin_banner_cache_control"]',
+        'res["be_visible"]',
+        'res["be_closed"]["expanded"] == "false"',
+        'res["be_closed"]["body_hidden"]',
+        'res["be_closed"]["label"] == "블로그 배너 퍼가기"',
+        'res["be_open"]["expanded"] == "true"',
+        'not res["be_open"]["body_hidden"]',
+        'res["be_img"]["nw"] == 800 and res["be_img"]["nh"] == 280',
+        'res["be_img"]["complete"]',
+        'res["be_preview_href"] == BANNER_URL',
+        'res["be_code"] == BANNER_HTML',
+        '"800 × 280" in res["be_meta"]',
+        'res["be_buttons"] == ["HTML 코드 복사", "이미지 URL 복사"]',
+        'res["be_clip_html"] == BANNER_HTML',
+        'res["be_toast_html"] == "HTML 코드를 복사했어요"',
+        'res["be_clip_url"] == BANNER_URL',
+        'res["be_toast_url"] == "배너 이미지 주소를 복사했어요"',
+        'not res["be_overflow"]',
+        'not res["be_clipped"]',
+        'not res["be_emoji"]',
+        'res["dark_be_visible"]',
+        'res["dark_be_img"] == [800, 280]',
+        'res["dark_be_card_bg"] == "rgb(23, 23, 28)"',
+        'not res["dark_be_overflow"]',
+        'res["desktop_be_visible"]',
+        'res["desktop_be_img_w"] > 400',
+        'not res["desktop_be_overflow"]',
         'res["css_v_deployed"]',
         'res["js_v_deployed"]',
         'res["support_title_style"]["size"] == "14px"',

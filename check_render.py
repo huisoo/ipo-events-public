@@ -62,6 +62,7 @@ import http.server
 import json
 import re
 import socketserver
+import sys
 import threading
 from pathlib import Path
 
@@ -126,6 +127,31 @@ DAY_PARAM = f"date={DAY.isoformat()}"
 
 # 개인정보 검사어가 없어도 항상 검사하는 기본 문구
 ALWAYS_TERMS = ["야탑", "판교", "이매", "쌍둥이", "육아", "어린이집", "휴대폰", "배송지"]
+
+# ── 블로그 배너 퍼가기 기대값 ──────────────────
+# index.html · app.js 와 같은 문자열입니다(티스토리·워드프레스 HTML 모드에 붙이는 코드).
+BANNER_URL = "https://ipo.mydon.kr/banner.png"
+BANNER_HTML = ('<a href="https://ipo.mydon.kr" target="_blank" rel="noopener">'
+               '<img src="' + BANNER_URL + '" alt="마이돈 — 오늘의 공모주 1분 요약" '
+               'width="800" height="280" style="max-width:100%;height:auto"></a>')
+
+# 배너 생성기(scripts/generate_banner.py) — 화면과 같은 규칙으로 금액을 고르는지 대조용
+sys.path.insert(0, str(ROOT / "scripts"))
+try:
+    import generate_banner as banner_mod
+except Exception:  # Pillow·폰트가 없는 환경에서는 이 대조만 건너뜁니다
+    banner_mod = None
+
+
+def png_size(path):
+    """PNG 헤더만 읽어 (width, height) — PNG 가 아니면 None."""
+    try:
+        b = Path(path).read_bytes()[:24]
+    except OSError:
+        return None
+    if b[:8] != b"\x89PNG\r\n\x1a\n":
+        return None
+    return (int.from_bytes(b[16:20], "big"), int.from_bytes(b[20:24], "big"))
 
 
 # ── 전체 일정 · 균등 최소증거금 기대값 ──────────────────────
@@ -1205,6 +1231,102 @@ async def main():
             await page.wait_for_timeout(150)
             await page.screenshot(path=str(ROOT / "preview-mobile-bottom.png"))
 
+            # ── 블로그 배너 퍼가기 (오늘 요약 맨 아래 · 기본 접힘) ────
+            # banner.png 는 scripts/generate_banner.py 가 data.json 으로 만드는 정적 이미지입니다.
+            # 접힘 → 누르면 미리보기·코드·복사 버튼이 펼쳐지고, 복사는 클립보드로 확인합니다.
+            await page.locator("#tab-today").click()
+            await page.wait_for_timeout(250)
+            be = page.locator("#banner-embed")
+            results["be_visible"] = await be.is_visible()
+            results["be_closed"] = {
+                "expanded": await page.get_attribute("#be-toggle", "aria-expanded"),
+                "body_hidden": await page.evaluate("document.querySelector('#be-body').hidden"),
+                "label": (await page.inner_text("#be-toggle .be-txt")).strip(),
+            }
+            results["be_toggle_h"] = round(await page.evaluate(
+                "document.querySelector('#be-toggle').getBoundingClientRect().height"))
+            results["be_pos"] = await page.evaluate("""(() => {
+                const r = s => document.querySelector(s).getBoundingClientRect();
+                return { ben: Math.round(r('#ben-link').bottom),
+                         be: Math.round(r('#banner-embed').top),
+                         support: Math.round(r('#support').top) };
+            })()""")
+            results["be_emoji"] = await page.evaluate(
+                "/[\\u{1F300}-\\u{1FAFF}\\u{2600}-\\u{27BF}]/u.test(document.querySelector('#banner-embed').textContent)")
+            await be.scroll_into_view_if_needed()
+            await page.wait_for_timeout(150)
+            await be.screenshot(path=str(ROOT / "preview-mobile-banner-closed.png"))
+            await page.click("#be-toggle")
+            await page.wait_for_timeout(500)
+            results["be_open"] = {
+                "expanded": await page.get_attribute("#be-toggle", "aria-expanded"),
+                "body_hidden": await page.evaluate("document.querySelector('#be-body').hidden"),
+                "arrow": await page.evaluate(
+                    "getComputedStyle(document.querySelector('.be-arrow')).transform"),
+            }
+            results["be_img"] = await page.evaluate("""(() => {
+                const i = document.querySelector('.be-prev img');
+                if (!i) return null;
+                const r = i.getBoundingClientRect();
+                return { nw: i.naturalWidth, nh: i.naturalHeight, complete: i.complete,
+                         src: i.getAttribute('src'), w: Math.round(r.width),
+                         h: Math.round(r.height) };
+            })()""")
+            results["be_preview_link"] = {
+                "href": await page.get_attribute(".be-prev", "href"),
+                "target": await page.get_attribute(".be-prev", "target"),
+                "rel": await page.get_attribute(".be-prev", "rel"),
+            }
+            results["be_code"] = (await page.inner_text("#be-code")).strip()
+            results["be_meta"] = (await page.inner_text(".be-meta")).replace("\n", " ").strip()
+            results["be_download"] = await page.get_attribute(".be-meta a", "download")
+            results["be_buttons"] = await page.eval_on_selector_all(
+                "#banner-embed .be-btn", "els => els.map(e => e.textContent.trim())")
+            results["be_btn_h"] = round(min(await page.eval_on_selector_all(
+                "#banner-embed .be-btn", "els => els.map(e => e.getBoundingClientRect().height)")))
+            results["be_btn_style"] = await page.evaluate("""(() => {
+                const probe = v => { const d = document.createElement('div');
+                    d.style.color = v; document.body.appendChild(d);
+                    const c = getComputedStyle(d).color; d.remove(); return c; };
+                const p = getComputedStyle(document.querySelector('#be-copy-html'));
+                const s = getComputedStyle(document.querySelector('#be-copy-url'));
+                return { primary_bg: p.backgroundColor === probe('var(--blue)'),
+                         primary_fg: p.color === 'rgb(255, 255, 255)',
+                         second_bg: s.backgroundColor === probe('var(--card)') };
+            })()""")
+
+            # 클립보드 — HTML 코드 / 이미지 주소
+            await page.evaluate("navigator.clipboard.writeText('')")
+            await page.click("#be-copy-html")
+            await page.wait_for_timeout(250)
+            results["be_clip_html"] = await page.evaluate("navigator.clipboard.readText()")
+            results["be_toast_html"] = (await page.inner_text("#toast")).strip()
+            results["be_label_html"] = (await page.inner_text("#be-copy-html")).strip()
+            await page.wait_for_timeout(1900)
+            results["be_label_back"] = (await page.inner_text("#be-copy-html")).strip()
+            await page.evaluate("navigator.clipboard.writeText('')")
+            await page.click("#be-copy-url")
+            await page.wait_for_timeout(250)
+            results["be_clip_url"] = await page.evaluate("navigator.clipboard.readText()")
+            results["be_toast_url"] = (await page.inner_text("#toast")).strip()
+            await be.screenshot(path=str(ROOT / "preview-mobile-banner.png"))
+            results["be_clipped"] = await page.evaluate("""(() => {
+                const vw = window.innerWidth, bad = [];
+                document.querySelectorAll('#banner-embed, #banner-embed *')
+                  .forEach(el => {
+                    if (el.closest('.sr-only')) return;
+                    const r = el.getBoundingClientRect();
+                    if (r.width && (r.left < -1 || r.right > vw + 1)) {
+                      bad.push(el.tagName + '.' + el.className + ' ' +
+                               Math.round(r.left) + '~' + Math.round(r.right));
+                    }
+                  });
+                return bad.slice(0, 5);
+            })()""")
+            results["be_overflow"] = await page.evaluate(
+                "document.documentElement.scrollWidth > window.innerWidth + 1")
+            results["banner_png"] = png_size(ROOT / "banner.png")
+
             # ── 전체 일정 탭 ────────────────────────────────
             await page.locator("#tab-schedule").click()
             await page.wait_for_timeout(300)
@@ -1687,6 +1809,25 @@ async def main():
             })()""")
             await dpage.locator("#support").screenshot(
                 path=str(ROOT / "preview-mobile-support-dark.png"))
+            # 블로그 배너 퍼가기 — 다크에서도 같은 카드·같은 버튼 위계
+            await dpage.locator("#tab-today").click()
+            await dpage.wait_for_timeout(250)
+            await dpage.click("#be-toggle")
+            await dpage.wait_for_timeout(400)
+            results["dark_be_visible"] = await dpage.locator("#be-body").is_visible()
+            results["dark_be_img"] = await dpage.evaluate("""(() => {
+                const i = document.querySelector('.be-prev img');
+                return i ? [i.naturalWidth, i.naturalHeight] : null;
+            })()""")
+            results["dark_be_card"] = await dpage.evaluate("""(() => {
+                const c = getComputedStyle(document.querySelector('#be-body'));
+                return { bg: c.backgroundColor, radius: c.borderRadius };
+            })()""")
+            results["dark_be_overflow"] = await dpage.evaluate(
+                "document.documentElement.scrollWidth > window.innerWidth + 1")
+            await dpage.locator("#banner-embed").scroll_into_view_if_needed()
+            await dpage.locator("#banner-embed").screenshot(
+                path=str(ROOT / "preview-mobile-banner-dark.png"))
             await dark.close()
 
             # ── 4. 데스크톱 1280 ──────────────────────────────
@@ -1732,6 +1873,18 @@ async def main():
             results["desktop_bf_overflow"] = await dp.evaluate(
                 "document.documentElement.scrollWidth > window.innerWidth + 1")
             await dp.screenshot(path=str(ROOT / "preview-desktop-benefits.png"), full_page=True)
+            await dp.locator("#tab-today").click()
+            await dp.wait_for_timeout(250)
+            await dp.click("#be-toggle")
+            await dp.wait_for_timeout(400)
+            results["desktop_be_visible"] = await dp.locator("#be-body").is_visible()
+            results["desktop_be_img_w"] = round(await dp.evaluate(
+                "document.querySelector('.be-prev img').getBoundingClientRect().width"))
+            results["desktop_be_overflow"] = await dp.evaluate(
+                "document.documentElement.scrollWidth > window.innerWidth + 1")
+            await dp.locator("#banner-embed").scroll_into_view_if_needed()
+            await dp.locator("#banner-embed").screenshot(
+                path=str(ROOT / "preview-desktop-banner.png"))
             await desk.close()
 
             # ── 5. ?tab=schedule 딥링크 ──────────────────────
@@ -2073,6 +2226,10 @@ async def main():
 
     # 조건을 한 줄씩 따로 평가합니다 — 실패한 조건만 이름 그대로 찍혀서
     # 어느 확인이 깨졌는지 바로 보입니다(조건 자체는 예전 and 체인과 같습니다).
+    # 배너 생성기 — 홈페이지와 같은 규칙으로 금액을 고르는지(평일=이번 달·스팩 제외, 주말=다음 주·스팩 포함)
+    banner_weekday = banner_mod.build_content(DATA, DAY) if banner_mod else None
+    banner_weekend = banner_mod.build_content(DATA, sat) if banner_mod else None
+
     _conds = [
         'True',
         # 브랜드·공유 제목: 마이돈 키워드와 캐시 버스터가 그대로 실렸는지
@@ -2414,6 +2571,50 @@ async def main():
         'results["support_css_hover"]',
         'results["support_css_dark"]',
         'not results["support_btn_emoji"]',
+        # ── 블로그 배너 퍼가기 (banner.png + 오늘 요약 맨 아래 접힘) ──────
+        'results["banner_png"] == (800, 280)',
+        '(banner_weekday or {}).get("card", {}).get("amount") == cash_peak_text(plan_m)',
+        '(banner_weekend or {}).get("card", {}).get("amount") == wk["peak_text"]',
+        'results["be_visible"]',
+        'results["be_closed"]["expanded"] == "false"',
+        'results["be_closed"]["body_hidden"]',
+        'results["be_closed"]["label"] == "블로그 배너 퍼가기"',
+        'results["be_toggle_h"] >= 44',
+        'results["be_pos"]["ben"] <= results["be_pos"]["be"] <= results["be_pos"]["support"]',
+        'not results["be_emoji"]',
+        'results["be_open"]["expanded"] == "true"',
+        'not results["be_open"]["body_hidden"]',
+        'results["be_open"]["arrow"] not in ("none", "")',
+        'results["be_img"]["nw"] == 800 and results["be_img"]["nh"] == 280',
+        'results["be_img"]["complete"]',
+        'results["be_img"]["src"] == "banner.png"',
+        'results["be_img"]["w"] > 200 and results["be_img"]["h"] > 60',
+        'results["be_preview_link"]["href"] == BANNER_URL',
+        'results["be_preview_link"]["target"] == "_blank"',
+        '"noopener" in (results["be_preview_link"]["rel"] or "")',
+        'results["be_code"] == BANNER_HTML',
+        '"800 × 280" in results["be_meta"]',
+        'results["be_download"] == "mydon-ipo-banner.png"',
+        'results["be_buttons"] == ["HTML 코드 복사", "이미지 URL 복사"]',
+        'results["be_btn_h"] >= 44',
+        'results["be_btn_style"]["primary_bg"] and results["be_btn_style"]["primary_fg"]',
+        'results["be_btn_style"]["second_bg"]',
+        'results["be_clip_html"] == BANNER_HTML',
+        'results["be_toast_html"] == "HTML 코드를 복사했어요"',
+        'results["be_label_html"] == "복사됐어요"',
+        'results["be_label_back"] == "HTML 코드 복사"',
+        'results["be_clip_url"] == BANNER_URL',
+        'results["be_toast_url"] == "배너 이미지 주소를 복사했어요"',
+        'not results["be_clipped"]',
+        'not results["be_overflow"]',
+        'results["dark_be_visible"]',
+        'results["dark_be_img"] == [800, 280]',
+        'results["dark_be_card"]["bg"] == "rgb(23, 23, 28)"',
+        'results["dark_be_card"]["radius"] == "14px"',
+        'not results["dark_be_overflow"]',
+        'results["desktop_be_visible"]',
+        'results["desktop_be_img_w"] > 400',
+        'not results["desktop_be_overflow"]',
         'results["dark_support_visible"]',
         'results["dark_support_btn_style"]["bg"] == "rgb(254, 229, 0)"',
         'results["dark_support_btn_style"]["color"] == "rgb(25, 25, 25)"',

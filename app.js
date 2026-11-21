@@ -14,6 +14,9 @@
  *                   | 혜택(#panel-benefits, data.json benefits[] — 증권사·금융 / 간편 이벤트·설문)
  * 전체 일정 맨 위 .cash  균등 최소증거금(이번 달/전체 · 스팩 제외) — 피크 자금 강조 + 종목별 예상 증거금
  * 오늘 요약 하단  .ben-link  '증권사 개설·현금성 혜택 N건 보기 →' 한 줄 배너 (혜택 탭으로 전환)
+ * 오늘 요약 맨 아래 .banner-embed  '블로그 배너 퍼가기' (기본 접힘 — banner.png 미리보기 +
+ *                                  HTML 코드/이미지 URL 복사·저장. banner.png 는
+ *                                  scripts/generate_banner.py 가 data.json 으로 매일 다시 만든다)
  */
 (function () {
   'use strict';
@@ -1561,8 +1564,50 @@
     });
   });
 
+  /* ── 블로그 배너 퍼가기 ─────────────────────
+   * banner.png 는 scripts/generate_banner.py 가 data.json 으로 매일 다시 만듭니다.
+   * 여기서는 미리보기 그림과 붙여넣을 코드·주소만 다룹니다.
+   *   · HTML 코드 : 티스토리·워드프레스·웹사이트 HTML 모드
+   *   · 이미지 URL : 네이버 블로그(URL 붙여넣기·저장 후 사진 첨부)
+   * 접힌 채로 두고, 누를 때만 미리보기를 펼칩니다(첫 화면 무게를 키우지 않음).
+   */
+  var BANNER_URL = SITE_URL + '/banner.png';
+  var BANNER_HTML = '<a href="' + SITE_URL + '" target="_blank" rel="noopener">' +
+    '<img src="' + BANNER_URL + '" alt="마이돈 — 오늘의 공모주 1분 요약" ' +
+    'width="800" height="280" style="max-width:100%;height:auto"></a>';
+
+  function initBanner() {
+    var toggle = $('be-toggle'), body = $('be-body'), code = $('be-code');
+    if (!toggle || !body) return;
+    if (code) code.textContent = BANNER_HTML;
+    toggle.addEventListener('click', function () {
+      var open = toggle.getAttribute('aria-expanded') === 'true';
+      toggle.setAttribute('aria-expanded', open ? 'false' : 'true');
+      body.hidden = open;
+    });
+  }
+
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest ? e.target.closest('[data-be-copy]') : null;
+    if (!btn) return;
+    var isUrl = btn.getAttribute('data-be-copy') === 'url';
+    copy(isUrl ? BANNER_URL : BANNER_HTML).then(function (ok) {
+      if (!ok) { toast('복사가 안 됐어요. 코드를 길게 눌러 복사해 주세요'); return; }
+      toast(isUrl ? '배너 이미지 주소를 복사했어요' : 'HTML 코드를 복사했어요', 'ok');
+      var label = btn.getAttribute('data-label') || btn.textContent;
+      btn.textContent = '복사됐어요';
+      btn.classList.add('done');
+      clearTimeout(btn._copyTimer);
+      btn._copyTimer = setTimeout(function () {
+        btn.textContent = label;
+        btn.classList.remove('done');
+      }, 1800);
+    });
+  });
+
   /* ── 시작 ─────────────────────────────── */
   initTheme();
+  initBanner();
   fetch('data.json?t=' + Math.floor(Date.now() / 60000), { cache: 'no-store' })
     .then(function (r) {
       if (!r.ok) throw new Error('HTTP ' + r.status);
