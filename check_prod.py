@@ -64,8 +64,8 @@ async def main():
         # (다음 청약 D-day·상장 히어로 등 날짜에 따라 달라지는 값을 요일과 무관하게 검증).
         pdata0 = await page.evaluate("fetch('data.json?t=' + Date.now()).then(r => r.json())")
         res["prod_date"] = (pdata0 or {}).get("date")
-        await page.goto(URL + "?date=" + str(res["prod_date"])[:10],
-                        wait_until="networkidle", timeout=45000)
+        DATED = URL + "?date=" + str(res["prod_date"])[:10]
+        await page.goto(DATED, wait_until="networkidle", timeout=45000)
         await page.wait_for_selector("#main:not([hidden])", timeout=15000)
         await page.wait_for_timeout(300)
 
@@ -519,7 +519,7 @@ async def main():
         thp.on("console", lambda m: th_errors.append(f"console.{m.type}: {m.text}")
                 if m.type == "error" else None)
         thp.on("pageerror", lambda e: th_errors.append(f"pageerror: {e}"))
-        await thp.goto(URL, wait_until="networkidle", timeout=45000)
+        await thp.goto(DATED, wait_until="networkidle", timeout=45000)
         await thp.wait_for_selector("#main:not([hidden])", timeout=15000)
         await thp.wait_for_timeout(300)
         res["theme_attr_default"] = await thp.evaluate(
@@ -582,7 +582,7 @@ async def main():
         sd_errors = []
         dpage.on("console", lambda m: sd_errors.append(f"console.{m.type}: {m.text}")
                  if m.type == "error" else None)
-        await dpage.goto(URL, wait_until="networkidle", timeout=45000)
+        await dpage.goto(DATED, wait_until="networkidle", timeout=45000)
         await dpage.wait_for_selector("#main:not([hidden])", timeout=15000)
         await dpage.wait_for_timeout(300)
         res["sysdark_attr"] = await dpage.evaluate(
@@ -650,7 +650,7 @@ async def main():
         desk = await browser.new_context(viewport={"width": 1280, "height": 900},
                                         locale="ko-KR", timezone_id="Asia/Seoul")
         dp = await desk.new_page()
-        await dp.goto(URL, wait_until="networkidle", timeout=45000)
+        await dp.goto(DATED, wait_until="networkidle", timeout=45000)
         await dp.wait_for_selector("#main:not([hidden])", timeout=15000)
         await dp.wait_for_timeout(300)
         res["desktop_hero"] = await dp.locator(".hero").count()
@@ -692,7 +692,7 @@ async def main():
             viewport={"width": 390, "height": 844}, device_scale_factor=2, is_mobile=True,
             has_touch=True, user_agent=UA, locale="ko-KR", timezone_id="Asia/Seoul")
         lp = await deepl.new_page()
-        await lp.goto(URL + "?tab=schedule", wait_until="networkidle", timeout=45000)
+        await lp.goto(DATED + "&tab=schedule", wait_until="networkidle", timeout=45000)
         await lp.wait_for_selector("#main:not([hidden])", timeout=15000)
         await lp.wait_for_timeout(300)
         res["deeplink_schedule"] = await lp.locator("#panel-schedule").is_visible()
@@ -702,7 +702,7 @@ async def main():
             viewport={"width": 390, "height": 844}, device_scale_factor=2, is_mobile=True,
             has_touch=True, user_agent=UA, locale="ko-KR", timezone_id="Asia/Seoul")
         bp = await deeplb.new_page()
-        await bp.goto(URL + "?tab=benefits", wait_until="networkidle", timeout=45000)
+        await bp.goto(DATED + "&tab=benefits", wait_until="networkidle", timeout=45000)
         await bp.wait_for_selector("#main:not([hidden])", timeout=15000)
         await bp.wait_for_timeout(300)
         res["deeplink_benefits"] = await bp.locator("#panel-benefits").is_visible()
@@ -714,7 +714,7 @@ async def main():
             viewport={"width": 390, "height": 844}, device_scale_factor=2, is_mobile=True,
             has_touch=True, user_agent=IOS_UA, locale="ko-KR", timezone_id="Asia/Seoul")
         ip = await iosctx.new_page()
-        await ip.goto(URL, wait_until="networkidle", timeout=45000)
+        await ip.goto(DATED, wait_until="networkidle", timeout=45000)
         await ip.wait_for_selector("#main:not([hidden])", timeout=15000)
         await ip.wait_for_timeout(300)
         res["ios_app_btns"] = await ip.eval_on_selector_all(
@@ -730,7 +730,7 @@ async def main():
                                         user_agent=DESKTOP_UA,
                                         locale="ko-KR", timezone_id="Asia/Seoul")
         dsp = await dctx.new_page()
-        await dsp.goto(URL, wait_until="networkidle", timeout=45000)
+        await dsp.goto(DATED, wait_until="networkidle", timeout=45000)
         await dsp.wait_for_selector("#main:not([hidden])", timeout=15000)
         await dsp.wait_for_timeout(300)
         res["desktop_app_btns"] = await dsp.eval_on_selector_all(
