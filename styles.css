@@ -34,33 +34,34 @@
   --shadow:0 1px 2px rgba(25,31,40,.04);
   --shadow-up:0 1px 3px rgba(25,31,40,.07);
 }
-@media (prefers-color-scheme: dark){
-  :root{
-    --bg:#101012;
-    --card:#17171c;
-    --sunken:#1b1b21;
-    --bg2:#23232b;
-    --line:#2c2c35;
-    --line2:#3a3a44;
-    --ink:#f2f4f6;
-    --ink2:#c3c9d1;
-    --ink3:#8b95a1;
-    --blue:#4b93ff;
-    --blue-deep:#6aa8ff;
-    --blue-soft:#16243a;
-    --green:#3ecf8e;
-    --green-soft:#12271d;
-    --red:#ff6b75;
-    --red-soft:#2c1619;
-    --pill:#2c2c35;
-    --track:#1d1d24;
-    --blue-ink:#8fbaff;
-    --shadow:none;
-    --shadow-up:none;
-  }
+/* 다크 모드 — 기본은 라이트 고정. 상단 토글이 html[data-theme="dark"] 를 붙일 때만 적용.
+   (시스템 prefers-color-scheme 을 따르지 않는다 — 기기가 다크여도 화면은 항상 밝게 뜬다.) */
+html[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#101012;
+  --card:#17171c;
+  --sunken:#1b1b21;
+  --bg2:#23232b;
+  --line:#2c2c35;
+  --line2:#3a3a44;
+  --ink:#f2f4f6;
+  --ink2:#c3c9d1;
+  --ink3:#8b95a1;
+  --blue:#4b93ff;
+  --blue-deep:#6aa8ff;
+  --blue-soft:#16243a;
+  --green:#3ecf8e;
+  --green-soft:#12271d;
+  --red:#ff6b75;
+  --red-soft:#2c1619;
+  --pill:#2c2c35;
+  --track:#1d1d24;
+  --blue-ink:#8fbaff;
+  --shadow:none;
+  --shadow-up:none;
 }
 *{box-sizing:border-box}
-html{-webkit-text-size-adjust:100%}
+html{-webkit-text-size-adjust:100%; color-scheme:light}
 body{
   margin:0;
   background:var(--bg);
@@ -93,7 +94,27 @@ body,input,button,select,textarea{font-variant-numeric:tabular-nums}
 .updated{
   margin-left:auto; font-size:11px; font-weight:500; color:var(--ink3);
   font-variant-numeric:tabular-nums; letter-spacing:0;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
+/* 다크 모드 토글 — 16:15 업데이트 오른쪽, 26px 아이콘 버튼(줄 높이는 22px 그대로) */
+.theme-toggle{
+  flex:none; display:inline-flex; align-items:center; justify-content:center;
+  width:26px; height:26px; margin:-2px -2px -2px 0; padding:0;
+  border:1px solid var(--line); border-radius:8px; background:var(--card);
+  color:var(--ink2); cursor:pointer; -webkit-tap-highlight-color:transparent;
+  transition:background .15s ease, border-color .15s ease, color .15s ease;
+}
+.theme-toggle:hover{background:var(--sunken); border-color:var(--line2); color:var(--ink)}
+.theme-toggle:active{transform:scale(.96)}
+.theme-toggle:focus-visible{outline:2px solid var(--blue); outline-offset:2px}
+.theme-toggle svg{
+  width:15px; height:15px; display:block;
+  fill:none; stroke:currentColor; stroke-width:1.8;
+  stroke-linecap:round; stroke-linejoin:round;
+}
+.theme-toggle .tt-sun{display:none}
+html[data-theme="dark"] .theme-toggle .tt-moon{display:none}
+html[data-theme="dark"] .theme-toggle .tt-sun{display:block}
 h1{
   margin:10px 0 4px;
   font-size:25px; font-weight:700; letter-spacing:-.04em; line-height:1.24;
@@ -323,11 +344,9 @@ h1 em{font-style:normal; color:inherit}
 .share-btn.done{
   color:var(--green); background:var(--green-soft); border-color:transparent;
 }
-@media (prefers-color-scheme: dark){
-  .share-btn{background:var(--card)}
-  .share-btn.is-primary{background:var(--blue); border-color:var(--blue); color:#0d1117}
-  .share-btn.done{background:var(--green-soft); color:var(--green)}
-}
+html[data-theme="dark"] .share-btn{background:var(--card)}
+html[data-theme="dark"] .share-btn.is-primary{background:var(--blue); border-color:var(--blue); color:#0d1117}
+html[data-theme="dark"] .share-btn.done{background:var(--green-soft); color:var(--green)}
 /* 없는 쪽 — 눌리지 않는 버튼(커서 기본·흐린 회색) */
 .share-btn:disabled{
   color:var(--ink3); background:var(--bg2); border-color:var(--bg2); border-style:solid;
@@ -701,10 +720,8 @@ h1 em{font-style:normal; color:inherit}
 }
 .toast.on{opacity:1; transform:translate(-50%, 0)}
 .toast.ok{background:rgba(2,162,98,.96)}
-@media (prefers-color-scheme: dark){
-  .toast{background:rgba(242,244,246,.95); color:#191f28}
-  .toast.ok{background:rgba(62,207,142,.96); color:#0d1117}
-}
+html[data-theme="dark"] .toast{background:rgba(242,244,246,.95); color:#191f28}
+html[data-theme="dark"] .toast.ok{background:rgba(62,207,142,.96); color:#0d1117}
 [hidden]{display:none !important}
 
 /* ── 데스크톱: 한 단만 넓게, 위계는 그대로 ── */

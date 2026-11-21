@@ -9,7 +9,8 @@ from pathlib import Path
 from playwright.async_api import async_playwright
 
 from check_render import (expected_copy, expected_listing_copy, IOS_UA, DESKTOP_UA,  # 공유문 기대값 규칙 공유
-                          cash_plan, cash_peak_text, cash_row_text, short_day, won_short)
+                          cash_plan, cash_peak_text, cash_row_text, short_day, won_short,
+                          DARK_PREF)
 
 URL = "https://ipo.mydon.kr/"
 SITE_URL = "https://ipo.mydon.kr"
@@ -469,14 +470,96 @@ async def main():
         }))()""")
         await ctx.close()
 
+        # 테마: 기본 라이트 고정 + 상단 다크 토글 (시스템 설정과 무관)
+        thctx = await browser.new_context(
+            viewport={"width": 390, "height": 844}, device_scale_factor=2, is_mobile=True,
+            has_touch=True, user_agent=UA, locale="ko-KR", timezone_id="Asia/Seoul")
+        thp = await thctx.new_page()
+        th_errors = []
+        thp.on("console", lambda m: th_errors.append(f"console.{m.type}: {m.text}")
+                if m.type == "error" else None)
+        thp.on("pageerror", lambda e: th_errors.append(f"pageerror: {e}"))
+        await thp.goto(URL, wait_until="networkidle", timeout=45000)
+        await thp.wait_for_selector("#main:not([hidden])", timeout=15000)
+        await thp.wait_for_timeout(300)
+        res["theme_attr_default"] = await thp.evaluate(
+            "document.documentElement.getAttribute('data-theme')")
+        res["theme_bg_default"] = await thp.evaluate(
+            "getComputedStyle(document.body).backgroundColor")
+        res["theme_meta_default"] = await thp.get_attribute("#theme-color", "content")
+        res["theme_btn_visible"] = await thp.locator("#theme-toggle").is_visible()
+        res["theme_btn_label"] = await thp.get_attribute("#theme-toggle", "aria-label")
+        res["theme_btn_pressed"] = await thp.get_attribute("#theme-toggle", "aria-pressed")
+        res["theme_btn_svgs"] = await thp.locator("#theme-toggle svg").count()
+        res["theme_head_row"] = await thp.evaluate("""(() => {
+            const b = document.querySelector('.brand').getBoundingClientRect();
+            const u = document.querySelector('.updated').getBoundingClientRect();
+            const t = document.querySelector('#theme-toggle').getBoundingClientRect();
+            const bar = document.querySelector('.brandbar').getBoundingClientRect();
+            const cy = r => Math.round(r.top + r.height / 2);
+            return { toggle_w: Math.round(t.width),
+                     same_row: Math.abs(cy(b) - cy(t)) <= 6 && Math.abs(cy(u) - cy(t)) <= 6,
+                     right_of_updated: t.left >= u.right - 1,
+                     last_in_row: t.right <= bar.right + 2,
+                     inside_bar: t.top >= bar.top - 2 && t.bottom <= bar.bottom + 2,
+                     bar_h: Math.round(bar.height) };
+        })()""")
+        await thp.locator(".site-head").screenshot(
+            path=str(OUT / "preview-prod-mobile-header.png"))
+        await thp.locator("#theme-toggle").click()
+        await thp.wait_for_timeout(250)
+        res["theme_dark_attr"] = await thp.evaluate(
+            "document.documentElement.getAttribute('data-theme')")
+        res["theme_dark_bg"] = await thp.evaluate(
+            "getComputedStyle(document.body).backgroundColor")
+        res["theme_dark_stored"] = await thp.evaluate("localStorage.getItem('mydon-theme')")
+        res["theme_dark_label"] = await thp.get_attribute("#theme-toggle", "aria-label")
+        res["theme_dark_pressed"] = await thp.get_attribute("#theme-toggle", "aria-pressed")
+        res["theme_dark_meta"] = await thp.get_attribute("#theme-color", "content")
+        await thp.locator(".site-head").screenshot(
+            path=str(OUT / "preview-prod-mobile-header-dark.png"))
+        await thp.reload(wait_until="networkidle")
+        await thp.wait_for_selector("#main:not([hidden])", timeout=15000)
+        await thp.wait_for_timeout(200)
+        res["theme_persist_attr"] = await thp.evaluate(
+            "document.documentElement.getAttribute('data-theme')")
+        res["theme_persist_bg"] = await thp.evaluate(
+            "getComputedStyle(document.body).backgroundColor")
+        await thp.locator("#theme-toggle").click()
+        await thp.wait_for_timeout(250)
+        res["theme_light_back_attr"] = await thp.evaluate(
+            "document.documentElement.getAttribute('data-theme')")
+        res["theme_light_back_stored"] = await thp.evaluate("localStorage.getItem('mydon-theme')")
+        res["theme_errors"] = th_errors
+        await thctx.close()
+
         dark = await browser.new_context(
             viewport={"width": 390, "height": 844}, device_scale_factor=2, is_mobile=True,
             has_touch=True, user_agent=UA, locale="ko-KR", timezone_id="Asia/Seoul",
             color_scheme="dark")
         dpage = await dark.new_page()
+        # 시스템이 다크여도 기본은 라이트 — 저장값이 dark 일 때만 다크로 뜨는지
+        sd_errors = []
+        dpage.on("console", lambda m: sd_errors.append(f"console.{m.type}: {m.text}")
+                 if m.type == "error" else None)
         await dpage.goto(URL, wait_until="networkidle", timeout=45000)
         await dpage.wait_for_selector("#main:not([hidden])", timeout=15000)
         await dpage.wait_for_timeout(300)
+        res["sysdark_attr"] = await dpage.evaluate(
+            "document.documentElement.getAttribute('data-theme')")
+        res["sysdark_bg"] = await dpage.evaluate(
+            "getComputedStyle(document.body).backgroundColor")
+        await dpage.locator(".site-head").screenshot(
+            path=str(OUT / "preview-prod-mobile-header-sysdark.png"))
+        await dpage.add_init_script(DARK_PREF)
+        await dpage.reload(wait_until="networkidle", timeout=45000)
+        await dpage.wait_for_selector("#main:not([hidden])", timeout=15000)
+        await dpage.wait_for_timeout(300)
+        res["dark_theme_attr"] = await dpage.evaluate(
+            "document.documentElement.getAttribute('data-theme')")
+        res["dark_theme_bg"] = await dpage.evaluate(
+            "getComputedStyle(document.body).backgroundColor")
+        res["sysdark_errors"] = sd_errors
         await dpage.screenshot(path=str(OUT / "preview-prod-mobile-dark.png"), full_page=True)
         res["dark_ok"] = await dpage.locator(".ev").count()
         res["dark_share_visible"] = await dpage.locator("#share").is_visible()
@@ -527,6 +610,17 @@ async def main():
         res["desktop_ben_link"] = await dp.locator("#ben-link").is_visible()
         res["desktop_h_overflow"] = await dp.evaluate(
             "document.documentElement.scrollWidth > window.innerWidth + 1")
+        res["desktop_theme_btn"] = await dp.locator("#theme-toggle").is_visible()
+        res["desktop_theme_row"] = await dp.evaluate("""(() => {
+            const u = document.querySelector('.updated').getBoundingClientRect();
+            const t = document.querySelector('#theme-toggle').getBoundingClientRect();
+            const bar = document.querySelector('.brandbar').getBoundingClientRect();
+            return { same_row: Math.abs((u.top + u.height / 2) - (t.top + t.height / 2)) <= 6,
+                     right_of_updated: t.left >= u.right - 1,
+                     inside_bar: t.top >= bar.top - 2 && t.bottom <= bar.bottom + 2 };
+        })()""")
+        await dp.locator(".site-head").screenshot(
+            path=str(OUT / "preview-prod-desktop-header.png"))
         await dp.screenshot(path=str(OUT / "preview-prod-desktop.png"))
         await dp.locator("#tab-schedule").click()
         await dp.wait_for_timeout(300)
@@ -635,6 +729,39 @@ async def main():
         'res["share_grid"]["fills"]',
         'res["share_grid"]["fit"]',
         'res["share_placed_ok"]',
+        # 테마: 기본 라이트 고정 + 상단 다크 토글 (시스템 다크여도 라이트)
+        'res["theme_attr_default"] is None',
+        'res["theme_bg_default"] == "rgb(244, 246, 248)"',
+        'res["theme_meta_default"] == "#f4f6f8"',
+        'res["theme_btn_visible"]',
+        'res["theme_btn_label"] == "다크 모드로 전환"',
+        'res["theme_btn_pressed"] == "false"',
+        'res["theme_btn_svgs"] == 2',
+        'res["theme_head_row"]["same_row"]',
+        'res["theme_head_row"]["right_of_updated"]',
+        'res["theme_head_row"]["last_in_row"]',
+        'res["theme_head_row"]["inside_bar"]',
+        'res["theme_head_row"]["toggle_w"] >= 24',
+        'res["theme_head_row"]["bar_h"] <= 28',
+        'res["theme_dark_attr"] == "dark"',
+        'res["theme_dark_bg"] == "rgb(16, 16, 18)"',
+        'res["theme_dark_stored"] == "dark"',
+        'res["theme_dark_label"] == "라이트 모드로 전환"',
+        'res["theme_dark_pressed"] == "true"',
+        'res["theme_dark_meta"] == "#101012"',
+        'res["theme_persist_attr"] == "dark"',
+        'res["theme_persist_bg"] == "rgb(16, 16, 18)"',
+        'res["theme_light_back_attr"] is None',
+        'res["theme_light_back_stored"] == "light"',
+        'not res["theme_errors"]',
+        'res["sysdark_attr"] is None',
+        'res["sysdark_bg"] == "rgb(244, 246, 248)"',
+        'res["dark_theme_attr"] == "dark"',
+        'res["dark_theme_bg"] == "rgb(16, 16, 18)"',
+        'res["desktop_theme_btn"]',
+        'res["desktop_theme_row"]["same_row"]',
+        'res["desktop_theme_row"]["right_of_updated"]',
+        'res["desktop_theme_row"]["inside_bar"]',
         'res["share_native"] == "undefined"',
         'res["share_lines"] >= 3',
         'res["share_head_ok"]',

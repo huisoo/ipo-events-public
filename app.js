@@ -27,6 +27,40 @@
   function $(id) { return document.getElementById(id); }
   function has(v) { return v != null && String(v) !== ''; }
 
+  /* ── 테마 (기본 라이트 고정 · 상단 토글) ──────────
+   * - 저장값 mydon-theme(light/dark, 기본 light)만 신뢰한다. 시스템 다크는 무시.
+   * - 첫 페인트 전 data-theme 부여는 index.html <head> 인라인 스크립트가 맡는다(깜빡임 방지).
+   *   여기서는 아이콘·aria 동기화와 토글 클릭 처리만. */
+  var THEME_KEY = 'mydon-theme';
+  function currentTheme() {
+    return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+  }
+  function applyTheme(theme) {
+    var dark = theme === 'dark';
+    var root = document.documentElement;
+    if (dark) root.setAttribute('data-theme', 'dark');
+    else root.removeAttribute('data-theme');
+    var meta = $('theme-color');
+    if (meta) meta.setAttribute('content', dark ? '#101012' : '#f4f6f8');
+    var btn = $('theme-toggle');
+    if (btn) {
+      var label = dark ? '라이트 모드로 전환' : '다크 모드로 전환';
+      btn.setAttribute('aria-pressed', dark ? 'true' : 'false');
+      btn.setAttribute('aria-label', label);
+      btn.setAttribute('title', label);
+    }
+  }
+  function initTheme() {
+    applyTheme(currentTheme());
+    var btn = $('theme-toggle');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      var next = currentTheme() === 'dark' ? 'light' : 'dark';
+      applyTheme(next);
+      try { localStorage.setItem(THEME_KEY, next); } catch (e) { /* 저장 불가(사생활 모드)면 이번 화면만 전환 */ }
+    });
+  }
+
   function parseDay(iso) {
     var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
     return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
@@ -1333,6 +1367,7 @@
   });
 
   /* ── 시작 ─────────────────────────────── */
+  initTheme();
   fetch('data.json?t=' + Math.floor(Date.now() / 60000), { cache: 'no-store' })
     .then(function (r) {
       if (!r.ok) throw new Error('HTTP ' + r.status);
