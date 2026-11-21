@@ -31,6 +31,7 @@
 | `--green` / `--red` | `#02a262` / `#f04452` | `#3ecf8e` / `#ff6b75` | 추천·상승(빨강)/마감 임박 |
 
 - 글꼴은 **Pretendard Variable**(jsDelivr CDN) + `font-variant-numeric: tabular-nums`.
+- **테마는 기본 라이트 고정**입니다. `@media (prefers-color-scheme: dark)` 는 쓰지 않으므로 기기가 다크여도 화면은 밝게 뜨고, 헤더 오른쪽(`16:15 업데이트` 옆) 해/달 아이콘 버튼을 누를 때만 `html[data-theme="dark"]` 가 붙습니다. 선택은 `localStorage: mydon-theme`(`light`/`dark`, 기본 `light`)에 남고, `index.html` `<head>` 인라인 스크립트가 저장값이 `dark` 일 때 첫 페인트 전에 속성을 붙여 깜박임을 막습니다. `theme-color` 메타도 함께 바뀝니다.
 - 그림자는 `0 1px 2px` 수준만, 점선 테두리·파스텔 알약·이모지는 쓰지 않습니다. 아이콘은 인라인 SVG(15~17px).
 - 주 액션(청약 정보 공유)은 블루 솔리드, 보조 액션(상장 정보 공유·앱 열기·응원)은 화이트 + 1px 실선.
 - 상승/하락은 국내 관례대로 상승 빨강(`--red`)·하락 블루(`--blue`).
@@ -297,7 +298,7 @@ BROWSABLE 딥링크가 확인된 앱(2026-11-21 기준 — 근거는 `handoffs/�
 | 파일 | 역할 |
 | --- | --- |
 | `index.html` | 화면 뼈대 (헤더 · 1레벨 히어로 컨테이너 · 2레벨 접힘 혜택 · 고지문) |
-| `styles.css` | 모바일 390px 기준 스타일, 시스템 다크 모드 대응 |
+| `styles.css` | 모바일 390px 기준 스타일, 기본 라이트 고정 + 상단 토글 다크(`html[data-theme="dark"]`) |
 | `app.js` | `data.json` 렌더 — 히어로 요약과 접힘 혜택 행 (데이터에 코드가 있으면 복사 버튼도 동작) |
 | `data.json` | 표시할 모든 데이터 (공모주 + 이벤트 + 고지문) |
 | `check_render.py` | 390×844 Playwright 검증 + 스크린샷 생성 (스크린샷은 `.gitignore`, 저장소에 올리지 않음) |
@@ -321,6 +322,10 @@ python3 check_render.py
 ```
 
 콘솔 에러·가로 스크롤·요소 잘림·개인정보 문구 포함 여부에 더해,
+**테마**(기본 라이트 고정 — 시스템 다크에서도 `--bg` `#f4f6f8`·`data-theme` 없음 / 헤더 오른쪽 해·달 버튼이
+`업데이트` 옆 같은 줄·26px·이모지 아님·24px 높이 유지 / 누르면 `data-theme="dark"`·`--bg` `#101012`·
+`mydon-theme=dark` 저장·아이콘·`aria-label`·`aria-pressed`·`theme-color` 동기화 / 새로고침 후에도 다크 유지 /
+다시 누르면 라이트 복귀),
 **위계**(히어로가 접힌 아코디언보다 위, 오늘 청약/상장·결론·최소증거금·유튜브 요약·다음 청약 D-day가
 첫 화면 844px 안), **2레벨 기본 접힘과 펼침 동작**(행 상세에 조건·신청 방법·공식 링크),
 하단 응원 카드의 링크·`target`/`rel`·잘림 여부, **3탭 전환**(기본 오늘 요약 → `?tab=schedule`,
