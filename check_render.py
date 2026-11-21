@@ -14,9 +14,10 @@ data.json 을 로컬 HTTP 로 띄워 확인합니다(파일 직접 열면 fetch 
 - expiresAt 이 지난 테스트 항목은 숨기고, 오늘 만료·상시 항목은 노출
 - (회귀용) 코드가 들어온(ready) 항목의 복사 버튼 동작
 - 청약·상장 정보 공유 바(.share): 히어로와 철회·출처 사이에 **2버튼 고정(2열 그리드)** —
-  왼쪽 `📤 청약 정보 공유`(오늘 청약 또는 ipo.next 가 있을 때, 없으면 `:disabled` + `오늘 청약 없음`),
-  오른쪽 `📈 상장 정보 공유`(ipo.listing.hasListing 일 때, 없으면 `:disabled` + `오늘 상장 없음`).
-  두 버튼 44px 이상·같은 줄·같은 폭·글자 잘림 없음·비활성은 커서 default/점선,
+  왼쪽 `청약 정보 공유`(오늘 청약 또는 ipo.next 가 있을 때, 없으면 `:disabled` + `오늘 청약 없음`),
+  오른쪽 `상장 정보 공유`(ipo.listing.hasListing 일 때, 없으면 `:disabled` + `오늘 상장 없음`).
+  두 버튼 44px 이상·같은 줄·같은 폭·글자 잘림 없음·아이콘은 이모지가 아닌 인라인 SVG,
+  주 액션은 블루 솔리드·보조 액션은 화이트/1px 실선, 비활성은 커서 default + 흐린 회색 배경,
   navigator.share 로 {title,text,url} 전달(url 은 text 에 중복 없음),
   미지원(헤드리스)·AbortError 이외 오류 시 클립보드에 해당 정보 포맷
   (청약: 📌 {종목} ({M/DD} 마감) / * 항목 12개 / ✅ 청약 의견,
@@ -730,7 +731,7 @@ async def main():
                     fit: lbl.every(e => e.scrollWidth <= e.clientWidth + 1),
                 };
             })()""")
-            # 왼쪽 색(--sun-soft/--sun) · 오른쪽 색(--blue-soft/--blue) · 둘 다 굵게
+            # 버튼 위계 — 주 액션(청약)은 블루 솔리드+흰 글씨, 보조 액션(상장)은 흰 카드+잉크 글씨/실선 보더
             results["share_btn_style"] = await page.evaluate("""(() => {
                 const probe = v => { const d = document.createElement('div');
                     d.style.color = v; document.body.appendChild(d);
@@ -739,11 +740,15 @@ async def main():
                     const cs = getComputedStyle(document.querySelector(sel));
                     return { bg_ok: cs.backgroundColor === probe(bgVar),
                              fg_ok: cs.color === probe(fgVar),
-                             bold: Number(cs.fontWeight) >= 700 };
+                             border_ok: cs.borderTopColor === probe('var(--line2)'),
+                             weight: Number(cs.fontWeight) };
                 };
-                return { sub: st('#share-sub', 'var(--sun-soft)', 'var(--sun)'),
-                         listing: st('#share-listing', 'var(--blue-soft)', 'var(--blue)') };
+                return { sub: st('#share-sub', 'var(--blue)', '#ffffff'),
+                         listing: st('#share-listing', 'var(--card)', 'var(--ink)') };
             })()""")
+            # 버튼 아이콘은 이모지가 아니라 인라인 SVG
+            results["share_icons"] = await page.locator("#share .share-btn .ico svg").count()
+            results["ben_link_icon"] = await page.locator("#ben-link .ben-link-arrow svg").count()
             results["share_pos"] = await page.evaluate("""(() => {
                 const r = s => document.querySelector(s).getBoundingClientRect();
                 return { hero: Math.round(r('#sec-ipo').bottom), share: Math.round(r('#share').top),
@@ -1327,6 +1332,14 @@ async def main():
                 "#share-sub", "e => getComputedStyle(e).cursor")
             results["disabled_border"] = await gpage.eval_on_selector(
                 "#share-sub", "e => getComputedStyle(e).borderTopStyle")
+            results["disabled_muted"] = await gpage.evaluate("""(() => {
+                const probe = v => { const d = document.createElement('div');
+                    d.style.color = v; document.body.appendChild(d);
+                    const c = getComputedStyle(d).color; d.remove(); return c; };
+                const cs = getComputedStyle(document.querySelector('#share-sub'));
+                return cs.color === probe('var(--ink3)')
+                    && cs.backgroundColor === probe('var(--bg2)');
+            })()""")
             await gpage.locator("#share").screenshot(
                 path=str(ROOT / "preview-mobile-share-off.png"))
             results["listing_mock_errors"] = g_errors
@@ -1475,10 +1488,12 @@ async def main():
                 ".hero.is-list .app-open", GET_APP)
             results["listing_app_btns"] = listing_apps
             results["listing_app_count"] = len(listing_apps)
+            results["listing_app_icons"] = await apppage.locator(
+                ".hero.is-list .app-open .ico svg").count()
             # Android UA — IBK투자증권은 BROWSABLE 딥링크가 확인되지 않아 Play 스토어 앱 페이지로
             results["listing_app_ok"] = bool(listing_apps) and all([
-                listing_apps[0]["text"].startswith("📱"),
-                listing_apps[0]["text"].endswith("IBK투자증권 앱 열기"),
+                listing_apps[0]["text"] == "IBK투자증권 앱 열기",
+                results["listing_app_icons"] == 1,
                 listing_apps[0]["href"] == play_url("com.ibks.ione.mts"),
                 listing_apps[0]["target"] == "_blank",
                 "noopener" in listing_apps[0]["rel"],
@@ -1564,13 +1579,13 @@ async def main():
             # KB증권은 Play 스토어로, NH투자증권은 앱 매니페스트에서 확인한 txsmart://txrun 로
             results["br_two_on_multi"] = (
                 len(by_card) == 2
-                and [b["text"] for b in by_card[0]] == ["📱KB증권 앱 열기", "📱NH투자증권 앱 열기"]
+                and [b["text"] for b in by_card[0]] == ["KB증권 앱 열기", "NH투자증권 앱 열기"]
                 and by_card[0][0]["href"] == play_url("com.kbsec.mts.iplustarngm2")
                 and by_card[0][0]["target"] == "_blank"
                 and by_card[0][1]["href"] == intent_url("com.wooriwm.txsmart", "txsmart", "txrun"))
             results["br_one_on_single"] = (
                 len(by_card[1]) == 1
-                and by_card[1][0]["text"] == "📱IBK투자증권 앱 열기"
+                and by_card[1][0]["text"] == "IBK투자증권 앱 열기"
                 and by_card[1][0]["href"] == play_url("com.ibks.ione.mts")
                 and by_card[1][0]["target"] == "_blank")
             # 확인된 앱은 intent://(같은 창) + Play 폴백, 확인 안 된 앱은 Play 스토어(새 탭)
@@ -1637,296 +1652,304 @@ async def main():
     simple_benefits = [b for b in live_benefits if b.get("category") == "simple"]
     inj_live = _live(test_events())
 
-    ok = (True
-          and "하나에어로다이내믹스" in results["app_hero_name"]
-          and results["listing_app_count"] == 1
-          and results["listing_app_ok"]
-          and results["listing_app_placed"]
-          and not results["app_overflow"]
-          and not results["app_clipped"]
-          and not results["app_errors"]
-          and results["ios_app_ok"]
-          and not results["ios_overflow"]
-          and not results["ios_errors"]
-          and results["desktop_app_ok"]
-          and not results["desktop_errors"]
-          and results["br_cards"] == 2
-          and results["br_two_on_multi"]
-          and results["br_one_on_single"]
-          and results["br_links_ok"]
-          and not results["br_overflow"]
-          and not results["br_clipped"]
-          and not results["br_errors"]
-          and results["dark_app_count"] == 1
-          and results["dark_app_h"] >= 36
-          and not results["dark_app_overflow"]
-          and not results["dark_app_errors"]
-          and results["tabs_visible"]
-          and results["tab_count"] == 3
-          and results["tab_labels"] == ["오늘 요약", "전체 일정", "혜택"]
-          and results["tab_row"]["three"]
-          and results["tab_row"]["same_row"]
-          and results["tab_row"]["equal_w"]
-          and results["tab_row"]["fit"]
-          and results["tab_default_today"]
-          and results["tab_height"] >= 40
-          and results["tab_switch_on"]
-          and results["tab_url_has_query"]
-          and results["sch_counts"]["subscribe"] >= 10
-          and results["sch_counts"]["listing"] >= 1
-          and results["sch_first"] and results["sch_first"]["dday"].startswith("D-")
-          and results["sch_first"]["when"].endswith("청약")
-          and "희망" in (results["sch_first"]["price"] or "")
-          and results["sch_first"]["sub"] and "증권" in results["sch_first"]["sub"]
-          and all(d.startswith("D-") or d in ("청약 중", "청약 종료") for d in results["sch_ddays"])
-          and len(results["sch_list_items"]) >= 1
-          and all("상장" in it for it in results["sch_list_items"])
-          and any("38.co.kr" in (u or "") for u in results["sch_src_urls"])
-          and results["sch_has_38"]
-          and not results["sch_h_overflow"]
-          and not results["sch_clipped"]
-          and results["sch_privacy_hits"] == []
-          # 필요 금액 카드 — 피크 자금·날짜·합계·추정 표시·칩 재계산
-          and results["cash_exists"] == 1
-          and results["cash_above_list"]
-          and results["cash_peak"] == cash_peak_text(plan_m)
-          and results["cash_when"].startswith(short_day(plan_m["peak"][0]))
-          and all(n in results["cash_when"] for n in plan_m["peak"][1]["names"][:3])
-          and results["cash_total"] == won_short(plan_m["total"])
-          and results["cash_count"] == str(plan_m["count"])
-          and results["cash_scope"] == plan_m["month_label"]
-          and "추정치입니다" in results["cash_note"]
-          and results["cash_chips"][0] == [plan_m["month_label"], "true"]
-          and results["cash_chips"][1] == [plan_m["all_label"], "false"]
-          and results["cash_chips"][2][1] == "true"
-          and "스팩 제외" in results["cash_chips"][2][0]
-          and results["cash_rows"] == [cash_row_text(it) for it in
-                                       sorted(IPO["upcoming"]["subscribe"],
-                                              key=lambda x: str(x.get("start") or "9999"))]
-          and results["cash_est_rows"] >= 1
-          and results["cash_all_peak"] == cash_peak_text(plan_a)
-          and results["cash_all_when"].startswith(short_day(plan_a["peak"][0]))
-          and results["cash_all_total"] == won_short(plan_a["total"])
-          and results["cash_all_count"] == str(plan_a["count"])
-          and results["cash_all_scope"] == plan_a["all_label"]
-          and results["cash_all_pressed"] == ["false", "true", "true"]
-          and results["cash_spac_off_peak"] == cash_peak_text(plan_as)
-          and results["cash_spac_off_total"] == won_short(plan_as["total"])
-          and results["cash_spac_off_count"] == str(plan_as["count"])
-          and results["cash_spac_pressed"] == "false"
-          and results["cash_month_spac_peak"] == cash_peak_text(plan_ms)
-          and results["cash_month_spac_total"] == won_short(plan_ms["total"])
-          and results["cash_month_spac_count"] == str(plan_ms["count"])
-          and results["cash_rows_after"] == results["cash_rows"]
-          and results["cash_restored"] == {"peak": cash_peak_text(plan_m),
-                                           "chip": "true", "spac": "true"}
-          and all(h >= 28 for h in results["cash_chip_h"])
-          and not results["cash_clipped"]
-          and not results["dark_cash_clipped"]
-          and results["dark_cash_visible"]
-          and results["dark_cash_peak"] == cash_peak_text(plan_m)
-          and results["desktop_cash_peak"] == cash_peak_text(plan_m)
-          and not results["sch_errors"]
-          and results["tab_back_today"]
-          and results["dark_sch_visible"]
-          and not results["dark_sch_overflow"]
-          and results["desktop_sch_cards"] >= 10
-          and not results["desktop_sch_overflow"]
-          and results["deeplink_schedule"]
-          and results["deeplink_cards"] >= 10
-          # 정보 공유 바 — 2버튼 고정(청약·상장)
-          and results["share_visible"]
-          and results["share_label"].startswith("단톡방에")
-          and "상장" in results["share_label"]
-          and len(results["share_btns"]) == 2
-          and results["share_ids"] == ["share-sub", "share-listing"]
-          and results["share_btns"][0].startswith("📤")
-          and results["share_btns"][0].endswith("청약 정보 공유")
-          and results["share_btns"][1].startswith("📈")
-          and results["share_btns"][1].endswith("상장 정보 공유")
-          and results["share_disabled"] == [False, False]
-          and min(results["share_btn_h"]) >= 44
-          and all(ws == "nowrap" for ws in results["share_white_space"])
-          and results["share_grid"]["count"] == 2
-          and results["share_grid"]["same_row"]
-          and results["share_grid"]["equal_w"]
-          and results["share_grid"]["fills"]
-          and results["share_grid"]["fit"]
-          and results["share_btn_style"]["sub"]["bg_ok"]
-          and results["share_btn_style"]["sub"]["fg_ok"]
-          and results["share_btn_style"]["sub"]["bold"]
-          and results["share_btn_style"]["listing"]["bg_ok"]
-          and results["share_btn_style"]["listing"]["fg_ok"]
-          and results["share_btn_style"]["listing"]["bold"]
-          and results["share_placed_ok"]
-          and results["share_native"] == "undefined"
-          and results["share_lines"] >= 3
-          and results["share_head_ok"]
-          and results["share_last_line"] == SITE_URL
-          and results["share_exact"]
-          and results["share_next_fallback"]
-          and results["share_no_summary"]
-          and results["share_no_listing"]
-          and results["share_only_subscribe_names"]
-          and not results["share_privacy_hits"]
-          and "청약 정보" in results["share_copy_toast"]
-          and results["share_copy_label"] == "복사됐어요"
-          and results["share_copy_label_back"] == "청약 정보 공유"
-          and results["share_fallback_clipboard"]
-          and "복사" in results["share_fallback_toast"]
-          # 오른쪽 — 상장 정보 포맷
-          and results["list_exact"]
-          and results["list_head_ok"]
-          and results["list_bullets"] == 7
-          and results["list_last_line"] == SITE_URL
-          and results["list_url_once"]
-          and results["list_no_subscribe_name"]
-          and not results["list_privacy_hits"]
-          and "상장 정보" in results["list_copy_toast"]
-          and results["list_copy_label"] == "복사됐어요"
-          and results["list_copy_label_back"] == "상장 정보 공유"
-          and results["stub_share_type"] == "function"
-          and results["stub_share_label"] == "청약 정보 공유"
-          and results["stub_share_toast"] == ""
-          and results["stub_list_label"] == "상장 정보 공유"
-          and results["abort_clipboard_empty"]
-          and results["abort_toast_empty"]
-          and results["abort_label"] == "청약 정보 공유"
-          and not results["abort_errors"]
-          and results["mock_exact"]
-          and results["mock_blocks"] == 2
-          and results["mock_bullets"] == 15
-          and results["mock_opinion"]
-          and results["mock_blank_between"]
-          and results["mock_dropped_unknown"]
-          and results["mock_url_once"]
-          and results["mock_disabled"] == [False, True]
-          and results["mock_labels"] == ["청약 정보 공유", "오늘 상장 없음"]
-          and results["ldisabled"] == [True, False]
-          and results["llabels"] == ["오늘 청약 없음", "상장 정보 공유"]
-          and results["lmock_exact"]
-          and results["lmock_bullets"] == 7
-          and results["lmock_url_once"]
-          and results["ldisabled_no_copy"]
-          and results["disabled_cursor"] == "default"
-          and results["disabled_border"] == "dashed"
-          and results["lsparse_exact"]
-          and results["lsparse_dropped"]
-          and results["no_ipo_share_visible"]
-          and results["no_ipo_disabled"] == [True, True]
-          and results["no_ipo_btns"][0].startswith("📤")
-          and results["no_ipo_btns"][0].endswith("오늘 청약 없음")
-          and results["no_ipo_btns"][1].startswith("📈")
-          and results["no_ipo_btns"][1].endswith("오늘 상장 없음")
-          and results["no_ipo_clipboard_empty"]
-          and results["no_ipo_toast_empty"]
-          and not results["sub_errors"]
-          and not results["listing_mock_errors"]
-          and not results["sparse_errors"]
-          and bool(results["shared_payload"])
-          and results["shared_payload"].get("url") == SITE_URL
-          and results["shared_payload"].get("title") == "공모주 청약 정보"
-          and results["shared_payload"].get("text") == expected_body(DATA)
-          and SITE_URL not in (results["shared_payload"].get("text") or "")
-          and bool(results["shared_listing_payload"])
-          and results["shared_listing_payload"].get("url") == SITE_URL
-          and results["shared_listing_payload"].get("title") == "공모주 상장 정보"
-          and results["shared_listing_payload"].get("text") == listing_block(DATA)
-          and SITE_URL not in (results["shared_listing_payload"].get("text") or "")
-          and "복사" in results["share_reject_toast"]
-          and results["share_reject_clipboard"]
-          and "복사" in results["list_reject_toast"]
-          and results["list_reject_clipboard"]
-          and results["dark_share_visible"]
-          and results["dark_share_count"] == 2
-          and min(results["dark_share_btns"]) >= 44
-          and results["dark_share_labels"] == ["청약 정보 공유", "상장 정보 공유"]
-          and results["dark_share_grid"]["same_row"]
-          and results["dark_share_grid"]["fit"]
-          and not results["dark_share_overflow"]
-          and results["desktop_share_visible"]
-          and results["desktop_share_labels"] == ["청약 정보 공유", "상장 정보 공유"]
-          and results["desktop_share_disabled"] == [False, False]
-          and results["desktop_share_fit"]
-          and not results["stub_errors"]
-          and not results["reject_errors"]
-          and results["hero_count"] == 1
-          and hero_ok
-          and "다음 청약" in results["next_rows"]
-          and results["next_dday"].startswith("D-")
-          and results["hierarchy_ok"]
-          and results["no_invite_words"]
-          # 오늘 요약 — 혜택 상세는 없고 한 줄 배너만
-          and results["today_has_no_detail"]
-          and results["today_has_no_accordion"]
-          and results["ben_link_visible"]
-          and results["ben_link_text"].startswith("🎁 증권사 개설·현금성 혜택")
-          and results["ben_link_text"].endswith("보기 →")
-          and results["ben_link_href"] == "?tab=benefits"
-          and results["ben_link_tab"] == "benefits"
-          and results["ben_link_count"] == str(len(sec_benefits))
-          and results["ben_link_placed"]
-          and results["ben_link_switch"]
-          and results["ben_link_url_ok"]
-          # 혜택 탭 — 칩 3개 · 카드 필수 필드 · 카테고리 필터
-          and results["bf_visible"]
-          and [c["id"] for c in results["bf_chips"]] == ["all", "securities", "simple"]
-          and results["bf_chips"][0]["on"] and results["bf_chips"][0]["pressed"] == "true"
-          and results["bf_chips"][1]["pressed"] == "false"
-          and results["bf_chip_row"]["count"] == 3
-          and results["bf_chip_row"]["fit"] and results["bf_chip_row"]["one_row"]
-          and results["bf_chip_counts"] == [str(len(live_benefits)),
-                                            str(len(sec_benefits)), str(len(simple_benefits))]
-          and results["bf_count"] == len(live_benefits)
-          and len(results["bf_securities"]) == len(sec_benefits) >= 4
-          and len(results["bf_simple"]) == len(simple_benefits) >= 3
-          and results["bf_cats"] == ["securities", "simple"]
-          and results["bf_all_fields"]
-          and results["bf_links_unique"]
-          and all(d.startswith("D-") or d in ("오늘 마감", "상시") for d in results["bf_ddays"])
-          and results["bf_terms_open"] and results["bf_terms_items"] >= 1
-          and results["bf_filter_securities"] == ["securities"] * len(sec_benefits)
-          and results["bf_filter_simple"] == ["simple"] * len(simple_benefits)
-          and results["bf_filter_all"] == (["securities"] * len(sec_benefits)
-                                           + ["simple"] * len(simple_benefits))
-          and not results["bf_clipped"]
-          and results["bf_scroll_top"] == results["viewport_width"]
-          # 주입 — 만료 숨김 · 오늘/상시 노출 · 링크 카드
-          and results["inject_cards"] == len(live_benefits) + len(inj_live)
-          and results["expired_hidden"]
-          and results["today_shown"]
-          and results["always_shown"]
-          and results["note_mentions_hidden"]
-          and results["inject_link_href"].startswith("https://example.com/")
-          and results["inject_link_target"] == "_blank"
-          and "앱에서 이벤트 신청" in results["inject_link_how"]
-          # 다크 · 데스크톱 · 딥링크
-          and results["dark_bf_visible"]
-          and results["dark_bf_cards"] == len(live_benefits)
-          and not results["dark_bf_overflow"]
-          and results["desktop_ben_link"]
-          and results["desktop_bf_cards"] == len(live_benefits)
-          and not results["desktop_bf_overflow"]
-          and results["deeplink_benefits"]
-          and results["deeplink_bf_cards"] == len(live_benefits)
-          and results["deeplink_bf_chip"] == f"전체 {len(live_benefits)}"
-          and not results["errors"]
-          and results["support_visible"]
-          and results["support_title"].endswith("커피 한 잔 응원하기")
-          and results["support_href"] == "https://qr.kakaopay.com/Ej7j2Gwco"
-          and results["support_target"] == "_blank"
-          and "noopener" in (results["support_rel"] or "")
-          and "noreferrer" in (results["support_rel"] or "")
-          and results["support_links"] == 1
-          and results["support_above_footer"]
-          and results["support_btn_h"] >= 36
-          and not results["inject_errors"]
-          and not results["dark_errors"]
-          and not results["desktop_errors"]
-          and not results["h_overflow"]
-          and not results["clipped"]
-          and not results["privacy_hits"]
-          and not results["desktop_h_overflow"])
+    # 조건을 한 줄씩 따로 평가합니다 — 실패한 조건만 이름 그대로 찍혀서
+    # 어느 확인이 깨졌는지 바로 보입니다(조건 자체는 예전 and 체인과 같습니다).
+    _conds = [
+        'True',
+        '"하나에어로다이내믹스" in results["app_hero_name"]',
+        'results["listing_app_count"] == 1',
+        'results["listing_app_ok"]',
+        'results["listing_app_placed"]',
+        'not results["app_overflow"]',
+        'not results["app_clipped"]',
+        'not results["app_errors"]',
+        'results["ios_app_ok"]',
+        'not results["ios_overflow"]',
+        'not results["ios_errors"]',
+        'results["desktop_app_ok"]',
+        'not results["desktop_errors"]',
+        'results["br_cards"] == 2',
+        'results["br_two_on_multi"]',
+        'results["br_one_on_single"]',
+        'results["br_links_ok"]',
+        'not results["br_overflow"]',
+        'not results["br_clipped"]',
+        'not results["br_errors"]',
+        'results["dark_app_count"] == 1',
+        'results["dark_app_h"] >= 36',
+        'not results["dark_app_overflow"]',
+        'not results["dark_app_errors"]',
+        'results["tabs_visible"]',
+        'results["tab_count"] == 3',
+        'results["tab_labels"] == ["오늘 요약", "전체 일정", "혜택"]',
+        'results["tab_row"]["three"]',
+        'results["tab_row"]["same_row"]',
+        'results["tab_row"]["equal_w"]',
+        'results["tab_row"]["fit"]',
+        'results["tab_default_today"]',
+        'results["tab_height"] >= 40',
+        'results["tab_switch_on"]',
+        'results["tab_url_has_query"]',
+        'results["sch_counts"]["subscribe"] >= 10',
+        'results["sch_counts"]["listing"] >= 1',
+        'results["sch_first"]',
+        'results["sch_first"]["dday"].startswith("D-")',
+        'results["sch_first"]["when"].endswith("청약")',
+        '"희망" in (results["sch_first"]["price"] or "")',
+        'results["sch_first"]["sub"]',
+        '"증권" in results["sch_first"]["sub"]',
+        'all(d.startswith("D-") or d in ("청약 중", "청약 종료") for d in results["sch_ddays"])',
+        'len(results["sch_list_items"]) >= 1',
+        'all("상장" in it for it in results["sch_list_items"])',
+        'any("38.co.kr" in (u or "") for u in results["sch_src_urls"])',
+        'results["sch_has_38"]',
+        'not results["sch_h_overflow"]',
+        'not results["sch_clipped"]',
+        'results["sch_privacy_hits"] == []',
+        'results["cash_exists"] == 1',
+        'results["cash_above_list"]',
+        'results["cash_peak"] == cash_peak_text(plan_m)',
+        'results["cash_when"].startswith(short_day(plan_m["peak"][0]))',
+        'all(n in results["cash_when"] for n in plan_m["peak"][1]["names"][:3])',
+        'results["cash_total"] == won_short(plan_m["total"])',
+        'results["cash_count"] == str(plan_m["count"])',
+        'results["cash_scope"] == plan_m["month_label"]',
+        '"추정치입니다" in results["cash_note"]',
+        'results["cash_chips"][0] == [plan_m["month_label"], "true"]',
+        'results["cash_chips"][1] == [plan_m["all_label"], "false"]',
+        'results["cash_chips"][2][1] == "true"',
+        '"스팩 제외" in results["cash_chips"][2][0]',
+        'results["cash_rows"] == [cash_row_text(it) for it in sorted(IPO["upcoming"]["subscribe"], key=lambda x: str(x.get("start") or "9999"))]',
+        'results["cash_est_rows"] >= 1',
+        'results["cash_all_peak"] == cash_peak_text(plan_a)',
+        'results["cash_all_when"].startswith(short_day(plan_a["peak"][0]))',
+        'results["cash_all_total"] == won_short(plan_a["total"])',
+        'results["cash_all_count"] == str(plan_a["count"])',
+        'results["cash_all_scope"] == plan_a["all_label"]',
+        'results["cash_all_pressed"] == ["false", "true", "true"]',
+        'results["cash_spac_off_peak"] == cash_peak_text(plan_as)',
+        'results["cash_spac_off_total"] == won_short(plan_as["total"])',
+        'results["cash_spac_off_count"] == str(plan_as["count"])',
+        'results["cash_spac_pressed"] == "false"',
+        'results["cash_month_spac_peak"] == cash_peak_text(plan_ms)',
+        'results["cash_month_spac_total"] == won_short(plan_ms["total"])',
+        'results["cash_month_spac_count"] == str(plan_ms["count"])',
+        'results["cash_rows_after"] == results["cash_rows"]',
+        'results["cash_restored"] == {"peak": cash_peak_text(plan_m), "chip": "true", "spac": "true"}',
+        'all(h >= 28 for h in results["cash_chip_h"])',
+        'not results["cash_clipped"]',
+        'not results["dark_cash_clipped"]',
+        'results["dark_cash_visible"]',
+        'results["dark_cash_peak"] == cash_peak_text(plan_m)',
+        'results["desktop_cash_peak"] == cash_peak_text(plan_m)',
+        'not results["sch_errors"]',
+        'results["tab_back_today"]',
+        'results["dark_sch_visible"]',
+        'not results["dark_sch_overflow"]',
+        'results["desktop_sch_cards"] >= 10',
+        'not results["desktop_sch_overflow"]',
+        'results["deeplink_schedule"]',
+        'results["deeplink_cards"] >= 10',
+        'results["share_visible"]',
+        'results["share_label"].startswith("단톡방에")',
+        '"상장" in results["share_label"]',
+        'len(results["share_btns"]) == 2',
+        'results["share_ids"] == ["share-sub", "share-listing"]',
+        'results["share_icons"] == 2',
+        'results["share_btns"][0] == "청약 정보 공유"',
+        'results["share_btns"][1] == "상장 정보 공유"',
+        'results["share_disabled"] == [False, False]',
+        'min(results["share_btn_h"]) >= 44',
+        'all(ws == "nowrap" for ws in results["share_white_space"])',
+        'results["share_grid"]["count"] == 2',
+        'results["share_grid"]["same_row"]',
+        'results["share_grid"]["equal_w"]',
+        'results["share_grid"]["fills"]',
+        'results["share_grid"]["fit"]',
+        'results["share_btn_style"]["sub"]["bg_ok"]',
+        'results["share_btn_style"]["sub"]["fg_ok"]',
+        'results["share_btn_style"]["sub"]["weight"] >= 700',
+        'results["share_btn_style"]["listing"]["bg_ok"]',
+        'results["share_btn_style"]["listing"]["fg_ok"]',
+        'results["share_btn_style"]["listing"]["border_ok"]',
+        'results["share_btn_style"]["listing"]["weight"] >= 600',
+        'results["share_placed_ok"]',
+        'results["share_native"] == "undefined"',
+        'results["share_lines"] >= 3',
+        'results["share_head_ok"]',
+        'results["share_last_line"] == SITE_URL',
+        'results["share_exact"]',
+        'results["share_next_fallback"]',
+        'results["share_no_summary"]',
+        'results["share_no_listing"]',
+        'results["share_only_subscribe_names"]',
+        'not results["share_privacy_hits"]',
+        '"청약 정보" in results["share_copy_toast"]',
+        'results["share_copy_label"] == "복사됐어요"',
+        'results["share_copy_label_back"] == "청약 정보 공유"',
+        'results["share_fallback_clipboard"]',
+        '"복사" in results["share_fallback_toast"]',
+        'results["list_exact"]',
+        'results["list_head_ok"]',
+        'results["list_bullets"] == 7',
+        'results["list_last_line"] == SITE_URL',
+        'results["list_url_once"]',
+        'results["list_no_subscribe_name"]',
+        'not results["list_privacy_hits"]',
+        '"상장 정보" in results["list_copy_toast"]',
+        'results["list_copy_label"] == "복사됐어요"',
+        'results["list_copy_label_back"] == "상장 정보 공유"',
+        'results["stub_share_type"] == "function"',
+        'results["stub_share_label"] == "청약 정보 공유"',
+        'results["stub_share_toast"] == ""',
+        'results["stub_list_label"] == "상장 정보 공유"',
+        'results["abort_clipboard_empty"]',
+        'results["abort_toast_empty"]',
+        'results["abort_label"] == "청약 정보 공유"',
+        'not results["abort_errors"]',
+        'results["mock_exact"]',
+        'results["mock_blocks"] == 2',
+        'results["mock_bullets"] == 15',
+        'results["mock_opinion"]',
+        'results["mock_blank_between"]',
+        'results["mock_dropped_unknown"]',
+        'results["mock_url_once"]',
+        'results["mock_disabled"] == [False, True]',
+        'results["mock_labels"] == ["청약 정보 공유", "오늘 상장 없음"]',
+        'results["ldisabled"] == [True, False]',
+        'results["llabels"] == ["오늘 청약 없음", "상장 정보 공유"]',
+        'results["lmock_exact"]',
+        'results["lmock_bullets"] == 7',
+        'results["lmock_url_once"]',
+        'results["ldisabled_no_copy"]',
+        'results["disabled_cursor"] == "default"',
+        'results["disabled_border"] == "solid"',
+        'results["disabled_muted"]',
+        'results["lsparse_exact"]',
+        'results["lsparse_dropped"]',
+        'results["no_ipo_share_visible"]',
+        'results["no_ipo_disabled"] == [True, True]',
+        'results["no_ipo_btns"][0] == "오늘 청약 없음"',
+        'results["no_ipo_btns"][1] == "오늘 상장 없음"',
+        'results["no_ipo_clipboard_empty"]',
+        'results["no_ipo_toast_empty"]',
+        'not results["sub_errors"]',
+        'not results["listing_mock_errors"]',
+        'not results["sparse_errors"]',
+        'bool(results["shared_payload"])',
+        'results["shared_payload"].get("url") == SITE_URL',
+        'results["shared_payload"].get("title") == "공모주 청약 정보"',
+        'results["shared_payload"].get("text") == expected_body(DATA)',
+        'SITE_URL not in (results["shared_payload"].get("text") or "")',
+        'bool(results["shared_listing_payload"])',
+        'results["shared_listing_payload"].get("url") == SITE_URL',
+        'results["shared_listing_payload"].get("title") == "공모주 상장 정보"',
+        'results["shared_listing_payload"].get("text") == listing_block(DATA)',
+        'SITE_URL not in (results["shared_listing_payload"].get("text") or "")',
+        '"복사" in results["share_reject_toast"]',
+        'results["share_reject_clipboard"]',
+        '"복사" in results["list_reject_toast"]',
+        'results["list_reject_clipboard"]',
+        'results["dark_share_visible"]',
+        'results["dark_share_count"] == 2',
+        'min(results["dark_share_btns"]) >= 44',
+        'results["dark_share_labels"] == ["청약 정보 공유", "상장 정보 공유"]',
+        'results["dark_share_grid"]["same_row"]',
+        'results["dark_share_grid"]["fit"]',
+        'not results["dark_share_overflow"]',
+        'results["desktop_share_visible"]',
+        'results["desktop_share_labels"] == ["청약 정보 공유", "상장 정보 공유"]',
+        'results["desktop_share_disabled"] == [False, False]',
+        'results["desktop_share_fit"]',
+        'not results["stub_errors"]',
+        'not results["reject_errors"]',
+        'results["hero_count"] == 1',
+        'hero_ok',
+        '"다음 청약" in results["next_rows"]',
+        'results["next_dday"].startswith("D-")',
+        'results["hierarchy_ok"]',
+        'results["no_invite_words"]',
+        'results["today_has_no_detail"]',
+        'results["today_has_no_accordion"]',
+        'results["ben_link_visible"]',
+        'results["ben_link_text"] == "증권사 개설·현금성 혜택 " + results["ben_link_count"] + "건 보기"',
+        'results["ben_link_icon"] == 1',
+        'results["ben_link_href"] == "?tab=benefits"',
+        'results["ben_link_tab"] == "benefits"',
+        'results["ben_link_count"] == str(len(sec_benefits))',
+        'results["ben_link_placed"]',
+        'results["ben_link_switch"]',
+        'results["ben_link_url_ok"]',
+        'results["bf_visible"]',
+        '[c["id"] for c in results["bf_chips"]] == ["all", "securities", "simple"]',
+        'results["bf_chips"][0]["on"]',
+        'results["bf_chips"][0]["pressed"] == "true"',
+        'results["bf_chips"][1]["pressed"] == "false"',
+        'results["bf_chip_row"]["count"] == 3',
+        'results["bf_chip_row"]["fit"]',
+        'results["bf_chip_row"]["one_row"]',
+        'results["bf_chip_counts"] == [str(len(live_benefits)), str(len(sec_benefits)), str(len(simple_benefits))]',
+        'results["bf_count"] == len(live_benefits)',
+        'len(results["bf_securities"]) == len(sec_benefits) >= 4',
+        'len(results["bf_simple"]) == len(simple_benefits) >= 3',
+        'results["bf_cats"] == ["securities", "simple"]',
+        'results["bf_all_fields"]',
+        'results["bf_links_unique"]',
+        'all(d.startswith("D-") or d in ("오늘 마감", "상시") for d in results["bf_ddays"])',
+        'results["bf_terms_open"]',
+        'results["bf_terms_items"] >= 1',
+        'results["bf_filter_securities"] == ["securities"] * len(sec_benefits)',
+        'results["bf_filter_simple"] == ["simple"] * len(simple_benefits)',
+        'results["bf_filter_all"] == (["securities"] * len(sec_benefits) + ["simple"] * len(simple_benefits))',
+        'not results["bf_clipped"]',
+        'results["bf_scroll_top"] == results["viewport_width"]',
+        'results["inject_cards"] == len(live_benefits) + len(inj_live)',
+        'results["expired_hidden"]',
+        'results["today_shown"]',
+        'results["always_shown"]',
+        'results["note_mentions_hidden"]',
+        'results["inject_link_href"].startswith("https://example.com/")',
+        'results["inject_link_target"] == "_blank"',
+        '"앱에서 이벤트 신청" in results["inject_link_how"]',
+        'results["dark_bf_visible"]',
+        'results["dark_bf_cards"] == len(live_benefits)',
+        'not results["dark_bf_overflow"]',
+        'results["desktop_ben_link"]',
+        'results["desktop_bf_cards"] == len(live_benefits)',
+        'not results["desktop_bf_overflow"]',
+        'results["deeplink_benefits"]',
+        'results["deeplink_bf_cards"] == len(live_benefits)',
+        'results["deeplink_bf_chip"] == f"전체 {len(live_benefits)}"',
+        'not results["errors"]',
+        'results["support_visible"]',
+        'results["support_title"].endswith("커피 한 잔 응원하기")',
+        'results["support_href"] == "https://qr.kakaopay.com/Ej7j2Gwco"',
+        'results["support_target"] == "_blank"',
+        '"noopener" in (results["support_rel"] or "")',
+        '"noreferrer" in (results["support_rel"] or "")',
+        'results["support_links"] == 1',
+        'results["support_above_footer"]',
+        'results["support_btn_h"] >= 36',
+        'not results["inject_errors"]',
+        'not results["dark_errors"]',
+        'not results["desktop_errors"]',
+        'not results["h_overflow"]',
+        'not results["clipped"]',
+        'not results["privacy_hits"]',
+        'not results["desktop_h_overflow"]',
+    ]
+    ok = True
+    _env = dict(globals())
+    _env.update({_k: _v for _k, _v in locals().items() if not _k.startswith('_')})
+    for _c in _conds:
+        try:
+            _v = bool(eval(_c, _env))
+        except Exception as _e:
+            _v = False
+            _c = _c + f'  [{type(_e).__name__}: {_e}]'
+        if not _v:
+            ok = False
+            print('FAIL:', _c)
     for k, v in results.items():
         print(f"{k}: {v}")
     print("\nRESULT:", "PASS" if ok else "CHECK")

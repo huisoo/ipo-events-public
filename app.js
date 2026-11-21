@@ -175,7 +175,7 @@
     return playUrl(a.play);
   }
 
-  /* brokers 문자열('KB증권 · NH투자증권') → 📱 {증권사} 앱 열기 칩(매핑된 증권사만) */
+  /* brokers 문자열('KB증권 · NH투자증권') → {증권사} 앱 열기 칩(매핑된 증권사만) */
   function brokerAppLinks(brokers) {
     var out = '';
     var seen = {};
@@ -191,7 +191,11 @@
         ? '' : ' target="_blank" rel="noopener"';
       out += '<a class="app-open" href="' + esc(url) + '"' + blank +
         ' aria-label="' + esc(name) + ' 앱 열기">' +
-        '<span class="ico" aria-hidden="true">📱</span>' + esc(name) + ' 앱 열기</a>';
+        '<span class="ico" aria-hidden="true">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"' +
+          ' stroke-linecap="round" stroke-linejoin="round">' +
+          '<rect x="6.5" y="2.8" width="11" height="18.4" rx="2.6"/><path d="M10.8 18.6h2.4"/>' +
+          '</svg></span>' + esc(name) + ' 앱 열기</a>';
     });
     return out ? '<div class="app-open-row">' + out + '</div>' : '';
   }
@@ -268,7 +272,7 @@
       if (hit && has(hit.equal)) vs += '<span class="v ' + tone(hit.equal) + '">균등 ' + esc(hit.equal) + '</span>';
       if (hit && has(hit.proportional)) vs += '<span class="v ' + tone(hit.proportional) + '">비례 ' + esc(hit.proportional) + '</span>';
       out += '<div class="yt-row">' +
-          '<span class="yt-name">🍸 ' + esc(hanjan.channel || '공모주한잔') + '</span>' + vs +
+          '<span class="yt-name">' + esc(hanjan.channel || '공모주한잔') + '</span>' + vs +
           (vUrl ? '<a class="yt-link" href="' + esc(vUrl) + '" target="_blank" rel="noopener"' +
             (hanjan.video && hanjan.video.title ? ' title="' + esc(hanjan.video.title) + '"' : '') + '>' +
             (hanjan.video && hanjan.video.url ? '분석 영상' : '채널') + '<i aria-hidden="true">›</i></a>' : '') +
@@ -279,7 +283,7 @@
     if (has(gm.verdict) || has(gm.note) || (gm.video && gm.video.url)) {
       var gUrl = (gm.video && gm.video.url) || gm.channelUrl || '';
       out += '<div class="yt-row">' +
-          '<span class="yt-name">📺 ' + esc(gm.name || '공모주린이') + '</span>' +
+          '<span class="yt-name">' + esc(gm.name || '공모주린이') + '</span>' +
           (has(gm.verdict) ? '<span class="v ' + tone(gm.verdict) + '">' + esc(gm.verdict) + '</span>' : '') +
           (has(gm.score) ? '<span class="score ' + scoreTone(gm.score) + '">' + esc(gm.score) + '</span>' : '') +
           (gUrl ? '<a class="yt-link" href="' + esc(gUrl) + '" target="_blank" rel="noopener">분석 영상<i aria-hidden="true">›</i></a>' : '') +

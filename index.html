@@ -5,7 +5,8 @@
 <title>오늘의 공모주 1분 요약 — 청약·상장·최소증거금</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#f4f2ee">
+<meta name="theme-color" content="#f4f6f8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#101012" media="(prefers-color-scheme: dark)">
 <meta name="description" content="오늘 청약·상장하는 공모주와 균등·비례 결론, 주관사별 최소 증거금, 공모주한잔·공모주린이 요약, 다음 청약 D-day까지 한 화면에 정리합니다.">
 <meta name="robots" content="index, follow, max-image-preview:large">
 <link rel="canonical" href="https://ipo.mydon.kr/">
@@ -18,7 +19,9 @@
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="오늘의 공모주 1분 요약">
 <meta name="twitter:description" content="오늘 청약·상장 여부, 균등·비례 결론, 주관사별 최소 증거금, 다음 청약 D-day까지 한 장에.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%88%3C/text%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='26' fill='%233182f6'/%3E%3Crect x='23' y='52' width='13' height='26' rx='5' fill='%23fff'/%3E%3Crect x='43.5' y='38' width='13' height='40' rx='5' fill='%23fff'/%3E%3Crect x='64' y='23' width='13' height='55' rx='5' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -26,10 +29,18 @@
 
   <header class="site-head">
     <div class="brandbar">
-      <span class="brand">📈 공모주 데일리</span>
+      <span class="brand">
+        <svg class="brand-mark" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+          <rect width="20" height="20" rx="5.2" fill="currentColor"/>
+          <rect x="4.5" y="10.6" width="2.5" height="5" rx="1.1" fill="#fff"/>
+          <rect x="8.75" y="7.8" width="2.5" height="7.8" rx="1.1" fill="#fff"/>
+          <rect x="13" y="4.9" width="2.5" height="10.7" rx="1.1" fill="#fff"/>
+        </svg>
+        공모주 데일리
+      </span>
       <span class="updated" id="updated"></span>
     </div>
-    <h1>오늘의 공모주 <em>1분 요약</em></h1>
+    <h1>오늘의 공모주 1분 요약</h1>
     <div class="dateline">
       <span id="dateline">—</span>
       <span class="draft" id="draft" hidden></span>
@@ -64,10 +75,10 @@
         <div class="share-row">
           <button type="button" class="share-btn is-primary" id="share-sub" data-share="subscribe"
             aria-label="오늘 청약 정보를 공유하기 (공유를 지원하지 않으면 링크까지 클립보드에 복사)">
-            <span class="ico" aria-hidden="true">📤</span><span class="lbl">청약 정보 공유</span></button>
+            <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3"/></svg></span><span class="lbl">청약 정보 공유</span></button>
           <button type="button" class="share-btn is-listing" id="share-listing" data-share="listing"
             aria-label="오늘 상장 정보를 공유하기 (공유를 지원하지 않으면 링크까지 클립보드에 복사)">
-            <span class="ico" aria-hidden="true">📈</span><span class="lbl">상장 정보 공유</span></button>
+            <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5"/><path d="M4 19h16"/><path d="m8 15 4-5 3 3 5-7"/></svg></span><span class="lbl">상장 정보 공유</span></button>
         </div>
       </div>
 
@@ -77,9 +88,8 @@
       <!-- 2레벨 · 혜택 탭으로 가는 한 줄 배너 (혜택 상세는 혜택 탭에 모아 둡니다) -->
       <a class="ben-link" id="ben-link" href="?tab=benefits" data-tab="benefits"
         aria-label="증권사 개설·현금성 혜택 전체 보기 (혜택 탭)">
-        <span class="ben-link-ico" aria-hidden="true">🎁</span>
         <span class="ben-link-txt">증권사 개설·현금성 혜택 <b><span id="ben-count">0</span>건</b> 보기</span>
-        <span class="ben-link-arrow" aria-hidden="true">→</span>
+        <span class="ben-link-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg></span>
       </a>
     </section>
 
@@ -90,7 +100,7 @@
 
     <section class="panel" id="panel-benefits" role="tabpanel" aria-labelledby="tab-benefits" hidden>
       <div class="bf-head">
-        <h2 class="bf-h">🎁 지금 챙길 혜택</h2>
+        <h2 class="bf-h">지금 챙길 혜택</h2>
         <p class="bf-n" id="bf-note"></p>
       </div>
       <div class="bf-chips" id="bf-chips" role="group" aria-label="혜택 분류 필터"></div>
@@ -105,13 +115,13 @@
 
   <!-- 3레벨 · 운영 응원 (조용한 카드, 푸터 위) -->
   <aside class="support" id="support" aria-labelledby="h-support" hidden>
-    <h2 class="sup-t" id="h-support"><span class="sup-ico" aria-hidden="true">☕</span>커피 한 잔 응원하기</h2>
+    <h2 class="sup-t" id="h-support"><span class="sup-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9h12v5a4.5 4.5 0 0 1-4.5 4.5h-3A4.5 4.5 0 0 1 5 14z"/><path d="M17 10.2h1.8a2.4 2.4 0 0 1 0 4.8H17"/><path d="M4.5 21.5h13"/></svg></span>커피 한 잔 응원하기</h2>
     <p class="sup-n">출근길 1분 공모주 요약이 도움이 되셨다면, 서버·데이터 운영에 가볍게 힘을 보태주실 수 있어요.</p>
     <a class="sup-btn" href="https://qr.kakaopay.com/Ej7j2Gwco" target="_blank" rel="noopener noreferrer">카카오페이로 보내기<i aria-hidden="true">↗</i></a>
   </aside>
 
   <footer class="foot" id="foot" hidden>
-    <div class="foot-title">⚠️ 꼭 읽어주세요</div>
+    <div class="foot-title">꼭 읽어주세요</div>
     <ul id="notice-list"></ul>
     <div class="foot-src" id="foot-src"></div>
   </footer>
