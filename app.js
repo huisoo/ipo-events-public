@@ -1039,7 +1039,7 @@
    * 미지원(데스크톱 등)이거나 AbortError 이외의 오류면 클립보드 복사본(마지막 줄에 URL)으로
    * 폴백합니다.
    */
-  var SITE_URL = 'https://ipo-events-public.vercel.app';
+  var SITE_URL = 'https://ipo-events-public.pages.dev';
   var SHARE_TITLE = '공모주 청약 정보';
   var LISTING_TITLE = '공모주 상장 정보';
   var subText = '';

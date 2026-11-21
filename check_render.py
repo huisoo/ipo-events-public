@@ -56,7 +56,7 @@ from playwright.async_api import async_playwright
 
 ROOT = Path(__file__).resolve().parent
 PORT = 8791
-SITE_URL = "https://ipo-events-public.vercel.app"
+SITE_URL = "https://ipo-events-public.pages.dev"
 DATA = json.loads((ROOT / "data.json").read_text(encoding="utf-8"))
 IPO = DATA.get("ipo", {})
 BASE = f"http://127.0.0.1:{PORT}/"

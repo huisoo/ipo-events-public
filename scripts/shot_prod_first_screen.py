@@ -9,7 +9,7 @@ from pathlib import Path
 
 from playwright.async_api import async_playwright
 
-URL = "https://ipo-events-public.vercel.app/"
+URL = "https://ipo-events-public.pages.dev/"
 DEFAULT_OUT = Path("downloads/ipo-prod-first-390.png")
 UA = ("Mozilla/5.0 (Linux; Android 14; SM-S911N) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")

@@ -1,0 +1,4 @@
+# Cloudflare Pages 응답 헤더
+# data.json 은 07:30·16:05 하루 2회 갱신되므로 60초만 캐시하고 재검증한다.
+/data.json
+  Cache-Control: public, max-age=60, must-revalidate

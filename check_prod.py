@@ -11,8 +11,8 @@ from playwright.async_api import async_playwright
 from check_render import (expected_copy, expected_listing_copy, IOS_UA, DESKTOP_UA,  # 공유문 기대값 규칙 공유
                           cash_plan, cash_peak_text, cash_row_text, short_day, won_short)
 
-URL = "https://ipo-events-public.vercel.app/"
-SITE_URL = "https://ipo-events-public.vercel.app"
+URL = "https://ipo-events-public.pages.dev/"
+SITE_URL = "https://ipo-events-public.pages.dev"
 OUT = Path(__file__).resolve().parent
 TODAY = dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).date()
 UA = ("Mozilla/5.0 (Linux; Android 14; SM-S911N) AppleWebKit/537.36 "
