@@ -453,7 +453,7 @@ async def main():
         res["deeplink_schedule"] = await lp.locator("#panel-schedule").is_visible()
         res["deeplink_cards"] = await lp.locator("#sch-subscribe .sc").count()
         await deepl.close()
-        deeplb, lpb, _ = await browser.new_context(
+        deeplb = await browser.new_context(
             viewport={"width": 390, "height": 844}, device_scale_factor=2, is_mobile=True,
             has_touch=True, user_agent=UA, locale="ko-KR", timezone_id="Asia/Seoul")
         bp = await deeplb.new_page()
