@@ -14,3 +14,6 @@ Thumbs.db
 
 # 로컬 전용 개인정보 검사어 (저장소에 올리지 않음)
 privacy_terms.txt
+
+# 리디자인 검증 스크린샷 (check 가 아니라 손으로 찍는 발표용 컷)
+redesign-*.png
