@@ -8,6 +8,7 @@
  * 원칙
  *   - 배경은 평탄한 쿨 그레이(#f4f6f8), 카드는 흰색 + 1px 실선(#e5e8eb)
  *   - 액센트는 블루 하나(#3182f6). 색은 의미가 있을 때만(상승·마감·추천)
+ *     — 예외 하나: 커피 응원 카드의 버튼은 카카오페이 브랜드 옐로(#fee500)만 쓴다
  *   - 그림자는 1px 수준으로만, 점선 테두리·파스텔 알약·이모지는 쓰지 않음
  */
 :root{
@@ -645,7 +646,7 @@ html[data-theme="dark"] .share-btn.done{background:var(--green-soft); color:var(
 .sch-src a{color:inherit; text-decoration:underline; text-underline-offset:2px}
 .sch-note{margin:5px 2px 0; font-size:10.5px; color:var(--ink3); line-height:1.55}
 
-/* ── 3레벨 · 운영 응원 (조용한 카드) ─────── */
+/* ── 3레벨 · 운영 응원 (조용한 카드 + 카카오페이 옐로 버튼) ─────── */
 .support{
   margin-top:14px; padding:14px;
   background:var(--card);
@@ -654,8 +655,8 @@ html[data-theme="dark"] .share-btn.done{background:var(--green-soft); color:var(
 }
 .sup-t{
   margin:0; display:flex; align-items:center; gap:6px;
-  font-size:12.5px; font-weight:600; letter-spacing:-.02em; line-height:1.35;
-  color:var(--ink2);
+  font-size:14px; font-weight:700; letter-spacing:-.02em; line-height:1.35;
+  color:var(--ink);
 }
 .sup-ico{
   flex:none; display:inline-flex; align-items:center; justify-content:center;
@@ -666,16 +667,22 @@ html[data-theme="dark"] .share-btn.done{background:var(--green-soft); color:var(
 .sup-btn{
   display:flex; align-items:center; justify-content:center; gap:4px;
   margin-top:10px; min-height:40px; padding:9px 12px;
-  border:1px solid var(--line); border-radius:10px;
-  background:var(--card); color:var(--ink2);
-  font-size:12px; font-weight:600; letter-spacing:-.01em;
+  border:1px solid rgba(25,25,25,.08); border-radius:10px;
+  background:#fee500; color:#191919;
+  font-size:13px; font-weight:700; letter-spacing:-.01em;
   text-decoration:none;
   -webkit-tap-highlight-color:transparent;
   transition:background .15s ease, border-color .15s ease;
 }
-.sup-btn i{font-style:normal; font-size:10px; color:var(--ink3)}
-.sup-btn:active{background:var(--bg2)}
+.sup-btn i{font-style:normal; font-size:10px; color:currentColor; opacity:.55}
+.sup-btn:hover{background:#f5dc00}
+.sup-btn:active{background:#f0d400}
 .sup-btn:focus-visible{outline:2px solid var(--blue); outline-offset:2px}
+/* 다크 모드에서도 카카오페이 옐로는 그대로 — 어두운 카드 위에서 가장 잘 읽힌다 */
+html[data-theme="dark"] .sup-btn{
+  background:#fee500; border-color:rgba(25,25,25,.08); color:#191919;
+}
+html[data-theme="dark"] .sup-btn:hover{background:#f5dc00}
 
 /* ── 푸터 고지 ───────────────────────────── */
 .foot{

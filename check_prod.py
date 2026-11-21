@@ -63,6 +63,12 @@ async def main():
         res["css_href"] = await page.get_attribute(
             "link[rel='stylesheet'][href*='styles.css']", "href")
         res["js_src"] = await page.get_attribute("script[src*='app.js']", "src")
+        # 캐시 버스터가 저장소 index.html 의 현재 값과 같은지 (Cloudflare 존 캐시 우회 확인)
+        _idx = (OUT / "index.html").read_text(encoding="utf-8")
+        res["local_css_v"] = _idx.split("styles.css?v=")[1].split('"')[0] if "styles.css?v=" in _idx else ""
+        res["local_js_v"] = _idx.split("app.js?v=")[1].split('"')[0] if "app.js?v=" in _idx else ""
+        res["css_v_deployed"] = res["local_css_v"] in (res["css_href"] or "")
+        res["js_v_deployed"] = res["local_js_v"] in (res["js_src"] or "")
         # 배포 후 캐시 헤더 — _headers 는 Pages 원본에서 적용(60초). 커스텀 도메인은 존 캐시 설정이 덮어쓸 수 있어 함께 본다.
         _css = await page.request.get(SITE_URL + "/" + (res["css_href"] or "styles.css"))
         res["css_cache_control"] = _css.headers.get("cache-control", "")
@@ -254,6 +260,25 @@ async def main():
             const s = document.querySelector('#support').getBoundingClientRect();
             const f = document.querySelector('#foot').getBoundingClientRect();
             return s.bottom <= f.top + 1;
+        })()""")
+        # 새 스펙 — 제목 14px/700/--ink, 버튼 카카오페이 옐로(#fee500) + #191919
+        res["support_title_style"] = await page.evaluate("""(() => {
+            const probe = document.createElement('span');
+            probe.style.color = 'var(--ink)';
+            document.body.appendChild(probe);
+            const ink = getComputedStyle(probe).color;
+            probe.remove();
+            const t = getComputedStyle(document.querySelector('#support .sup-t'));
+            return { size: t.fontSize, weight: t.fontWeight, color: t.color,
+                     color_is_ink: t.color === ink };
+        })()""")
+        res["support_btn_style"] = await page.evaluate("""(() => {
+            const b = getComputedStyle(document.querySelector('#support .sup-btn'));
+            const c = getComputedStyle(document.querySelector('#support'));
+            return { bg: b.backgroundColor, color: b.color, weight: b.fontWeight,
+                     border_w: b.borderTopWidth, radius: b.borderRadius,
+                     card_border: c.borderTopWidth + ' ' + c.borderTopColor,
+                     card_radius: c.borderRadius };
         })()""")
         await page.locator("#support").scroll_into_view_if_needed()
         await page.wait_for_timeout(200)
@@ -594,6 +619,16 @@ async def main():
         res["dark_bf_overflow"] = await dpage.evaluate(
             "document.documentElement.scrollWidth > window.innerWidth + 1")
         await dpage.screenshot(path=str(OUT / "preview-prod-mobile-benefits-dark.png"), full_page=True)
+        # 응원 카드 — 다크 모드에서도 카카오페이 옐로 유지
+        await dpage.locator("#support").scroll_into_view_if_needed()
+        await dpage.wait_for_timeout(150)
+        res["dark_support_visible"] = await dpage.locator("#support").is_visible()
+        res["dark_support_btn_style"] = await dpage.evaluate("""(() => {
+            const b = getComputedStyle(document.querySelector('#support .sup-btn'));
+            return { bg: b.backgroundColor, color: b.color };
+        })()""")
+        await dpage.locator("#support").screenshot(
+            path=str(OUT / "preview-prod-mobile-support-dark.png"))
         await dark.close()
 
         # 데스크톱 폭에서도 확인
@@ -921,6 +956,20 @@ async def main():
         'res["support_target"] == "_blank"',
         '"noopener" in (res["support_rel"] or "")',
         'res["support_above_footer"]',
+        'res["css_v_deployed"]',
+        'res["js_v_deployed"]',
+        'res["support_title_style"]["size"] == "14px"',
+        'res["support_title_style"]["weight"] == "700"',
+        'res["support_title_style"]["color_is_ink"]',
+        'res["support_btn_style"]["bg"] == "rgb(254, 229, 0)"',
+        'res["support_btn_style"]["color"] == "rgb(25, 25, 25)"',
+        'res["support_btn_style"]["weight"] == "700"',
+        'res["support_btn_style"]["border_w"] == "1px"',
+        'res["support_btn_style"]["radius"] == "10px"',
+        'res["support_btn_style"]["card_radius"] == "14px"',
+        'res["dark_support_visible"]',
+        'res["dark_support_btn_style"]["bg"] == "rgb(254, 229, 0)"',
+        'res["dark_support_btn_style"]["color"] == "rgb(25, 25, 25)"',
         'not res["console_errors"]',
         'res["doc_width"] == res["viewport_width"]',
         'not res["desktop_h_overflow"]',

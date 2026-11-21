@@ -1059,6 +1059,31 @@ async def main():
             })()""")
             results["support_btn_h"] = round(await page.evaluate(
                 "document.querySelector('#support .sup-btn').getBoundingClientRect().height"))
+            # 새 스펙 — 제목 14px/700/--ink, 버튼 카카오페이 옐로(#fee500) + #191919
+            results["support_title_style"] = await page.evaluate("""(() => {
+                const probe = document.createElement('span');
+                probe.style.color = 'var(--ink)';
+                document.body.appendChild(probe);
+                const ink = getComputedStyle(probe).color;
+                probe.remove();
+                const t = getComputedStyle(document.querySelector('#support .sup-t'));
+                return { size: t.fontSize, weight: t.fontWeight, color: t.color,
+                         ink: ink, color_is_ink: t.color === ink };
+            })()""")
+            results["support_btn_style"] = await page.evaluate("""(() => {
+                const b = getComputedStyle(document.querySelector('#support .sup-btn'));
+                const c = getComputedStyle(document.querySelector('#support'));
+                return { bg: b.backgroundColor, color: b.color, weight: b.fontWeight,
+                         border_w: b.borderTopWidth, border_c: b.borderTopColor,
+                         radius: b.borderRadius,
+                         card_border: c.borderTopWidth + ' ' + c.borderTopColor,
+                         card_radius: c.borderRadius };
+            })()""")
+            _sup_css = (ROOT / "styles.css").read_text(encoding="utf-8")
+            results["support_css_hover"] = ".sup-btn:hover{background:#f5dc00}" in _sup_css
+            results["support_css_dark"] = 'html[data-theme="dark"] .sup-btn{' in _sup_css
+            results["support_btn_emoji"] = await page.evaluate(
+                "/[\\u{1F300}-\\u{1FAFF}\\u{2600}-\\u{27BF}]/u.test(document.querySelector('#support .sup-btn').textContent)")
             await sup.scroll_into_view_if_needed()
             await page.wait_for_timeout(200)
             await sup.screenshot(path=str(ROOT / "preview-mobile-support.png"))
@@ -1538,6 +1563,16 @@ async def main():
             results["dark_bf_overflow"] = await dpage.evaluate(
                 "document.documentElement.scrollWidth > window.innerWidth + 1")
             await dpage.screenshot(path=str(ROOT / "preview-mobile-benefits-dark.png"), full_page=True)
+            # 응원 카드 — 다크 모드에서도 카카오페이 옐로 유지
+            await dpage.locator("#support").scroll_into_view_if_needed()
+            await dpage.wait_for_timeout(150)
+            results["dark_support_visible"] = await dpage.locator("#support").is_visible()
+            results["dark_support_btn_style"] = await dpage.evaluate("""(() => {
+                const b = getComputedStyle(document.querySelector('#support .sup-btn'));
+                return { bg: b.backgroundColor, color: b.color, weight: b.fontWeight };
+            })()""")
+            await dpage.locator("#support").screenshot(
+                path=str(ROOT / "preview-mobile-support-dark.png"))
             await dark.close()
 
             # ── 4. 데스크톱 1280 ──────────────────────────────
@@ -2108,6 +2143,22 @@ async def main():
         'results["support_links"] == 1',
         'results["support_above_footer"]',
         'results["support_btn_h"] >= 36',
+        'results["support_title_style"]["size"] == "14px"',
+        'results["support_title_style"]["weight"] == "700"',
+        'results["support_title_style"]["color_is_ink"]',
+        'results["support_btn_style"]["bg"] == "rgb(254, 229, 0)"',
+        'results["support_btn_style"]["color"] == "rgb(25, 25, 25)"',
+        'results["support_btn_style"]["weight"] == "700"',
+        'results["support_btn_style"]["border_w"] == "1px"',
+        'results["support_btn_style"]["radius"] == "10px"',
+        'results["support_btn_style"]["card_border"] == "1px rgb(229, 232, 235)"',
+        'results["support_btn_style"]["card_radius"] == "14px"',
+        'results["support_css_hover"]',
+        'results["support_css_dark"]',
+        'not results["support_btn_emoji"]',
+        'results["dark_support_visible"]',
+        'results["dark_support_btn_style"]["bg"] == "rgb(254, 229, 0)"',
+        'results["dark_support_btn_style"]["color"] == "rgb(25, 25, 25)"',
         'not results["inject_errors"]',
         'not results["dark_errors"]',
         'not results["desktop_errors"]',
