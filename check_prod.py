@@ -13,6 +13,7 @@ from check_render import (expected_copy, expected_listing_copy, IOS_UA, DESKTOP_
 
 URL = "https://ipo.mydon.kr/"
 SITE_URL = "https://ipo.mydon.kr"
+ORIGIN = "https://ipo-events-public.pages.dev"  # Pages 원본(_headers 가 그대로 적용되는 쪽)
 OUT = Path(__file__).resolve().parent
 TODAY = dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).date()
 UA = ("Mozilla/5.0 (Linux; Android 14; SM-S911N) AppleWebKit/537.36 "
@@ -61,11 +62,18 @@ async def main():
         res["css_href"] = await page.get_attribute(
             "link[rel='stylesheet'][href*='styles.css']", "href")
         res["js_src"] = await page.get_attribute("script[src*='app.js']", "src")
-        # 배포 후 캐시 헤더 — styles.css·app.js 는 60초 캐시(_headers)
-        res["css_cache_control"] = (await page.request.get(SITE_URL + "/styles.css")).headers.get(
-            "cache-control", "")
-        res["js_cache_control"] = (await page.request.get(SITE_URL + "/app.js")).headers.get(
-            "cache-control", "")
+        # 배포 후 캐시 헤더 — _headers 는 Pages 원본에서 적용(60초). 커스텀 도메인은 존 캐시 설정이 덮어쓸 수 있어 함께 본다.
+        _css = await page.request.get(SITE_URL + "/" + (res["css_href"] or "styles.css"))
+        res["css_cache_control"] = _css.headers.get("cache-control", "")
+        _js = await page.request.get(SITE_URL + "/" + (res["js_src"] or "app.js"))
+        res["js_cache_control"] = _js.headers.get("cache-control", "")
+        _o_css = await page.request.get(ORIGIN + "/styles.css")
+        res["origin_css_cache_control"] = _o_css.headers.get("cache-control", "")
+        _o_js = await page.request.get(ORIGIN + "/app.js")
+        res["origin_js_cache_control"] = _o_js.headers.get("cache-control", "")
+        # 버스터 URL 로 받은 파일이 실제 배포본과 같은 바이트인지
+        res["css_matches_origin"] = (await _css.text()) == (await _o_css.text())
+        res["js_matches_origin"] = (await _js.text()) == (await _o_js.text())
         res["h1"] = (await page.inner_text("h1")).replace("\n", " ")
         res["dateline"] = await page.inner_text("#dateline")
         res["updated"] = await page.inner_text("#updated")
@@ -669,10 +677,13 @@ async def main():
         'res["og_site_name"] == "마이돈"',
         '"?v=" in (res["css_href"] or "")',
         '"?v=" in (res["js_src"] or "")',
-        '"max-age=60" in res["css_cache_control"]',
+        '"max-age=60" in res["origin_css_cache_control"]',
+        '"must-revalidate" in res["origin_css_cache_control"]',
+        '"max-age=60" in res["origin_js_cache_control"]',
+        '"must-revalidate" in res["origin_js_cache_control"]',
         '"must-revalidate" in res["css_cache_control"]',
-        '"max-age=60" in res["js_cache_control"]',
-        '"must-revalidate" in res["js_cache_control"]',
+        'res["css_matches_origin"]',
+        'res["js_matches_origin"]',
         'res["robots"]',
         '"noindex" not in res["robots"]',
         '"index" in res["robots"]',
