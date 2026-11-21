@@ -12,6 +12,7 @@
  *
  * 상단 탭  .tabs  오늘 요약(#panel-today) | 전체 일정(#panel-schedule, data.json ipo.upcoming)
  *                   | 혜택(#panel-benefits, data.json benefits[] — 증권사·금융 / 간편 이벤트·설문)
+ * 전체 일정 맨 위 .cash  균등 최소증거금(이번 달/전체 · 스팩 제외) — 피크 자금 강조 + 종목별 예상 증거금
  * 오늘 요약 하단  .ben-link  '증권사 개설·현금성 혜택 N건 보기 →' 한 줄 배너 (혜택 탭으로 전환)
  */
 (function () {
@@ -477,7 +478,208 @@
     return s + '~' + shortDay(item.end);
   }
 
-  /* 일정 카드 한 장 — D-day · 종목명 / 일정 · 공모가 / 시장 · 주관 · 환불 */
+  /* ── 균등 최소증거금 요약 (전체 일정 최상단) ─────────────
+   * ipo.upcoming.subscribe[] 종목마다
+   *   증거금 = 공모가 × 최소청약주수 × 0.5 (균등 청약 증거금 50%)
+   * 을 계산합니다. 최소청약주수(minShares)나 확정 공모가가 없으면
+   * 10주 · 희망가 상단으로 추정하고 금액 옆에 '추정'을 붙입니다.
+   *
+   * 자금은 청약 시작일 ~ 환불일 전날까지 묶이는 것으로 봅니다
+   * (start <= d < refund — 환불일 당일 돈이 돌아와 그날 청약에 쓸 수 있음).
+   * 날짜별로 동시에 묶이는 금액을 더해 최댓값(피크)과 그날 겹치는 종목,
+   * 선택 범위의 단순 합계를 함께 보여 줍니다.
+   */
+  var DEPOSIT_RATE = 0.5;
+  var DEFAULT_MIN_SHARES = 10;
+  var cashRange = '';      /* '' = 자동(이번 달 → 이번 달 일정이 없으면 전체) */
+  var cashNoSpac = true;   /* 스팩 제외 기본 ON */
+
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+  function dayKey(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+  function nextDay(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1); }
+  function sameMonth(a, b) {
+    return !!(a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth());
+  }
+
+  /* '확정 7,000원' · '희망 15,000~17,800원' · '희망 2,000원' → { value, estimated, range }
+     범위면 보수적으로 상단(최댓값)을 씁니다. */
+  function offerPrice(price) {
+    var s = String(price == null ? '' : price).replace(/\s+/g, '');
+    if (!s) return null;
+    var found = s.match(/\d[\d,]*/g) || [];
+    var values = found.map(function (x) { return Number(String(x).replace(/,/g, '')); })
+      .filter(function (n) { return n > 0; });
+    if (!values.length) return null;
+    return {
+      value: Math.max.apply(null, values),
+      estimated: !/확정/.test(s) || /희망/.test(s),
+      range: values.length > 1
+    };
+  }
+
+  /* 종목 하나의 최소청약 증거금 — 값이 없으면 null(금액에서 제외) */
+  function depositOf(item) {
+    var p = offerPrice(item && item.price);
+    if (!p) return null;
+    var raw = Number(item.minShares);
+    var shares = raw > 0 ? Math.round(raw) : DEFAULT_MIN_SHARES;
+    return {
+      amount: Math.round(p.value * shares * DEPOSIT_RATE),
+      price: p.value,
+      shares: shares,
+      sharesEstimated: !(raw > 0),
+      priceEstimated: p.estimated,
+      priceRange: p.range
+    };
+  }
+
+  /* 추정 이유 — 희망가 / 10주 가정 */
+  function depositReason(dep) {
+    if (dep.priceEstimated && dep.sharesEstimated) return '희망가·10주 가정';
+    if (dep.priceEstimated) return '희망가 가정';
+    if (dep.sharesEstimated) return '10주 가정';
+    return '';
+  }
+
+  /* 자금이 묶이는 끝(다음 날 = 환불일, 그날 돈이 돌아옴). 환불일이 없으면 마감일까지. */
+  function lockUntil(item) {
+    var r = parseDay(item && item.refund);
+    if (r) return r;
+    var e = parseDay(item && item.end) || parseDay(item && item.start);
+    return e ? nextDay(e) : null;
+  }
+
+  /* 89000 → 8.9만원 · 99000 → 9.9만원 · 8250 → 8,250원 */
+  function wonShort(v) {
+    if (!(v > 0)) return '0원';
+    function tenths(n) {
+      var s = (Math.round(n * 10) / 10).toFixed(1);
+      return s.replace(/\.0$/, '');
+    }
+    if (v >= 100000000) return tenths(v / 100000000) + '억원';
+    if (v >= 10000) return tenths(v / 10000) + '만원';
+    return v.toLocaleString('ko-KR') + '원';
+  }
+
+  /* 일정 전체의 청약 월 범위 — 11~12월 / 11월 */
+  function cashSpan(items) {
+    var first = null, last = null;
+    items.forEach(function (it) {
+      var s = parseDay(it.start), u = lockUntil(it);
+      if (s && (!first || s < first)) first = s;
+      if (u && (!last || u > last)) last = u;
+    });
+    if (!first || !last) return '';
+    var a = first.getMonth() + 1, b = last.getMonth() + 1;
+    return (a === b ? String(a) : a + '~' + b) + '월';
+  }
+
+  /* 선택 범위(이번 달/전체) × 스팩 제외 → 계산 결과 */
+  function cashPlan(ipo) {
+    var up = (ipo && ipo.upcoming) || {};
+    var today = todayDay();
+    var all = (up.subscribe || []).filter(function (it) {
+      var until = lockUntil(it);
+      return until && until > today;   /* 이미 환불된 일정은 금액에서 뺀다 */
+    });
+    var month = all.filter(function (it) { return sameMonth(parseDay(it.start), today); });
+    var range = cashRange || (month.length ? 'month' : 'all');
+    var picked = range === 'month' ? month : all;
+    var scoped = cashNoSpac ? picked.filter(function (it) { return !it.spac; }) : picked;
+
+    var rows = [];
+    scoped.forEach(function (it) {
+      var dep = depositOf(it), until = lockUntil(it);
+      if (!dep || !until) return;
+      rows.push({ item: it, dep: dep, until: until });
+    });
+    /* 계산에서 뺀 건수는 스팩 제외가 아니라 '공모가를 못 읽은' 경우만 */
+    var noPrice = picked.filter(function (it) { return !depositOf(it); }).length;
+
+    /* 날짜별 동시 묶임 — start <= d < 환불일 */
+    var days = {};
+    rows.forEach(function (r) {
+      var start = parseDay(r.item.start);
+      if (!start) return;
+      for (var d = start; d < r.until; d = nextDay(d)) {
+        if (d < today) continue;
+        var k = dayKey(d);
+        var cell = days[k] || (days[k] = { day: new Date(d), amount: 0, names: [] });
+        cell.amount += r.dep.amount;
+        if (cell.names.indexOf(r.item.name) < 0) cell.names.push(r.item.name);
+      }
+    });
+    var peak = null;
+    Object.keys(days).sort().forEach(function (k) {
+      var cell = days[k];
+      if (!peak || cell.amount > peak.amount) peak = cell;
+    });
+
+    return {
+      range: range,
+      rows: rows,
+      count: rows.length,
+      missing: noPrice,   /* 공모가를 못 읽어 계산에서 뺀 건수 */
+      total: rows.reduce(function (n, r) { return n + r.dep.amount; }, 0),
+      peak: peak,
+      monthLabel: '이번 달 (' + (today.getMonth() + 1) + '월)',
+      allLabel: '전체 예정 (' + cashSpan(all) + ')'
+    };
+  }
+
+  function cashNames(names) {
+    var head = names.slice(0, 3).join('·');
+    return names.length > 3 ? head + ' 외 ' + (names.length - 3) : head;
+  }
+
+  function cashChip(range, label, on) {
+    return '<button type="button" class="cash-chip' + (on ? ' is-on' : '') + '"' +
+      ' data-cash-range="' + range + '" aria-pressed="' + (on ? 'true' : 'false') + '">' +
+      esc(label) + '</button>';
+  }
+
+  /* 카드 한 장 — 피크 자금(크게) · 피크 날짜·겹치는 종목 · 단순 합계 · 기간/스팩 칩 · 안내 1줄 */
+  function cashCard(ipo) {
+    var plan = cashPlan(ipo);
+    var peak = plan.peak;
+    var when = peak
+      ? esc(shortDay(dayKey(peak.day))) +
+        (peak.names.length > 1
+          ? ' · ' + peak.names.length + '종목 겹침 <span class="cash-names">' + esc(cashNames(peak.names)) + '</span>'
+          : ' · <span class="cash-names">' + esc(cashNames(peak.names)) + '</span>')
+      : '이 기간에 묶이는 청약이 없어요.';
+
+    return '<div class="cash" id="cash-card">' +
+        '<div class="cash-top">' +
+          '<span class="cash-kick">균등 최소증거금</span>' +
+          '<span class="cash-scope" id="cash-scope">' +
+            esc(plan.range === 'month' ? plan.monthLabel : plan.allLabel) + '</span>' +
+        '</div>' +
+        '<div class="cash-peak">' +
+          '<span class="cash-lab">동시에 묶이는 최대 자금</span>' +
+          '<b class="cash-amt" id="cash-peak">' + (peak ? '약 ' + wonShort(peak.amount) : '0원') + '</b>' +
+        '</div>' +
+        '<p class="cash-day" id="cash-peak-when">' + when + '</p>' +
+        '<div class="cash-sum">' +
+          '<span>단순 합계 <b id="cash-total">' + wonShort(plan.total) + '</b></span>' +
+          '<span>청약 <b id="cash-count">' + plan.count + '</b>건' +
+            (plan.missing ? ' · 공모가 미정 ' + plan.missing + '건 제외' : '') + '</span>' +
+        '</div>' +
+        '<div class="cash-chips" id="cash-chips" role="group" aria-label="필요 금액 범위와 스팩">' +
+          cashChip('month', plan.monthLabel, plan.range === 'month') +
+          cashChip('all', plan.allLabel, plan.range === 'all') +
+          '<button type="button" class="cash-chip is-spac' + (cashNoSpac ? ' is-on' : '') + '"' +
+            ' id="cash-spac" data-cash-spac="' + (cashNoSpac ? '1' : '0') + '"' +
+            ' aria-pressed="' + (cashNoSpac ? 'true' : 'false') + '">' +
+            (cashNoSpac ? '<span class="ck" aria-hidden="true">✓</span>' : '') +
+            '스팩 제외</button>' +
+        '</div>' +
+        '<p class="cash-note" id="cash-note">※ 최소청약주수·확정가 미공시 종목은 ' +
+          '희망가 상단·10주(증거금 50%) 기준 추정치입니다.</p>' +
+      '</div>';
+  }
+
+  /* 일정 카드 한 장 — D-day · 종목명 / 일정 · 공모가 · 균등 증거금 / 시장 · 주관 · 환불 */
   function scheduleCard(item, kind, today) {
     var isList = kind === 'listing';
     var dd = isList ? listBadge(item, today) : subBadge(item, today);
@@ -490,6 +692,19 @@
     if (has(item.brokers)) sub.push(esc(item.brokers));
     if (!isList && has(item.refund)) sub.push('환불 ' + esc(shortDay(item.refund)));
 
+    /* 종목별 예상 균등 증거금 — 왜 이 금액인지 '추정' 표시까지 */
+    var depHtml = '';
+    if (!isList) {
+      var dep = depositOf(item);
+      if (dep) {
+        var reason = depositReason(dep);
+        depHtml = '<span class="sc-dep">균등 ' +
+          (reason ? '약 ' : '') + wonShort(dep.amount) +
+          (reason ? ' <span class="sc-est" title="' + esc(reason) + '">추정</span>' : '') +
+          '</span>';
+      }
+    }
+
     return '<li class="sc' + (isList ? ' is-list' : '') + '">' +
         '<div class="sc-top">' +
           (dd ? '<span class="sc-dd' + (dd.cls ? ' ' + dd.cls : '') + '">' + esc(dd.text) + '</span>' : '') +
@@ -499,6 +714,7 @@
         '<div class="sc-mid">' +
           '<span class="sc-when">' + esc(when) + '</span>' +
           (has(item.price) ? '<span class="sc-price">' + esc(item.price) + '</span>' : '') +
+          depHtml +
         '</div>' +
         (sub.length ? '<div class="sc-sub">' + sub.join(' · ') + '</div>' : '') +
       '</li>';
@@ -514,6 +730,8 @@
     });
 
     var html = '';
+
+    html += cashCard(ipo);   /* 이달/향후 균등 공모주 필요 금액 — 목록 바로 위 */
 
     html += '<div class="sch-head">' +
         '<span class="sch-kicker">앞으로 4주</span>' +
@@ -645,6 +863,13 @@
       : '<div class="empty">지금 챙길 혜택이 없어요.</div>';
   }
 
+  var lastIpo = null;
+
+  /* 범위·스팩 칩을 누를 때 전체 일정 본문만 다시 그립니다(탭·스크롤 유지) */
+  function renderSchedule() {
+    $('schedule-body').innerHTML = scheduleSection(lastIpo, todayDay());
+  }
+
   /* ── 렌더 ─────────────────────────────── */
   function render(d) {
     var today = todayDay();
@@ -666,6 +891,7 @@
 
     $('ipo-body').innerHTML = ipoSection(d.ipo, today);
     $('ipo-foot').innerHTML = ipoFoot(d.ipo);
+    lastIpo = d.ipo;
     $('schedule-body').innerHTML = scheduleSection(d.ipo, today);
 
     /* 2레벨: 혜택 탭으로 가는 한 줄 배너 — 증권사·금융 혜택 건수만 적습니다 */
@@ -745,6 +971,21 @@
     if (bfFilter === id) return;
     bfFilter = id;
     benefitsBody(bfLive, todayDay());
+  });
+
+  /* 전체 일정 · 필요 금액 범위(이번 달/전체) · 스팩 제외 칩 — 즉시 재계산 */
+  document.addEventListener('click', function (e) {
+    var chip = e.target.closest ? e.target.closest('[data-cash-range], [data-cash-spac]') : null;
+    if (!chip) return;
+    e.preventDefault();
+    var range = chip.getAttribute('data-cash-range');
+    if (range === 'month' || range === 'all') {
+      if (cashRange === range) return;
+      cashRange = range;
+    } else {
+      cashNoSpac = !cashNoSpac;
+    }
+    renderSchedule();
   });
 
   document.addEventListener('keydown', function (e) {

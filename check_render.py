@@ -27,9 +27,14 @@ data.json 을 로컬 HTTP 로 띄워 확인합니다(파일 직접 열면 fetch 
   상장 정보 mock(풀 필드·빈 항목 생략), 상장 없는 날 → 오른쪽 버튼 비활성 '오늘 상장 없음',
   청약·다음 청약 모두 없는 날 → 왼쪽 버튼 비활성 '오늘 청약 없음' + 눌러도 복사되지 않음
 - 스크린샷: preview-mobile.png / preview-mobile-events.png / preview-mobile-dark.png /
-  preview-desktop.png / preview-toast.png / preview-mobile-schedule*.png /
+  preview-desktop.png / preview-toast.png / preview-mobile-schedule*.png / preview-mobile-cash.png /
   preview-mobile-share.png / preview-mobile-share-dark.png / preview-mobile-share-full.png /
   preview-mobile-share-off.png (양쪽 비활성)
+- 전체 일정 최상단 필요 금액 카드(#cash-card): 증거금 = 공모가 × 최소청약주수 × 0.5
+  (minShares 없으면 10주·추정, 희망가면 상단) — 종목 행마다 `균등 약 8.9만원 추정`,
+  날짜별 동시 묶임(start ≤ d < 환불일)의 최댓값(피크)·피크 날짜·겹치는 종목·단순 합계,
+  이번 달/전체·스팩 제외 칩이 같은 데이터로 즉시 재계산(기대값은 data.json 에서 같은 규칙으로 계산),
+  가로 잘림 없음, 다크·데스크톱 동일 값
 - 상단 3탭: 기본 '오늘 요약', '전체 일정'(?tab=schedule) · '혜택'(?tab=benefits) —
   390px에서 3탭이 한 줄(같은 폭·잘림 없음), 다크·데스크톱에서도 가로 스크롤 없이 렌더
 - 오늘 요약 하단 한 줄 배너(.ben-link): 증권사·금융 혜택 N건 · 누르면 혜택 탭 전환 · 혜택 상세는 없음
@@ -95,6 +100,167 @@ TODAY = dt.datetime.now(KST).date()
 
 # 개인정보 검사어가 없어도 항상 검사하는 기본 문구
 ALWAYS_TERMS = ["야탑", "판교", "이매", "쌍둥이", "육아", "어린이집", "휴대폰", "배송지"]
+
+
+# ── 전체 일정 · 균등 최소증거금 기대값 ──────────────────────
+# app.js 의 offerPrice·depositOf·lockUntil·wonShort·cashPlan 과 같은 규칙입니다.
+# (check_prod.py 도 이 함수들을 가져다 씁니다.)
+CASH_RATE = 0.5
+DEFAULT_MIN_SHARES = 10
+
+
+def parse_iso(v):
+    """'2026-11-24' → date (없으면 None)."""
+    m = re.match(r"^(\d{4})-(\d{2})-(\d{2})", str(v or ""))
+    return dt.date(int(m[1]), int(m[2]), int(m[3])) if m else None
+
+
+def cash_price(text):
+    """공모가 문자열 → {value, estimated, range}. 희망 A~B원이면 상단 B."""
+    s = re.sub(r"\s+", "", str(text or ""))
+    if not s:
+        return None
+    vals = [int(x.replace(",", "")) for x in re.findall(r"\d[\d,]*", s)]
+    vals = [v for v in vals if v > 0]
+    if not vals:
+        return None
+    return {"value": max(vals),
+            "estimated": ("확정" not in s) or ("희망" in s),
+            "range": len(vals) > 1}
+
+
+def cash_deposit(item):
+    """최소청약 증거금 = 공모가 × 최소청약주수 × 0.5 (없으면 10주)."""
+    p = cash_price((item or {}).get("price"))
+    if not p:
+        return None
+    try:
+        raw = int((item or {}).get("minShares") or 0)
+    except (TypeError, ValueError):
+        raw = 0
+    shares = raw if raw > 0 else DEFAULT_MIN_SHARES
+    return {
+        "amount": int(round(p["value"] * shares * CASH_RATE)),
+        "price": p["value"], "shares": shares,
+        "shares_estimated": raw <= 0, "price_estimated": p["estimated"],
+        "price_range": p["range"],
+    }
+
+
+def cash_reason(dep):
+    """app.js depositReason — 희망가 / 10주 가정."""
+    if dep["price_estimated"] and dep["shares_estimated"]:
+        return "희망가·10주 가정"
+    if dep["price_estimated"]:
+        return "희망가 가정"
+    if dep["shares_estimated"]:
+        return "10주 가정"
+    return ""
+
+
+def cash_lock_until(item):
+    """자금이 묶이는 끝(제외 구간 끝 = 환불일). 환불일이 없으면 마감일 다음 날."""
+    r = parse_iso(item.get("refund"))
+    if r:
+        return r
+    e = parse_iso(item.get("end")) or parse_iso(item.get("start"))
+    return e + dt.timedelta(days=1) if e else None
+
+
+def won_short(v):
+    """JS wonShort 와 같은 표기 — 89000 → 8.9만원 (0.05 단위는 반올림)."""
+    from fractions import Fraction
+
+    def tenths(fr):
+        n = int(fr + Fraction(1, 2))
+        s = f"{n // 10}.{n % 10}"
+        return s[:-2] if s.endswith(".0") else s
+
+    if not (v > 0):
+        return "0원"
+    if v >= 100000000:
+        return tenths(Fraction(v * 10, 100000000)) + "억원"
+    if v >= 10000:
+        return tenths(Fraction(v * 10, 10000)) + "만원"
+    return f"{v:,}원"
+
+
+def cash_span(items):
+    first = last = None
+    for it in items:
+        s = parse_iso(it.get("start"))
+        u = cash_lock_until(it)
+        if s and (first is None or s < first):
+            first = s
+        if u and (last is None or u > last):
+            last = u
+    if not first or not last:
+        return ""
+    a, b = first.month, last.month
+    return (f"{a}" if a == b else f"{a}~{b}") + "월"
+
+
+def cash_plan(ipo, today, range_=None, no_spac=True):
+    """선택 범위·스팩 제외별 피크 자금 · 단순 합계 기대값."""
+    subs = ((ipo or {}).get("upcoming") or {}).get("subscribe") or []
+    allitems = [it for it in subs if (cash_lock_until(it) or dt.date.min) > today]
+    month = [it for it in allitems
+             if (parse_iso(it.get("start")) or dt.date.min).month == today.month
+             and (parse_iso(it.get("start")) or dt.date.min).year == today.year]
+    rng = range_ or ("month" if month else "all")
+    picked = month if rng == "month" else allitems
+    scoped = [it for it in picked if not it.get("spac")] if no_spac else picked
+
+    rows = []
+    for it in scoped:
+        dep, until = cash_deposit(it), cash_lock_until(it)
+        if dep and until:
+            rows.append((it, dep, until))
+
+    days = {}
+    for it, dep, until in rows:
+        start = parse_iso(it.get("start"))
+        if not start:
+            continue
+        d = start
+        while d < until:
+            if d >= today:
+                cell = days.setdefault(d, {"amount": 0, "names": []})
+                cell["amount"] += dep["amount"]
+                if it.get("name") not in cell["names"]:
+                    cell["names"].append(it.get("name"))
+            d += dt.timedelta(days=1)
+
+    peak = None
+    for d in sorted(days):
+        if peak is None or days[d]["amount"] > peak[1]["amount"]:
+            peak = (d, days[d])
+
+    return {
+        "range": rng, "rows": rows, "count": len(rows),
+        "missing": sum(1 for it in picked if not cash_deposit(it)),
+        "total": sum(r[1]["amount"] for r in rows), "peak": peak,
+        "month_label": f"이번 달 ({today.month}월)",
+        "all_label": f"전체 예정 ({cash_span(allitems)})",
+    }
+
+
+def cash_peak_text(plan):
+    return ("약 " + won_short(plan["peak"][1]["amount"])) if plan["peak"] else "0원"
+
+
+def short_day(d):
+    """11/24(화) — JS shortDay 와 같은 표기(일요일=0)."""
+    return f"{d.month}/{d.day}(" + "일월화수목금토"[(d.weekday() + 1) % 7] + ")"
+
+
+def cash_row_text(item):
+    dep = cash_deposit(item)
+    if not dep:
+        return None
+    reason = cash_reason(dep)
+    return ("균등 " + ("약 " if reason else "") + won_short(dep["amount"])
+            + (" 추정" if reason else ""))
 
 
 def serve():
@@ -906,6 +1072,44 @@ async def main():
                 "#sch-subscribe .sc .sc-name", "els => els.map(e => e.textContent.trim())")
             results["sch_ddays"] = await page.eval_on_selector_all(
                 "#sch-subscribe .sc .sc-dd", "els => els.map(e => e.textContent.trim())")
+
+            # ── 필요 금액 카드 (균등 최소증거금) — 계산값·칩 ─────
+            plan_m = cash_plan(IPO, TODAY)                       # 기본: 이번 달 · 스팩 제외
+            plan_a = cash_plan(IPO, TODAY, "all")                 # 전체 · 스팩 제외
+            plan_ms = cash_plan(IPO, TODAY, "month", no_spac=False)  # 이번 달 · 스팩 포함
+            plan_as = cash_plan(IPO, TODAY, "all", no_spac=False)
+            results["cash_exists"] = await page.locator("#cash-card").count()
+            results["cash_above_list"] = await page.evaluate("""(() => {
+                const c = document.querySelector('#cash-card').getBoundingClientRect();
+                const h = document.querySelector('.sch-head').getBoundingClientRect();
+                const l = document.querySelector('#sch-subscribe .sc').getBoundingClientRect();
+                return c.top < h.top && h.top < l.top + 1;
+            })()""")
+            results["cash_peak"] = await page.inner_text("#cash-peak")
+            results["cash_when"] = (await page.inner_text("#cash-peak-when")).replace("\n", " ")
+            results["cash_total"] = await page.inner_text("#cash-total")
+            results["cash_count"] = await page.inner_text("#cash-count")
+            results["cash_scope"] = await page.inner_text("#cash-scope")
+            results["cash_note"] = await page.inner_text("#cash-note")
+            results["cash_chips"] = await page.eval_on_selector_all(
+                "#cash-chips .cash-chip",
+                "els => els.map(e => [e.textContent.trim(), e.getAttribute('aria-pressed')])")
+            results["cash_rows"] = await page.eval_on_selector_all(
+                "#sch-subscribe .sc .sc-dep",
+                "els => els.map(e => e.textContent.replace(/\\s+/g, ' ').trim())")
+            results["cash_est_rows"] = await page.locator("#sch-subscribe .sc .sc-est").count()
+            results["cash_chip_h"] = await page.eval_on_selector_all(
+                "#cash-chips .cash-chip", "els => els.map(e => Math.round(e.getBoundingClientRect().height))")
+            results["cash_clipped"] = await page.evaluate("""(() => {
+                const vw = window.innerWidth, bad = [];
+                document.querySelectorAll('#cash-card, #cash-card *').forEach(el => {
+                  const r = el.getBoundingClientRect();
+                  if (r.width && (r.left < -1 || r.right > vw + 1)) {
+                    bad.push(el.className + ' ' + Math.round(r.left) + '~' + Math.round(r.right));
+                  }
+                });
+                return bad.slice(0, 5);
+            })()""")
             results["sch_list_items"] = await page.eval_on_selector_all(
                 "#sch-listing .sc", "els => els.map(e => e.textContent.replace(/\\s+/g,' ').trim())")
             results["sch_src_urls"] = await page.eval_on_selector_all(
@@ -934,6 +1138,44 @@ async def main():
             await page.locator("#sch-src").scroll_into_view_if_needed()
             await page.wait_for_timeout(200)
             await page.screenshot(path=str(ROOT / "preview-mobile-schedule-bottom.png"))
+
+            # 카드만 다른 그림으로도 남깁니다(보고용)
+            await page.locator("#cash-card").scroll_into_view_if_needed()
+            await page.wait_for_timeout(150)
+            await page.locator("#cash-card").screenshot(path=str(ROOT / "preview-mobile-cash.png"))
+
+            # 칩 — 누르면 같은 데이터로 즉시 재계산(스팩 제외 → 포함, 이번 달 → 전체)
+            await page.locator("[data-cash-range='all']").click()
+            await page.wait_for_timeout(250)
+            results["cash_all_peak"] = await page.inner_text("#cash-peak")
+            results["cash_all_when"] = (await page.inner_text("#cash-peak-when")).replace("\n", " ")
+            results["cash_all_total"] = await page.inner_text("#cash-total")
+            results["cash_all_count"] = await page.inner_text("#cash-count")
+            results["cash_all_scope"] = await page.inner_text("#cash-scope")
+            results["cash_all_pressed"] = await page.eval_on_selector_all(
+                "#cash-chips .cash-chip", "els => els.map(e => e.getAttribute('aria-pressed'))")
+            await page.locator("#cash-spac").click()
+            await page.wait_for_timeout(250)
+            results["cash_spac_off_peak"] = await page.inner_text("#cash-peak")
+            results["cash_spac_off_total"] = await page.inner_text("#cash-total")
+            results["cash_spac_off_count"] = await page.inner_text("#cash-count")
+            results["cash_spac_pressed"] = await page.get_attribute("#cash-spac", "aria-pressed")
+            await page.locator("[data-cash-range='month']").click()
+            await page.wait_for_timeout(250)
+            results["cash_month_spac_peak"] = await page.inner_text("#cash-peak")
+            results["cash_month_spac_total"] = await page.inner_text("#cash-total")
+            results["cash_month_spac_count"] = await page.inner_text("#cash-count")
+            results["cash_rows_after"] = await page.eval_on_selector_all(
+                "#sch-subscribe .sc .sc-dep",
+                "els => els.map(e => e.textContent.replace(/\\s+/g, ' ').trim())")
+            # 기본 상태(이번 달 · 스팩 제외)로 되돌립니다
+            await page.locator("#cash-spac").click()
+            await page.wait_for_timeout(250)
+            results["cash_restored"] = await page.evaluate("""(() => ({
+                peak: document.querySelector('#cash-peak').textContent.trim(),
+                chip: document.querySelector('[data-cash-range=\"month\"]').getAttribute('aria-pressed'),
+                spac: document.querySelector('#cash-spac').getAttribute('aria-pressed')
+            }))()""")
 
             # 전체 일정 화면에서 개인정보 문구가 새지 않는지 한 번 더
             results["sch_privacy_hits"] = await page.evaluate("""terms =>
@@ -1146,6 +1388,18 @@ async def main():
             await dpage.wait_for_timeout(300)
             results["dark_sch_visible"] = await dpage.locator("#panel-schedule").is_visible()
             results["dark_sch_cards"] = await dpage.locator("#sch-subscribe .sc").count()
+            results["dark_cash_visible"] = await dpage.locator("#cash-card").is_visible()
+            results["dark_cash_peak"] = await dpage.inner_text("#cash-peak")
+            results["dark_cash_clipped"] = await dpage.evaluate("""(() => {
+                const vw = window.innerWidth, bad = [];
+                document.querySelectorAll('#cash-card, #cash-card *').forEach(el => {
+                  const r = el.getBoundingClientRect();
+                  if (r.width && (r.left < -1 || r.right > vw + 1)) {
+                    bad.push(el.className + ' ' + Math.round(r.left) + '~' + Math.round(r.right));
+                  }
+                });
+                return bad.slice(0, 5);
+            })()""")
             results["dark_sch_overflow"] = await dpage.evaluate(
                 "document.documentElement.scrollWidth > window.innerWidth + 1")
             await dpage.screenshot(path=str(ROOT / "preview-mobile-schedule-dark.png"), full_page=True)
@@ -1180,6 +1434,7 @@ async def main():
             await dp.locator("#tab-schedule").click()
             await dp.wait_for_timeout(300)
             results["desktop_sch_cards"] = await dp.locator("#sch-subscribe .sc").count()
+            results["desktop_cash_peak"] = await dp.inner_text("#cash-peak")
             results["desktop_sch_overflow"] = await dp.evaluate(
                 "document.documentElement.scrollWidth > window.innerWidth + 1")
             await dp.screenshot(path=str(ROOT / "preview-desktop-schedule.png"), full_page=True)
@@ -1429,7 +1684,47 @@ async def main():
           and results["sch_has_38"]
           and not results["sch_h_overflow"]
           and not results["sch_clipped"]
-          and not results["sch_privacy_hits"]
+          and results["sch_privacy_hits"] == []
+          # 필요 금액 카드 — 피크 자금·날짜·합계·추정 표시·칩 재계산
+          and results["cash_exists"] == 1
+          and results["cash_above_list"]
+          and results["cash_peak"] == cash_peak_text(plan_m)
+          and results["cash_when"].startswith(short_day(plan_m["peak"][0]))
+          and all(n in results["cash_when"] for n in plan_m["peak"][1]["names"][:3])
+          and results["cash_total"] == won_short(plan_m["total"])
+          and results["cash_count"] == str(plan_m["count"])
+          and results["cash_scope"] == plan_m["month_label"]
+          and "추정치입니다" in results["cash_note"]
+          and results["cash_chips"][0] == [plan_m["month_label"], "true"]
+          and results["cash_chips"][1] == [plan_m["all_label"], "false"]
+          and results["cash_chips"][2][1] == "true"
+          and "스팩 제외" in results["cash_chips"][2][0]
+          and results["cash_rows"] == [cash_row_text(it) for it in
+                                       sorted(IPO["upcoming"]["subscribe"],
+                                              key=lambda x: str(x.get("start") or "9999"))]
+          and results["cash_est_rows"] >= 1
+          and results["cash_all_peak"] == cash_peak_text(plan_a)
+          and results["cash_all_when"].startswith(short_day(plan_a["peak"][0]))
+          and results["cash_all_total"] == won_short(plan_a["total"])
+          and results["cash_all_count"] == str(plan_a["count"])
+          and results["cash_all_scope"] == plan_a["all_label"]
+          and results["cash_all_pressed"] == ["false", "true", "true"]
+          and results["cash_spac_off_peak"] == cash_peak_text(plan_as)
+          and results["cash_spac_off_total"] == won_short(plan_as["total"])
+          and results["cash_spac_off_count"] == str(plan_as["count"])
+          and results["cash_spac_pressed"] == "false"
+          and results["cash_month_spac_peak"] == cash_peak_text(plan_ms)
+          and results["cash_month_spac_total"] == won_short(plan_ms["total"])
+          and results["cash_month_spac_count"] == str(plan_ms["count"])
+          and results["cash_rows_after"] == results["cash_rows"]
+          and results["cash_restored"] == {"peak": cash_peak_text(plan_m),
+                                           "chip": "true", "spac": "true"}
+          and all(h >= 28 for h in results["cash_chip_h"])
+          and not results["cash_clipped"]
+          and not results["dark_cash_clipped"]
+          and results["dark_cash_visible"]
+          and results["dark_cash_peak"] == cash_peak_text(plan_m)
+          and results["desktop_cash_peak"] == cash_peak_text(plan_m)
           and not results["sch_errors"]
           and results["tab_back_today"]
           and results["dark_sch_visible"]
