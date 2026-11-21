@@ -77,10 +77,36 @@
     return d.getFullYear() + '.' + String(d.getMonth() + 1).padStart(2, '0') + '.' +
       String(d.getDate()).padStart(2, '0') + ' (' + '일월화수목금토'.charAt(d.getDay()) + ')';
   }
-  /* 기기 기준 오늘 0시 */
+  /* ── 오늘 0시 (KST 고정) ───────────────────
+   * 브라우저 타임존과 무관하게 Asia/Seoul(UTC+9) 날짜를 씁니다.
+   * UTC 게터로 읽으면 기기 설정이 무엇이든 KST 벽시계가 나옵니다.
+   * ?date=YYYY-MM-DD 로 날짜를 고정할 수 있습니다(검증·디버그용 — 기본 동작은 현재 KST 시각). */
+  var FIXED_DAY = null;
+  function kstToday() {
+    var t = new Date(Date.now() + 9 * 3600000);
+    return new Date(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate());
+  }
+  function urlParam(name) {
+    var m = new RegExp('[?&]' + name + '=([^&#]*)').exec(location.search || '');
+    return m ? decodeURIComponent(m[1].replace(/\+/g, ' ')) : '';
+  }
   function todayDay() {
-    var n = new Date();
-    return new Date(n.getFullYear(), n.getMonth(), n.getDate());
+    return FIXED_DAY || kstToday();
+  }
+  FIXED_DAY = parseDay(urlParam('date'));
+
+  /* 토·일 = 주말(시장 휴장) */
+  function isWeekend(d) {
+    var w = (d || todayDay()).getDay();
+    return w === 0 || w === 6;
+  }
+  function addDays(d, n) {
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+  }
+  /* 2026-11-22 → 2026년 11월 22일 일요일 */
+  function korDay(d) {
+    return d.getFullYear() + '년 ' + (d.getMonth() + 1) + '월 ' + d.getDate() + '일 ' +
+      ['일', '월', '화', '수', '목', '금', '토'][d.getDay()] + '요일';
   }
   /* expiresAt 이 오늘보다 이전이면 만료 (null/빈값 = 상시) */
   function isExpired(ev, today) {
@@ -453,8 +479,159 @@
       '</div>';
   }
 
+  /* ── 주말 모드 · 다음 주 청약 미리보기 ────────
+   * 토·일에는 시장이 쉬므로 '오늘 요약'의 첫 카드를 다음 주 청약 미리보기로 바꿉니다.
+   *   · 대상 : ipo.upcoming.subscribe 중 start 가 다음 주(월~일)인 종목
+   *   · 금액 : 종목별 균등 최소증거금(depositOf — 공모가×최소청약주수×50%)을
+   *            다음 주 안에서 날짜별로 더해 가장 많이 묶이는 날(피크)을 보여 줍니다
+   *            (start ≤ d < 환불일 — 환불일 당일 돈이 돌아옴)
+   *   · 직전 영업일(수집일)의 상장·철회는 히어로 아래 보조 카드로 라벨을 낮춰 둡니다.
+   */
+  function nextMonday(d) {
+    return addDays(d, d.getDay() === 6 ? 2 : 1);
+  }
+
+  function weekPreview(ipo, today) {
+    var mon = nextMonday(today);
+    var end = addDays(mon, 7);
+    var items = (((ipo || {}).upcoming || {}).subscribe || []).filter(function (it) {
+      var s = parseDay(it.start);
+      return s && s >= mon && s < end;
+    }).sort(function (a, b) {
+      return String(a.start || '').localeCompare(String(b.start || ''));
+    });
+
+    var rows = [];
+    items.forEach(function (it) {
+      var dep = depositOf(it), until = lockUntil(it), start = parseDay(it.start);
+      if (!dep || !until || !start) return;
+      rows.push({ item: it, dep: dep, until: until, start: start });
+    });
+
+    var days = {};
+    rows.forEach(function (r) {
+      for (var d = r.start; d < r.until && d < end; d = addDays(d, 1)) {
+        if (d < mon) continue;
+        var cell = days[dayKey(d)] || (days[dayKey(d)] = { day: new Date(d), amount: 0, names: [] });
+        cell.amount += r.dep.amount;
+        if (cell.names.indexOf(r.item.name) < 0) cell.names.push(r.item.name);
+      }
+    });
+    var peak = null;
+    Object.keys(days).sort().forEach(function (k) {
+      if (!peak || days[k].amount > peak.amount) peak = days[k];
+    });
+
+    return {
+      mon: mon,
+      end: end,
+      items: items,
+      rows: rows,
+      peak: peak,
+      total: rows.reduce(function (n, r) { return n + r.dep.amount; }, 0),
+      label: shortDay(dayKey(mon)) + '~' + shortDay(dayKey(addDays(mon, 4)))
+    };
+  }
+
+  /* 미리보기 종목 한 줄 — 기간 · 종목명 / 공모가 · 균등 증거금 / 주관 · 환불 */
+  function weekItem(it) {
+    var dep = depositOf(it);
+    var mid = '';
+    if (has(it.price)) mid += '<span class="wk-price">' + esc(it.price) + '</span>';
+    if (dep) {
+      var reason = depositReason(dep);
+      mid += '<span class="wk-dep">균등 ' + (reason ? '약 ' : '') + wonShort(dep.amount) +
+        (reason ? ' <span class="wk-est" title="' + esc(reason) + '">추정</span>' : '') +
+        '</span>';
+    }
+    var sub = [];
+    if (has(it.brokers)) sub.push(esc(it.brokers));
+    if (has(it.market)) sub.push(esc(it.market));
+    if (has(it.refund)) sub.push('환불 ' + esc(shortDay(it.refund)));
+
+    return '<li class="wk-i">' +
+        '<div class="wk-top">' +
+          (has(it.start) ? '<span class="wk-when">' + esc(dayRange(it)) + '</span>' : '') +
+          '<b class="wk-name">' + esc(it.name) + '</b>' +
+          (it.spac ? '<span class="wk-tag">스팩</span>' : '') +
+        '</div>' +
+        (mid ? '<div class="wk-mid">' + mid + '</div>' : '') +
+        (sub.length ? '<div class="wk-sub">' + sub.join(' · ') + '</div>' : '') +
+      '</li>';
+  }
+
+  function weekendHero(ipo, today) {
+    var w = weekPreview(ipo, today);
+    var n = w.items.length;
+    var asOf = mdd(ipo.date || ipo.updatedAt || dayKey(today));
+
+    var peak = '';
+    if (w.peak) {
+      peak = '<div class="wk-cash" id="wk-cash">' +
+          '<span class="wk-k">다음 주 균등 최소증거금 피크</span>' +
+          '<b class="wk-amt" id="wk-peak">약 ' + wonShort(w.peak.amount) + '</b>' +
+          '<span class="wk-day" id="wk-peak-when">' + esc(shortDay(dayKey(w.peak.day))) +
+            (w.peak.names.length > 1 ? ' · ' + w.peak.names.length + '종목 겹침' : '') +
+            ' <em>' + esc(cashNames(w.peak.names)) + '</em></span>' +
+        '</div>' +
+        '<p class="wk-note">※ 희망가 상단·10주(증거금 50%) 기준 추정 · 스팩 포함</p>';
+    }
+
+    var body = n
+      ? '<ul class="wk-list" id="wk-list">' + w.items.map(weekItem).join('') + '</ul>'
+      : '<p class="hempty wk-empty" id="wk-empty">다음 주에는 청약 예정 종목이 없어요.' +
+          ' 월요일 07:30 갱신 뒤 다시 확인하세요.</p>';
+
+    return '<article class="hero is-weekend" id="hero-weekend">' +
+        '<div class="flags">' +
+          '<span class="flag is-week">주말 휴장</span>' +
+          '<span class="flag is-next">다음 주 청약 미리보기</span>' +
+        '</div>' +
+        '<div class="hname sm">다음 주 청약 <b class="wk-cnt">' + n + '건</b></div>' +
+        '<p class="hernote">' +
+          (n ? esc(w.label) + ' · ' : '') +
+          '직전 영업일(' + esc(asOf) + ') 수집</p>' +
+        peak +
+        body +
+      '</article>';
+  }
+
+  /* 직전 영업일 상장 — 주말에 '오늘 상장'으로 읽히지 않게 라벨을 낮춘 보조 카드 */
+  function prevDayCard(ipo) {
+    var l = ipo.listing || {};
+    var when = mdd(l.date || ipo.date);
+    var flow = [];
+    if (has(l.ipoPrice)) flow.push('공모가 ' + esc(l.ipoPrice));
+    if (has(l.openPrice)) {
+      flow.push('시초 ' + esc(l.openPrice) +
+        (has(l.openChange) ? ' <span class="chg sm ' + dirOf(l.openChange) + '">' + esc(l.openChange) + '</span>' : ''));
+    }
+    var lastP = has(l.closePrice) ? l.closePrice : (l.earlyPrice || '');
+    var lastC = has(l.closeChange) ? l.closeChange
+      : (has(l.closePrice) ? '' : (l.earlyChange || ''));
+    if (has(lastP)) {
+      flow.push('종가 ' + esc(lastP) +
+        (lastC ? ' <span class="chg sm ' + dirOf(lastC) + '">' + esc(lastC) + '</span>' : ''));
+    }
+    var facts = [];
+    if (has(l.lockupRate)) facts.push('확약 ' + esc(l.lockupRate));
+    if (has(l.floatSummary)) facts.push('유통 ' + esc(l.floatSummary));
+
+    return '<div class="srows prevday" id="prev-day">' +
+        '<div class="srow">' +
+          '<div class="srow-top">' +
+            '<span class="k is-list">직전 영업일(' + esc(when) + ') 상장</span>' +
+            '<b>' + esc(l.name) + '</b>' +
+          '</div>' +
+          (flow.length ? '<div class="d">' + flow.join(' · ') + '</div>' : '') +
+          (facts.length ? '<div class="d">' + facts.join(' · ') + '</div>' : '') +
+        '</div>' +
+      '</div>';
+  }
+
   function ipoSection(ipo, today) {
     if (!ipo) return '<div class="empty">오늘 공모주 정보가 아직 없어요.</div>';
+    if (isWeekend(today)) return weekendHero(ipo, today);
 
     var html = '';
     var subs = ipo.subscribe || [];
@@ -468,10 +645,13 @@
     return html;
   }
 
-  /* 히어로 아래(공유 버튼 다음) — 철회 종목과 출처 */
-  function ipoFoot(ipo) {
+  /* 히어로 아래(공유 버튼 다음) — (주말) 직전 영업일 상장 · 철회 종목 · 출처 */
+  function ipoFoot(ipo, today) {
     if (!ipo) return '';
     var html = '';
+    if (isWeekend(today || todayDay()) && ipo.listing && ipo.listing.hasListing) {
+      html += prevDayCard(ipo);
+    }
     var side = '';
     (ipo.cancelled || []).forEach(function (c) {
       side += smallRow('off', c.badge || '청약 취소', c.name, esc(c.body));
@@ -918,9 +1098,19 @@
     var hiddenEvents = allEvents.length - liveEvents.length;
     var liveSec = liveEvents.filter(function (ev) { return benefitCat(ev) === 'securities'; }).length;
     var title = '마이돈 — 오늘의 공모주 1분 요약';
-    document.title = title + (d.date ? ' · ' + shortDay(d.date) : '');
+    var weekend = isWeekend(today);
+    document.title = title + (weekend || d.date ? ' · ' + shortDay(dayKey(today)) : '');
 
-    $('dateline').textContent = d.dateLabel || shortDay(d.date);
+    /* 주말에는 날짜 줄에 주말임을 분명히 적고, 갱신 안내는 '직전 영업일 수집 · 월요일 갱신'으로 바꿉니다 */
+    $('dateline').textContent = weekend
+      ? korDay(today) + ' · 주말 휴장'
+      : (d.dateLabel || shortDay(d.date));
+    var schedNote = $('sched-note');
+    if (schedNote) {
+      schedNote.innerHTML = weekend
+        ? '직전 영업일(<b>' + esc(mdd((d.ipo && d.ipo.date) || d.date)) + '</b>) 수집 · <b>월요일 07:30</b> 갱신'
+        : '평일 <b>07:30</b> · <b>16:05</b> 자동 갱신';
+    }
     $('updated').textContent = d.updatedLabel ? d.updatedLabel + ' 업데이트' : '';
 
     if (d.draft) {
@@ -930,7 +1120,7 @@
     }
 
     $('ipo-body').innerHTML = ipoSection(d.ipo, today);
-    $('ipo-foot').innerHTML = ipoFoot(d.ipo);
+    $('ipo-foot').innerHTML = ipoFoot(d.ipo, today);
     lastIpo = d.ipo;
     $('schedule-body').innerHTML = scheduleSection(d.ipo, today);
 
@@ -984,7 +1174,12 @@
       panel.hidden = !on;
     });
     if (!(opts && opts.silent)) {
-      var url = location.pathname + (name === 'today' ? '' : '?tab=' + name);
+      /* 탭을 바꾸며 새로고침해도 ?date(검증용 날짜 고정)는 유지합니다 */
+      var q = [];
+      var fixed = urlParam('date');
+      if (fixed) q.push('date=' + encodeURIComponent(fixed));
+      if (name !== 'today') q.push('tab=' + name);
+      var url = location.pathname + (q.length ? '?' + q.join('&') : '');
       try { history.replaceState(null, '', url); } catch (e) { /* file:// 등 */ }
     }
     if (!(opts && opts.noScroll)) {

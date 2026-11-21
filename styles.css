@@ -183,6 +183,9 @@ h1 em{font-style:normal; color:inherit}
 .flag.is-list{background:var(--blue-soft); color:var(--blue-ink)}
 .flag.is-list-on{background:var(--green-soft); color:var(--green)}
 .flag.is-soft{background:var(--bg2); color:var(--ink2)}
+/* 주말 모드 — 휴장 배지는 차분하게, 미리보기 배지는 정보 블루 */
+.flag.is-week{background:var(--bg2); color:var(--ink2)}
+.flag.is-next{background:var(--blue-soft); color:var(--blue-ink)}
 
 .hname{
   display:flex; align-items:baseline; gap:8px; flex-wrap:wrap;
@@ -192,6 +195,60 @@ h1 em{font-style:normal; color:inherit}
 .hname.sm{font-size:17px; letter-spacing:-.02em; line-height:1.35}
 .hmarket{font-size:12px; font-weight:500; color:var(--ink3); letter-spacing:0}
 .hempty{margin:6px 0 14px; font-size:13px; color:var(--ink3); line-height:1.45}
+
+/* ── 주말 모드 · 다음 주 청약 미리보기 카드 ──────────
+   히어로 하나에 ① 다음 주 기간·건수 ② 피크 자금 ③ 종목 줄(기간·공모가·균등 증거금·주관)
+   만 담습니다. 카드 폭을 꽉 채우는 띠로 두어 평일 히어로와 같은 무게를 유지합니다. */
+.hero.is-weekend{padding-bottom:0}
+.hernote{
+  margin:5px 0 0; font-size:11.5px; font-weight:400; line-height:1.5; color:var(--ink3);
+  font-variant-numeric:tabular-nums;
+}
+.hernote b{font-weight:600; color:var(--ink2)}
+.wk-cash{
+  margin-top:12px; padding:11px 13px;
+  background:var(--blue-soft); border-radius:10px;
+  display:grid; gap:1px;
+}
+.wk-k{font-size:11px; font-weight:600; letter-spacing:-.01em; color:var(--blue-ink)}
+.wk-amt{
+  font-size:26px; font-weight:700; letter-spacing:-.04em; line-height:1.15;
+  color:var(--ink); font-variant-numeric:tabular-nums;
+}
+.wk-day{
+  font-size:11px; font-weight:500; color:var(--ink2);
+  font-variant-numeric:tabular-nums; line-height:1.45;
+}
+.wk-day em{font-style:normal; font-weight:500; color:var(--ink3)}
+.wk-list{
+  margin:12px -16px 0; padding:0; list-style:none; border-top:1px solid var(--line);
+}
+.wk-i{padding:9px 16px 10px; border-bottom:1px solid var(--line)}
+.wk-i:last-child{border-bottom:0; padding-bottom:12px}
+.wk-top{display:flex; align-items:baseline; gap:6px; flex-wrap:wrap}
+.wk-when{
+  font-size:11px; font-weight:600; color:var(--ink2);
+  font-variant-numeric:tabular-nums; white-space:nowrap;
+}
+.wk-name{font-size:14px; font-weight:700; letter-spacing:-.02em; color:var(--ink)}
+.wk-tag{
+  flex:none; font-size:9.5px; font-weight:600; letter-spacing:0;
+  border-radius:4px; padding:0 4px; background:var(--bg2); color:var(--ink3);
+}
+.wk-mid{display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; margin-top:2px}
+.wk-price{font-size:11.5px; font-weight:500; color:var(--ink2); font-variant-numeric:tabular-nums}
+.wk-dep{
+  font-size:11.5px; font-weight:600; color:var(--ink2);
+  font-variant-numeric:tabular-nums; white-space:nowrap;
+}
+.wk-est{
+  font-size:9.5px; font-weight:500; letter-spacing:0; color:var(--ink3);
+  background:var(--bg2); border-radius:4px; padding:0 4px;
+}
+.wk-sub{margin-top:2px; font-size:10.5px; font-weight:400; color:var(--ink3); line-height:1.45}
+.wk-note{margin:6px 2px 0; font-size:10.5px; line-height:1.5; color:var(--ink3)}
+.wk-empty{margin:12px 0 14px}
+.hname .wk-cnt{font-weight:700; color:var(--ink); font-variant-numeric:tabular-nums}
 
 .hprice{
   display:flex; align-items:baseline; gap:7px; flex-wrap:wrap;
@@ -404,8 +461,10 @@ html[data-theme="dark"] .share-btn.done{background:var(--green-soft); color:var(
   border-radius:5px; padding:1px 6px; background:var(--bg2); color:var(--ink3);
 }
 .srow .k.next{background:var(--blue-soft); color:var(--blue-ink)}
+.srow .k.is-list{background:var(--blue-soft); color:var(--blue-ink)}
 .srow b{font-size:12px; font-weight:600; color:var(--ink2)}
 .srow .d{display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden}
+.srow .d + .d{margin-top:2px}
 
 .src{margin:2px 2px 4px; font-size:10.5px; color:var(--ink3)}
 .src a{color:inherit; text-decoration:underline; text-underline-offset:2px}

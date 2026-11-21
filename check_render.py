@@ -42,6 +42,18 @@ data.json 을 로컬 HTTP 로 띄워 확인합니다(파일 직접 열면 fetch 
 - 혜택 탭: 칩 3개(전체·증권사·금융·간편 이벤트·설문, 건수 포함) 즉시 필터링,
   카드마다 카테고리·D-day·혜택명·핵심 금액·대상·마감·기간·공식 링크(_blank)·
   '유의사항·신청 방법' 펼침, 만료 숨김(테스트 주입), 개인정보 문구 0건
+- 주말 모드(`?date=토·일`, app.js 는 KST 기준 토·일 자동 판별): `오늘 요약` 첫 카드가
+  `.hero.is-weekend` 로 바뀝니다. 배지 `주말 휴장` + `다음 주 청약 미리보기`, 날짜 줄은
+  `2026년 11월 21일 토요일 · 주말 휴장`, 갱신 줄은 `직전 영업일(11/20) 수집 · 월요일 07:30 갱신`,
+  히어로는 `다음 주 청약 N건` + 다음 주 월~일 `ipo.upcoming.subscribe` 종목(기간·공모가·
+  주관·환불·스팩 태그)과 **다음 주 균등 최소증거금 피크**(날짜별 동시 묶임 최댓값 — 기대값은
+  data.json 에서 같은 규칙으로 계산), 직전 영업일 상장은 `직전 영업일(11/20) 상장` 보조 카드로
+  내려가고 `오늘 청약`·`오늘 상장` 문구는 0건 — 토·일 모두 같은 미리보기, 다음 주 0건이면 빈 상태 문구,
+  다크·데스크톱 동일 값, 평일(`?date=수집일`)에는 주말 카드 없음, `?date` 없는 실제 오늘(KST)
+  로딩이 그날(평일/주말)에 맞는 카드를 내는지까지 확인합니다.
+
+검증 기준일은 data.json 의 수집일(마지막 영업일)로 고정(`?date=`)해, 검증을 어느 요일에
+돌려도 같은 기대값으로 평일 화면을 보고 주말 화면은 따로 더합니다.
 """
 import asyncio
 import datetime as dt
@@ -102,6 +114,15 @@ _TERMS_FILE = ROOT / "privacy_terms.txt"
 PRIVACY_TERMS = ([ln.strip() for ln in _TERMS_FILE.read_text(encoding="utf-8").splitlines()
                   if ln.strip() and not ln.startswith("#")] if _TERMS_FILE.exists() else [])
 TODAY = dt.datetime.now(KST).date()
+
+# ── 검증 기준일 고정 ──────────────────────────
+# 화면과 기대값을 같은 날짜로 맞춰야 요일과 무관하게 결과가 같습니다.
+# data.json 의 수집일(date)은 '직전 영업일'이라 평일 화면을 그대로 재현합니다.
+# app.js 는 ?date=YYYY-MM-DD 로 오늘을 고정할 수 있습니다(기본은 실제 KST 날짜).
+_m = re.match(r"^(\d{4})-(\d{2})-(\d{2})", str(DATA.get("date") or ""))
+DAY = (dt.date(int(_m[1]), int(_m[2]), int(_m[3])) if _m else TODAY)
+TODAY = DAY
+DAY_PARAM = f"date={DAY.isoformat()}"
 
 # 개인정보 검사어가 없어도 항상 검사하는 기본 문구
 ALWAYS_TERMS = ["야탑", "판교", "이매", "쌍둥이", "육아", "어린이집", "휴대폰", "배송지"]
@@ -260,6 +281,12 @@ def short_day(d):
     return f"{d.month}/{d.day}(" + "일월화수목금토"[(d.weekday() + 1) % 7] + ")"
 
 
+def kor_day(d):
+    """2026년 11월 22일 일요일 — JS korDay 와 같은 표기."""
+    return (f"{d.year}년 {d.month}월 {d.day}일 "
+            + "일월화수목금토"[(d.weekday() + 1) % 7] + "요일")
+
+
 def cash_row_text(item):
     dep = cash_deposit(item)
     if not dep:
@@ -267,6 +294,73 @@ def cash_row_text(item):
     reason = cash_reason(dep)
     return ("균등 " + ("약 " if reason else "") + won_short(dep["amount"])
             + (" 추정" if reason else ""))
+
+
+# ── 주말 모드 · 다음 주 청약 미리보기 기대값 ─────────────
+# app.js 의 nextMonday·weekPreview·weekItem 과 같은 규칙입니다.
+def next_monday(today):
+    """토·일 다음 월요일."""
+    return today + dt.timedelta(days=2 if today.weekday() == 5 else 1)
+
+
+def cash_names(names):
+    """3개까지만 이름, 더 많으면 '외 N'."""
+    head = "·".join(names[:3])
+    return f"{head} 외 {len(names) - 3}" if len(names) > 3 else head
+
+
+def week_preview(ipo, today):
+    """다음 주(월~일) 청약 종목 · 날짜별 동시 묶임 피크 · 기간 라벨."""
+    mon = next_monday(today)
+    end = mon + dt.timedelta(days=7)
+    items = []
+    for it in ((ipo or {}).get("upcoming") or {}).get("subscribe") or []:
+        s = parse_iso(it.get("start"))
+        if s and mon <= s < end:
+            items.append(it)
+    items.sort(key=lambda it: str(it.get("start") or ""))
+
+    rows = []
+    for it in items:
+        dep, until, start = cash_deposit(it), cash_lock_until(it), parse_iso(it.get("start"))
+        if dep and until and start:
+            rows.append((it, dep, until, start))
+
+    days = {}
+    for it, dep, until, start in rows:
+        d = start
+        while d < until and d < end:
+            if d >= mon:
+                cell = days.setdefault(d, {"amount": 0, "names": []})
+                cell["amount"] += dep["amount"]
+                if it.get("name") not in cell["names"]:
+                    cell["names"].append(it.get("name"))
+            d += dt.timedelta(days=1)
+
+    peak = None
+    for d in sorted(days):
+        if peak is None or days[d]["amount"] > peak[1]["amount"]:
+            peak = (d, days[d])
+
+    return {
+        "mon": mon,
+        "end": end,
+        "items": items,
+        "names": [it.get("name") for it in items],
+        "spac": [it.get("name") for it in items if it.get("spac")],
+        "label": short_day(mon) + "~" + short_day(mon + dt.timedelta(days=4)),
+        "peak": peak,
+        "peak_text": ("약 " + won_short(peak[1]["amount"])) if peak else None,
+        "peak_names": cash_names(peak[1]["names"]) if peak else "",
+        "deps": [cash_row_text(it) for it in items],
+        "whens": [
+            short_day(parse_iso(it.get("start")))
+            + ("~" + short_day(parse_iso(it.get("end")))
+               if it.get("end") and it.get("end") != it.get("start") else "")
+            for it in items
+        ],
+        "total": sum(dep["amount"] for _it, dep, _u, _s in rows),
+    }
 
 
 def serve():
@@ -479,6 +573,19 @@ def no_ipo_day(body):
     return body
 
 
+def week_empty_day(body):
+    """다음 주 청약이 0건인 주말 — 빈 상태 문구 확인용."""
+    body = json.loads(json.dumps(body))
+    ipo = body.setdefault("ipo", {})
+    mon = next_monday(TODAY)
+    end = mon + dt.timedelta(days=7)
+    up = ipo.setdefault("upcoming", {})
+    up["subscribe"] = [it for it in up.get("subscribe") or []
+                       if not (parse_iso(it.get("start"))
+                               and mon <= parse_iso(it.get("start")) < end)]
+    return body
+
+
 # ── 공유문 기대값 계산 (app.js 의 shareBlock 과 같은 규칙) ──────────────
 SHARE_FIELDS = [
     ("ipoPrice", "공모가"), ("lockupRate", "확약률"), ("marketCap", "시총"),
@@ -613,7 +720,14 @@ def expected_listing_copy(data):
     return f"{body}\n{SITE_URL}" if body else ""
 
 
-async def open_page(browser, inject=None, path="", init_script=None, mutate=None, **ctx_kw):
+async def open_page(browser, inject=None, path=None, init_script=None, mutate=None,
+                    pin=True, **ctx_kw):
+    """pin=True(기본)면 수집일(평일)로 날짜를 고정해 연다 — 실제 요일과 무관하게 평일 화면을 검증.
+    pin=False 면 파라미터 없이 실제 KST 날짜로 열어 프로덕션과 같은 동작을 본다."""
+    if path is None:
+        path = ""
+    if pin and DAY_PARAM not in path:
+        path += ("&" if "?" in path else "?") + DAY_PARAM
     ctx_args = dict(
         viewport={"width": 390, "height": 844},
         device_scale_factor=2,
@@ -1787,6 +1901,150 @@ async def main():
             await dkctx.close()
             await brctx.close()
 
+            # ── 주말 모드 · 다음 주 청약 미리보기 (?date=토·일) ─
+            # 평일 화면은 위에서 수집일(금)로 고정해 검증했고, 여기서는 같은 data.json 으로
+            # 토요일·일요일에 첫 카드가 '주말 휴장 · 다음 주 청약 미리보기'로 바뀌는지 본다.
+            sat = TODAY + dt.timedelta(days=1)
+            while sat.weekday() != 5:          # 5 = Saturday
+                sat += dt.timedelta(days=1)
+            sun = sat + dt.timedelta(days=1)
+            wk = week_preview(IPO, sat)
+            results["wk_day"] = sat.isoformat()
+            results["wk_expect_names"] = wk["names"]
+            results["wk_expect_label"] = wk["label"]
+            results["wk_expect_peak"] = wk["peak_text"]
+
+            wctx, wpage, w_errors = await open_page(
+                browser, path="?date=" + sat.isoformat(), pin=False)
+            results["wk_hero_class"] = await wpage.evaluate(
+                "(() => { const h = document.querySelector('.hero');"
+                " return h ? h.className : 'none'; })()")
+            results["wk_hero_count"] = await wpage.locator(".hero").count()
+            results["wk_flags"] = await wpage.eval_on_selector_all(
+                ".hero .flag", "els => els.map(e => e.textContent.trim())")
+            results["wk_title"] = await wpage.evaluate(
+                "document.querySelector('.hero .hname').textContent.replace(/\\s+/g, ' ').trim()")
+            results["wk_note"] = (await wpage.inner_text(".hero .hernote")).replace("\n", " ")
+            results["wk_dateline"] = await wpage.inner_text("#dateline")
+            results["wk_sched"] = (await wpage.inner_text("#sched-note")).replace("\n", " ")
+            results["wk_doc_title"] = await wpage.title()
+            results["wk_names"] = await wpage.eval_on_selector_all(
+                "#wk-list .wk-name", "els => els.map(e => e.textContent.trim())")
+            results["wk_whens"] = await wpage.eval_on_selector_all(
+                "#wk-list .wk-when", "els => els.map(e => e.textContent.trim())")
+            results["wk_deps"] = await wpage.eval_on_selector_all(
+                "#wk-list .wk-dep", "els => els.map(e => e.textContent.replace(/\\s+/g, ' ').trim())")
+            results["wk_spac_tags"] = await wpage.eval_on_selector_all(
+                "#wk-list .wk-i",
+                "els => els.map(e => e.querySelector('.wk-tag') ? e.querySelector('.wk-name').textContent.trim() : '')")
+            results["wk_peak"] = await opt_text(wpage, "#wk-peak")
+            results["wk_peak_when"] = (await opt_text(wpage, "#wk-peak-when")).replace("\n", " ")
+            results["wk_cash_note"] = await opt_text(wpage, ".wk-note")
+            results["wk_prev_label"] = await opt_text(wpage, "#prev-day .srow .k")
+            results["wk_prev_name"] = await opt_text(wpage, "#prev-day .srow b")
+            results["wk_prev_lines"] = await wpage.eval_on_selector_all(
+                "#prev-day .srow .d", "els => els.map(e => e.textContent.replace(/\\s+/g,' ').trim())")
+            results["wk_today_words"] = await wpage.evaluate("""(() => {
+                const t = (document.querySelector('#sec-ipo').innerText + ' ' +
+                           document.querySelector('#ipo-foot').innerText);
+                return ['오늘 청약', '오늘 상장'].filter(w => t.includes(w));
+            })()""")
+            results["wk_share"] = await wpage.eval_on_selector_all(
+                "#share .share-btn",
+                "els => els.map(e => ({ id: e.id, label: e.querySelector('.lbl').textContent.trim(),"
+                " disabled: e.disabled, h: Math.round(e.getBoundingClientRect().height) }))")
+            results["wk_next_band"] = await wpage.locator(".hero-next").count()
+            results["wk_overflow"] = await wpage.evaluate(
+                "document.documentElement.scrollWidth > window.innerWidth + 1")
+            results["wk_clipped"] = await wpage.evaluate("""(() => {
+                const vw = window.innerWidth, bad = [];
+                document.querySelectorAll('#sec-ipo .hero, #sec-ipo .hero *').forEach(el => {
+                  const r = el.getBoundingClientRect();
+                  if (r.width && (r.left < -1 || r.right > vw + 1)) bad.push(el.className);
+                });
+                return bad.slice(0, 5);
+            })()""")
+            results["wk_privacy_hits"] = [t for t in PRIVACY_TERMS + ALWAYS_TERMS
+                                          if t in await wpage.evaluate("document.body.innerText")]
+            results["wk_errors"] = w_errors
+            await wpage.screenshot(path=str(ROOT / "preview-mobile-weekend-first.png"))
+            await wpage.screenshot(path=str(ROOT / "preview-mobile-weekend.png"), full_page=True)
+            await wctx.close()
+
+            # 일요일도 같은 미리보기(다음 주 월요일 기준) — 토·일 판별이 둘 다 되는지
+            suctx, supage, su_errors = await open_page(
+                browser, path="?date=" + sun.isoformat(), pin=False)
+            results["wk_sun_class"] = await supage.evaluate(
+                "(() => { const h = document.querySelector('.hero');"
+                " return h ? h.className : 'none'; })()")
+            results["wk_sun_names"] = await supage.eval_on_selector_all(
+                "#wk-list .wk-name", "els => els.map(e => e.textContent.trim())")
+            results["wk_sun_dateline"] = await supage.inner_text("#dateline")
+            results["wk_sun_errors"] = su_errors
+            await suctx.close()
+
+            # 다음 주 청약 0건 — 빈 상태 문구
+            ectx, epage, e_errors = await open_page(
+                browser, path="?date=" + sat.isoformat(), mutate=week_empty_day, pin=False)
+            results["wk_empty_class"] = await epage.evaluate(
+                "(() => { const h = document.querySelector('.hero');"
+                " return h ? h.className : 'none'; })()")
+            results["wk_empty_text"] = await opt_text(epage, "#wk-empty")
+            results["wk_empty_peak"] = await epage.locator("#wk-peak").count()
+            results["wk_empty_items"] = await epage.locator("#wk-list .wk-i").count()
+            results["wk_empty_title"] = await epage.evaluate(
+                "document.querySelector('.hero .hname').textContent.replace(/\\s+/g, ' ').trim()")
+            results["wk_empty_errors"] = e_errors
+            await epage.screenshot(path=str(ROOT / "preview-mobile-weekend-empty.png"))
+            await ectx.close()
+
+            # 다크 모드 · 데스크톱 폭 — 같은 카드가 무너지지 않는지
+            wdctx, wdpage, wd_errors = await open_page(
+                browser, path="?date=" + sat.isoformat(), pin=False,
+                color_scheme="dark", init_script=DARK_PREF)
+            results["wk_dark_visible"] = await wdpage.locator("#hero-weekend").is_visible()
+            results["wk_dark_peak"] = await opt_text(wdpage, "#wk-peak")
+            results["wk_dark_bg"] = await wdpage.evaluate(
+                "getComputedStyle(document.querySelector('.hero.is-weekend')).backgroundColor")
+            results["wk_dark_overflow"] = await wdpage.evaluate(
+                "document.documentElement.scrollWidth > window.innerWidth + 1")
+            results["wk_dark_errors"] = wd_errors
+            await wdpage.screenshot(path=str(ROOT / "preview-mobile-weekend-dark.png"))
+            await wdctx.close()
+
+            wdkctx, wdkpage, wdk_errors = await open_page(
+                browser, path="?date=" + sat.isoformat(), pin=False,
+                viewport={"width": 1280, "height": 900}, is_mobile=False,
+                has_touch=False, device_scale_factor=1, permissions=[])
+            results["wk_desktop_visible"] = await wdkpage.locator("#hero-weekend").is_visible()
+            results["wk_desktop_peak"] = await opt_text(wdkpage, "#wk-peak")
+            results["wk_desktop_items"] = await wdkpage.locator("#wk-list .wk-i").count()
+            results["wk_desktop_overflow"] = await wdkpage.evaluate(
+                "document.documentElement.scrollWidth > window.innerWidth + 1")
+            results["wk_desktop_errors"] = wdk_errors
+            await wdkpage.screenshot(path=str(ROOT / "preview-desktop-weekend.png"), full_page=True)
+            await wdkctx.close()
+
+            # 평일 모드에는 주말 카드가 없어야 한다(수집일 고정 페이지에서 회귀 확인)
+            pctx, ppage, p_errors = await open_page(browser)
+            results["wk_weekday_absent"] = await ppage.locator("#hero-weekend, #wk-list, #prev-day").count()
+            results["wk_weekday_hero"] = await ppage.evaluate(
+                "(() => { const h = document.querySelector('.hero');"
+                " return h ? h.className : 'none'; })()")
+            results["wk_weekday_errors"] = p_errors
+            await pctx.close()
+
+            # 실제 오늘(KST)은 자동으로 그 날에 맞는 첫 카드가 떠야 한다 — ?date 없이 열기
+            real_kst = dt.datetime.now(KST).date()
+            rctx, rpage, r_errors = await open_page(browser, pin=False)
+            results["real_kst_day"] = real_kst.isoformat()
+            results["real_kst_weekend"] = real_kst.weekday() >= 5
+            results["real_kst_class"] = await rpage.evaluate(
+                "(() => { const h = document.querySelector('.hero');"
+                " return h ? h.className : 'none'; })()")
+            results["real_kst_errors"] = r_errors
+            await rctx.close()
+
             await browser.close()
     finally:
         httpd.shutdown()
@@ -2166,6 +2424,61 @@ async def main():
         'not results["clipped"]',
         'not results["privacy_hits"]',
         'not results["desktop_h_overflow"]',
+        # ── 주말 모드 · 다음 주 청약 미리보기 ────────────────────
+        'results["wk_hero_class"] == "hero is-weekend"',
+        'results["wk_hero_count"] == 1',
+        'results["wk_flags"] == ["주말 휴장", "다음 주 청약 미리보기"]',
+        'results["wk_dateline"] == kor_day(sat) + " · 주말 휴장"',
+        '"직전 영업일" in results["wk_sched"]',
+        '"월요일 07:30" in results["wk_sched"]',
+        'mdd(IPO.get("date")) in results["wk_sched"]',
+        'results["wk_doc_title"].endswith(short_day(sat))',
+        'results["wk_title"] == "다음 주 청약 " + str(len(wk["items"])) + "건"',
+        'results["wk_note"] == wk["label"] + " · 직전 영업일(" + mdd(IPO.get("date")) + ") 수집"',
+        'results["wk_names"] == wk["names"]',
+        'results["wk_whens"] == wk["whens"]',
+        'results["wk_deps"] == wk["deps"]',
+        'all(t in results["wk_spac_tags"] for t in wk["spac"])',
+        'results["wk_peak"] == wk["peak_text"]',
+        'results["wk_peak_when"].startswith(short_day(wk["peak"][0]))',
+        'all(n in results["wk_peak_when"] for n in wk["peak"][1]["names"][:3])',
+        '"추정" in results["wk_cash_note"] and "스팩 포함" in results["wk_cash_note"]',
+        'results["wk_prev_label"] == "직전 영업일(" + mdd(IPO["listing"].get("date")) + ") 상장"',
+        'results["wk_prev_name"] == IPO["listing"]["name"]',
+        'any("공모가" in ln for ln in results["wk_prev_lines"])',
+        'results["wk_today_words"] == []',
+        '[b["label"] for b in results["wk_share"]] == ["청약 정보 공유", "상장 정보 공유"]',
+        'min(b["h"] for b in results["wk_share"]) >= 44',
+        'results["wk_next_band"] == 0',
+        'not results["wk_overflow"]',
+        'not results["wk_clipped"]',
+        'not results["wk_privacy_hits"]',
+        'not results["wk_errors"]',
+        'results["wk_sun_class"] == "hero is-weekend"',
+        'results["wk_sun_names"] == wk["names"]',
+        'results["wk_sun_dateline"] == kor_day(sun) + " · 주말 휴장"',
+        'not results["wk_sun_errors"]',
+        'results["wk_empty_class"] == "hero is-weekend"',
+        'results["wk_empty_title"] == "다음 주 청약 0건"',
+        '"청약 예정 종목이 없어요" in results["wk_empty_text"]',
+        'results["wk_empty_peak"] == 0',
+        'results["wk_empty_items"] == 0',
+        'not results["wk_empty_errors"]',
+        'results["wk_dark_visible"]',
+        'results["wk_dark_peak"] == wk["peak_text"]',
+        'results["wk_dark_bg"] == "rgb(23, 23, 28)"',
+        'not results["wk_dark_overflow"]',
+        'not results["wk_dark_errors"]',
+        'results["wk_desktop_visible"]',
+        'results["wk_desktop_peak"] == wk["peak_text"]',
+        'results["wk_desktop_items"] == len(wk["items"])',
+        'not results["wk_desktop_overflow"]',
+        'not results["wk_desktop_errors"]',
+        'results["wk_weekday_absent"] == 0',
+        'results["wk_weekday_hero"] in ("hero is-list", "hero is-empty", "hero")',
+        'not results["wk_weekday_errors"]',
+        '("is-weekend" in results["real_kst_class"]) == results["real_kst_weekend"]',
+        'not results["real_kst_errors"]',
     ]
     ok = True
     _env = dict(globals())

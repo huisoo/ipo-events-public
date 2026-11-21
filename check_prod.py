@@ -10,7 +10,7 @@ from playwright.async_api import async_playwright
 
 from check_render import (expected_copy, expected_listing_copy, IOS_UA, DESKTOP_UA,  # 공유문 기대값 규칙 공유
                           cash_plan, cash_peak_text, cash_row_text, short_day, won_short,
-                          DARK_PREF)
+                          week_preview, next_monday, mdd, DARK_PREF)
 
 URL = "https://ipo.mydon.kr/"
 SITE_URL = "https://ipo.mydon.kr"
@@ -53,6 +53,21 @@ async def main():
         res["final_url"] = page.url
         await page.wait_for_selector("#main:not([hidden])", timeout=15000)
         await page.wait_for_timeout(400)
+
+        # 실제 오늘(KST)의 첫 화면 — 주말이면 '주말 휴장 · 다음 주 청약 미리보기'여야 함
+        res["live_hero"] = await page.evaluate(
+            "(() => { const h = document.querySelector('.hero');"
+            " return h ? h.className : 'none'; })()")
+        await page.screenshot(path=str(OUT / "preview-prod-mobile-live.png"))
+
+        # 수집일을 기준으로 한 평일 화면 — 아래 검사 내역은 모두 이 페이지에서 읽습니다
+        # (다음 청약 D-day·상장 히어로 등 날짜에 따라 달라지는 값을 요일과 무관하게 검증).
+        pdata0 = await page.evaluate("fetch('data.json?t=' + Date.now()).then(r => r.json())")
+        res["prod_date"] = (pdata0 or {}).get("date")
+        await page.goto(URL + "?date=" + str(res["prod_date"])[:10],
+                        wait_until="networkidle", timeout=45000)
+        await page.wait_for_selector("#main:not([hidden])", timeout=15000)
+        await page.wait_for_timeout(300)
 
         res["title"] = await page.title()
         res["brand"] = (await page.inner_text(".brand")).replace("\n", " ").strip()
@@ -724,7 +739,91 @@ async def main():
             " href: e.getAttribute('href'), target: e.getAttribute('target'),"
             " rel: e.getAttribute('rel') || '' }))")
         await dctx.close()
+        # ── 주말 모드 — 다음 주 청약 미리보기 (?date=토요일) ─────────────
+        pd = dt.date.fromisoformat(str(res["prod_date"])[:10])
+        sat = pd + dt.timedelta(days=1)
+        while sat.weekday() != 5:
+            sat += dt.timedelta(days=1)
+        wk = week_preview(IPO_PROD, sat)
+        res["wk_expect"] = {"names": wk["names"], "peak": wk["peak_text"], "label": wk["label"]}
+        wctx = await browser.new_context(
+            viewport={"width": 390, "height": 844}, device_scale_factor=2,
+            is_mobile=True, has_touch=True, user_agent=UA,
+            locale="ko-KR", timezone_id="Asia/Seoul")
+        wpage = await wctx.new_page()
+        wk_errors = []
+        wpage.on("console", lambda m: wk_errors.append(f"console.{m.type}: {m.text}")
+                 if m.type == "error" else None)
+        wpage.on("pageerror", lambda e: wk_errors.append(f"pageerror: {e}"))
+        await wpage.goto(URL + "?date=" + sat.isoformat(), wait_until="networkidle", timeout=45000)
+        await wpage.wait_for_selector("#main:not([hidden])", timeout=15000)
+        await wpage.wait_for_timeout(400)
+        res["wk_class"] = await wpage.evaluate(
+            "(() => { const h = document.querySelector('.hero');"
+            " return h ? h.className : 'none'; })()")
+        res["wk_flags"] = await wpage.eval_on_selector_all(
+            ".hero .flag", "els => els.map(e => e.textContent.trim())")
+        res["wk_title"] = await wpage.evaluate(
+            "document.querySelector('.hero .hname').textContent.replace(/\\s+/g, ' ').trim()")
+        res["wk_note"] = (await wpage.inner_text(".hero .hernote")).replace("\n", " ")
+        res["wk_dateline"] = await wpage.inner_text("#dateline")
+        res["wk_sched"] = (await wpage.inner_text("#sched-note")).replace("\n", " ")
+        res["wk_names"] = await wpage.eval_on_selector_all(
+            "#wk-list .wk-name", "els => els.map(e => e.textContent.trim())")
+        res["wk_whens"] = await wpage.eval_on_selector_all(
+            "#wk-list .wk-when", "els => els.map(e => e.textContent.trim())")
+        res["wk_deps"] = await wpage.eval_on_selector_all(
+            "#wk-list .wk-dep", "els => els.map(e => e.textContent.replace(/\\s+/g, ' ').trim())")
+        res["wk_peak"] = await opt_text(wpage, "#wk-peak")
+        res["wk_peak_when"] = (await opt_text(wpage, "#wk-peak-when")).replace("\n", " ")
+        res["wk_prev_label"] = await opt_text(wpage, "#prev-day .srow .k")
+        res["wk_today_words"] = await wpage.evaluate("""(() => {
+            const t = document.querySelector('#sec-ipo').innerText + ' ' +
+                      document.querySelector('#ipo-foot').innerText;
+            return ['오늘 청약', '오늘 상장'].filter(w => t.includes(w));
+        })()""")
+        res["wk_share_labels"] = await wpage.eval_on_selector_all(
+            "#share .share-btn .lbl", "els => els.map(e => e.textContent.trim())")
+        res["wk_share_h"] = await wpage.eval_on_selector_all(
+            "#share .share-btn", "els => els.map(e => Math.round(e.getBoundingClientRect().height))")
+        res["wk_overflow"] = await wpage.evaluate(
+            "document.documentElement.scrollWidth > window.innerWidth + 1")
+        res["wk_privacy_hits"] = [t for t in TERMS + ALWAYS_TERMS
+                                  if t in await wpage.evaluate("document.body.innerText")]
+        res["wk_errors"] = wk_errors
+        await wpage.screenshot(path=str(OUT / "preview-prod-mobile-weekend-first.png"))
+        await wpage.screenshot(path=str(OUT / "preview-prod-mobile-weekend.png"), full_page=True)
+
+        # 주말 화면의 다크 모드 · 전체 일정 탭·혜택 탭도 그대로 동작하는지
+        await wpage.add_init_script(DARK_PREF)
+        await wpage.reload(wait_until="networkidle", timeout=45000)
+        await wpage.wait_for_selector("#main:not([hidden])", timeout=15000)
+        await wpage.wait_for_timeout(300)
+        res["wk_dark_class"] = await wpage.evaluate(
+            "(() => { const h = document.querySelector('.hero');"
+            " return h ? h.className : 'none'; })()")
+        res["wk_dark_peak"] = await opt_text(wpage, "#wk-peak")
+        res["wk_dark_overflow"] = await wpage.evaluate(
+            "document.documentElement.scrollWidth > window.innerWidth + 1")
+        await wpage.screenshot(path=str(OUT / "preview-prod-mobile-weekend-dark.png"))
+        await wpage.locator("#tab-schedule").click()
+        await wpage.wait_for_timeout(300)
+        res["wk_sch_cards"] = await wpage.locator("#sch-subscribe .sc").count()
+        res["wk_sch_cash"] = await wpage.inner_text("#cash-peak")
+        await wpage.locator("#tab-benefits").click()
+        await wpage.wait_for_timeout(300)
+        res["wk_bf_cards"] = await wpage.locator("#bf-list .bf").count()
+        await wpage.locator("#tab-today").click()
+        await wpage.wait_for_timeout(200)
+        res["wk_back_today"] = await wpage.locator("#hero-weekend").is_visible()
+        await wctx.close()
+
+        # 실제 오늘(KST)이 주말이면 처음 연 기본 URL(live) 화면이 미리보기여야 합니다
+        real_kst = dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).date()
+        res["real_kst_day"] = real_kst.isoformat()
+        res["real_weekend"] = real_kst.weekday() >= 5
         await browser.close()
+
 
     # 청약일이면 유튜브 요약까지, 상장일이면 상장 포인트로 히어로를 검증
     hero_ok = ((res["hero_kind"] == "subscribe" and res["yt_rows"] >= 2)
@@ -951,6 +1050,34 @@ async def main():
         'res["desktop_cash_peak"] == cash_peak_text(plan_m)',
         'not res["privacy_hits"]',
         'not res["invite_words"]',
+        # ── 주말 모드 · 다음 주 청약 미리보기 ────────────────
+        '("is-weekend" in res["live_hero"]) == res["real_weekend"]',
+        'res["wk_class"] == "hero is-weekend"',
+        'res["wk_flags"] == ["주말 휴장", "다음 주 청약 미리보기"]',
+        'res["wk_dateline"] == f"{sat.year}년 {sat.month}월 {sat.day}일 토요일 · 주말 휴장"',
+        'res["wk_title"] == "다음 주 청약 " + str(len(wk["items"])) + "건"',
+        'res["wk_note"] == wk["label"] + " · 직전 영업일(" + mdd(res["prod_date"]) + ") 수집"',
+        '"직전 영업일" in res["wk_sched"]',
+        '"월요일 07:30" in res["wk_sched"]',
+        'res["wk_names"] == wk["names"]',
+        'res["wk_whens"] == wk["whens"]',
+        'res["wk_deps"] == wk["deps"]',
+        'res["wk_peak"] == (wk["peak_text"] or "")',
+        'res["wk_peak_when"].startswith(short_day(wk["peak"][0]))',
+        'all(n in res["wk_peak_when"] for n in wk["peak"][1]["names"][:3])',
+        'res["wk_prev_label"] == "직전 영업일(" + mdd(IPO_PROD["listing"].get("date")) + ") 상장"',
+        'res["wk_today_words"] == []',
+        'res["wk_share_labels"] == ["청약 정보 공유", "상장 정보 공유"]',
+        'min(res["wk_share_h"]) >= 44',
+        'not res["wk_overflow"]',
+        'not res["wk_privacy_hits"]',
+        'not res["wk_errors"]',
+        'res["wk_dark_class"] == "hero is-weekend"',
+        'res["wk_dark_peak"] == (wk["peak_text"] or "")',
+        'not res["wk_dark_overflow"]',
+        'res["wk_sch_cards"] >= 10',
+        'res["wk_bf_cards"] >= 1',
+        'res["wk_back_today"]',
         'res["support_visible"]',
         'res["support_href"] == "https://qr.kakaopay.com/Ej7j2Gwco"',
         'res["support_target"] == "_blank"',
