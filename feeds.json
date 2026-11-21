@@ -1,5 +1,5 @@
 {
- "updated_at": "2026-11-20T12:37:29+09:00",
+ "updated_at": "2026-11-21T12:19:42+09:00",
  "channels": [
   {
    "name": "공모주한잔",
@@ -54,14 +54,14 @@
     "videoId": "pqI-jhdtBE8",
     "title": "2026년 11월20일 하나에어로다이내믹스 상장일(멘트는 타채널에서)",
     "url": "https://www.youtube.com/watch?v=pqI-jhdtBE8",
-    "published": "2026-11-19T22:46:47+00:00"
+    "published": "2026-11-20T07:36:16+00:00"
    },
    "videos": [
     {
      "videoId": "pqI-jhdtBE8",
      "title": "2026년 11월20일 하나에어로다이내믹스 상장일(멘트는 타채널에서)",
      "url": "https://www.youtube.com/watch?v=pqI-jhdtBE8",
-     "published": "2026-11-19T22:46:47+00:00"
+     "published": "2026-11-20T07:36:16+00:00"
     },
     {
      "videoId": "K2VUAVmGYFo",
@@ -94,14 +94,6 @@
   "source": "38커뮤니케이션 공모주 청약일정",
   "url": "http://www.38.co.kr/html/fund/index.htm?o=k",
   "items": [
-   {
-    "name": "유캐스트",
-    "period": "2026.11.18~11.19",
-    "price_fixed": "19,000",
-    "price_band": "19,000~23,000",
-    "competition": "",
-    "brokers": "유진투자증권,신영증권"
-   },
    {
     "name": "케이엠에프",
     "period": "2026.11.24~11.25",
@@ -229,6 +221,14 @@
     "price_band": "7,500~10,500",
     "competition": "",
     "brokers": "한국투자증권"
+   },
+   {
+    "name": "피지티",
+    "period": "2026.12.17~12.18",
+    "price_fixed": "-",
+    "price_band": "18,000~20,000",
+    "competition": "",
+    "brokers": "한국투자증권,유안타증권"
    }
   ]
  },
@@ -240,10 +240,6 @@
   {
    "date": "11/30",
    "name": "유캐스트"
-  },
-  {
-   "date": "12/02",
-   "name": "아델"
   }
  ]
 }
