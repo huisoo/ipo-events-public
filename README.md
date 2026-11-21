@@ -9,7 +9,8 @@
 한 줄 배너만 두어 첫 화면 무게를 해치지 않습니다.
 빌드 도구 없이 `index.html` + `app.js` + `data.json` 만으로 동작하고, Vercel 같은 정적 호스팅에 그대로 올릴 수 있습니다.
 
-공개 URL: <https://ipo-events-public.pages.dev>
+공개 URL: <https://ipo.mydon.kr>
+(Cloudflare Pages 기본 주소 `https://ipo-events-public.pages.dev`도 그대로 동작하는 별칭입니다. 공유·OG·canonical 기준은 `https://ipo.mydon.kr`.)
 
 - 기준 배포는 **Cloudflare Pages**(`huisoo/ipo-events-public` GitHub 연동, `main` 푸시 시 자동 배포)입니다. Cloudflare Web Analytics 스크립트는 Pages가 HTML에 자동 삽입합니다.
 - 이전 Vercel 배포(`ipo-events-public.vercel.app`)는 기존 공유 링크가 깨지지 않도록 당분간 그대로 둡니다.
@@ -57,7 +58,7 @@
 * 상장일: 11/20
 
 ✅ 청약 의견: 균등 + 비례 풀청약 추천
-https://ipo-events-public.pages.dev   ← 클립보드 복사본에만(공유 시 url 필드로 따로 전달)
+https://ipo.mydon.kr   ← 클립보드 복사본에만(공유 시 url 필드로 따로 전달)
 ```
 
 - 종목이 여러 개면 빈 줄 하나로 구분해 이어 붙입니다.
@@ -88,7 +89,7 @@ https://ipo-events-public.pages.dev   ← 클립보드 복사본에만(공유 �
 * 상장일 유통물량: 17.30% (약 175억)
 * 가격제한폭: 3,420원 ~ 22,800원 (60~400%)
 * 한줄 요약: 장 초반 +98% 급등 후 마감 · 12/5 15일 확약 물량 주의
-https://ipo-events-public.pages.dev   ← 클립보드 복사본에만(공유 시 url 필드로 따로 전달)
+https://ipo.mydon.kr   ← 클립보드 복사본에만(공유 시 url 필드로 따로 전달)
 ```
 
 - 괄호의 날짜는 `ipo.listing.date`(없으면 `listingDate` → `ipo.date`)를 `M/DD`로 바꿔 씁니다.

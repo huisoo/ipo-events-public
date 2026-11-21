@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://ipo-events-public.pages.dev/sitemap.xml
+Sitemap: https://ipo.mydon.kr/sitemap.xml
