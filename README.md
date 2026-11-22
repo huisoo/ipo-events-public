@@ -330,9 +330,10 @@ BROWSABLE 딥링크가 확인된 앱(2026-11-21 기준 — 근거는 `handoffs/�
 | `scripts/generate_banner.py` | 배너 생성기 (Pillow · 한글 폰트 동봉) — `--self-test` 로 네 가지 상황을 확인 |
 | `check_render.py` | 390×844 Playwright 검증 + 스크린샷 생성 (스크린샷은 `.gitignore`, 저장소에 올리지 않음) |
 | `scripts/generate_icons.py` | 홈 화면 아이콘 생성기 (Pillow · 폰트 불필요, 블루 배경 + 흰 막대 3개) |
-| `scripts/fetch_ipo_feeds.py` | 공모주 유튜브 2채널 RSS + 38커뮤니케이션 청약일정 수집기 (API 키 불필요) |
+| `scripts/fetch_ipo_feeds.py` | 공모주 유튜브 2채널 RSS + 38커뮤니케이션 청약·신규상장 일정 수집기. `--sync-data` 로 `data.json` 전체 일정까지 자동 병합 (API 키 불필요) |
 | `feeds.json` | 수집기가 만드는 최신 영상·청약일정·신규상장 스냅샷 (사람이 쓰는 `data.json` 과 분리) |
-| `.github/workflows/update-ipo-feeds.yml` | 매일 07:30 KST 자동 수집·커밋 |
+| `scripts/fetch_listing_price.py` | 상장일 시초가·종가 조회기 — 네이버 금융 실시간 API에서 `ov`·`nv`·`hv`를 읽어 공모가 대비 등락률과 함께 JSON으로 출력하고, `--mode open·close --apply-data` 로 `ipo.listing`에 반영 |
+| `.github/workflows/update-ipo-feeds.yml` | 평일 06:13·16:13 KST 자동 수집·병합·커밋 |
 
 ## 홈 화면에 앱으로 추가 (PWA)
 
@@ -488,26 +489,63 @@ python3 check_prod.py   # 배포 URL 검증 (같은 공유 바·배너 항목 �
 
 ## 자동 수집 (`scripts/fetch_ipo_feeds.py`)
 
-API 키 없이 도는 수집기입니다. 화면 데이터(`data.json`)는 건드리지 않고 `feeds.json` 만 씁니다.
+API 키 없이 도는 수집기입니다. 기본 동작은 화면 데이터(`data.json`)를 건드리지 않고 `feeds.json` 만 쓰고,
+`--sync-data` 를 붙이면 `data.json` 의 전체 일정(`ipo.upcoming`)과 `ipo.next`·`ipo.nextListing` 도
+38커뮤니케이션 최신 표 기준으로 자동 병합 갱신합니다.
 
 ```bash
-python3 scripts/fetch_ipo_feeds.py            # feeds.json 갱신 + 새 영상·새 일정 요약 출력
-python3 scripts/fetch_ipo_feeds.py --dry-run  # 파일을 쓰지 않고 확인만
+python3 scripts/fetch_ipo_feeds.py              # feeds.json 갱신 + 새 영상·새 일정 요약 출력
+python3 scripts/fetch_ipo_feeds.py --dry-run    # 파일을 쓰지 않고 확인만
+python3 scripts/fetch_ipo_feeds.py --sync-data  # + data.json 전체 일정 병합 (바뀌면 banner.png 도 재생성)
+python3 scripts/fetch_ipo_feeds.py --sync-data --dry-run
 ```
 
 - **유튜브**: `공모주한잔`(UC8kMkLj4kAqMTeOeVQgxyUg), `공모주투자의법칙(공주)`(UCstq1xNCuEIR43dM3CMop3g) RSS에서
   최신 5개 영상의 제목·URL·업로드 시각을 가져옵니다.
 - **38커뮤니케이션**(`http://www.38.co.kr/html/fund/index.htm?o=k`, EUC-KR): 공모주 청약일정 표
-  (종목명·청약기간·확정/희망 공모가·경쟁률·주관사)와 IPO 신규상장 일정을 파싱합니다.
+  (종목명·청약기간·확정/희망 공모가·경쟁률·주관사)와 IPO 신규상장 일정(`?o=nw` — 상장일·확정 공모가·시초가·첫날종가)을 파싱합니다.
 - 지난 `feeds.json` 과 비교해 새로 올라온 영상·일정만 stdout 에 요약하고, 바뀐 내용이 없으면
   파일을 다시 쓰지 않습니다. 청약기간이 끝난 일정은 저장에서 뺍니다.
 
+### `--sync-data` 병합 규칙
+
+- **보존**: 같은 종목명이면 기존 항목의 키 순서와 38표에 없는 정밀 필드(`minShares`, `code`,
+  `spac`, `ipo.next`의 `lockupRate`·`marketCap`·`minSubscription`·`fee`·`equalShares`·
+  `expectedProRata`·`proRata10Shares`·`fullSubscription`·`listingDate`·`opinion` 등)를 절대 지우지 않습니다.
+- **갱신**: 청약기간·공모가(희망 → 확정 전환 포함)·주관사·상장일은 매 실행 최신 표 값으로 바뀝니다.
+- **신규 종목**: 38 상세 페이지를 한 번 더 읽어 시장구분(`market`)·종목코드(`code`)·환불일(`refund`)을 채웁니다.
+- **환불일**: 상세 페이지 값(공휴일 반영) 우선, 없으면 마감일 + 2영업일로 계산합니다.
+- **`asOf`·`windowLabel`**: 수집일과 첫 청약일 ~ 마지막 청약일 범위로 자동 계산합니다.
+- **`ipo.next`**: 아직 시작 안 한 청약 중 가장 이른 종목(같은 날이면 스팩을 뒤로) + '같은 날 N도 청약' 메모.
+- **`ipo.nextListing`**: 가장 이른 상장 예정 종목 + '{요일} 상장' 메모.
+- **배너**: `data.json` 내용이 실제로 바뀌었을 때만 `scripts/generate_banner.py` 로 `banner.png` 를 다시 만듭니다
+  (`--no-banner` 로 생략). 두 파일은 항상 같은 커밋에 넣습니다.
+- 38 청약일정 표를 못 읽은 실행은 `data.json` 을 손대지 않고 건너뜁니다(빈 일정으로 덮는 사고 방지).
+
+## 상장일 시세 (`scripts/fetch_listing_price.py`)
+
+네이버 금융 실시간 API(`polling.finance.naver.com/api/realtime?query=SERVICE_ITEM:{code}`)에서
+시초가(`ov`)·현재가(`nv`)·고가(`hv`)·저가(`lv`)를 읽어 공모가 대비 등락률과 함께 JSON 으로 출력합니다.
+
+```bash
+python3 scripts/fetch_listing_price.py 271160 --ipo-price 5700          # 조회만 (JSON 출력)
+python3 scripts/fetch_listing_price.py --mode open --apply-data         # 시초가 → ipo.listing.openPrice / openChange
+python3 scripts/fetch_listing_price.py --mode close --apply-data --stamp 16:05  # 종가 → closePrice / closeChange
+```
+
+- 종목코드·공모가를 생략하면 `data.json` 의 `ipo.listing.code`·`ipo.listing.ipoPrice` 를 씁니다
+  ('5,700원' 표기도 인식). 그마저 없으면 네이버 기준가(`sv`)를 기준으로 쓰고 `basis` 로 표시합니다.
+- `--mode close` 는 15:30 전(장중)에는 경고를 출력합니다 — 종가 확정은 장 마감 뒤 16:05 루틴에서 적용하는 것이 안전합니다.
+- `--apply-data` 는 `ipo.listing` 의 가격 필드만 바꿉니다(lockupRate·floatSummary·`points` 등은 손대지 않음).
+  `--banner` 로 배너 재생성, `--stamp HH:MM` 으로 `updatedAt`/`updatedLabel` 갱신을 함께 할 수 있습니다.
+
 ## 데이터 기준
 
-- `data.json`은 2026-11-20 기준입니다.
-- `ipo.upcoming`(청약·상장 예정)은 2026-11-20 38커뮤니케이션 청약일정(`?o=k`)·신규상장 일정(`?o=nw`) 표와
-  종목별 상세 페이지에서 확인한 값입니다(희망 공모가·청약 기간·환불일·주관사·시장구분).
-  아델은 수요예측(11/12~11/18) 뒤 2026-11-20 증권신고서를 철회해 `ipo.cancelled`로 옮렸습니다.
+- `data.json`의 공모주 전체 일정(`ipo.upcoming`)은 `scripts/fetch_ipo_feeds.py --sync-data` 가
+  38커뮤니케이션 청약일정(`?o=k`)·신규상장 일정(`?o=nw`) 표와 종목별 상세 페이지에서 자동 병합합니다
+  (GitHub Actions가 평일 06:13·16:13 KST에 실행). 그 밖의 오늘 요약·유튜브 코멘트·분석 의견은
+  매일 브리핑 루틴에서 사람/AI 확인으로 채웁니다.
+  아델은 수요예측(11/12~11/18) 뒤 2026-11-20 증권신고서를 철회해 `ipo.cancelled`로 옮겼습니다.
 - 증권사 혜택은 각 사 공식 이벤트 페이지에서 확인한 내용이며, 혜택·마감일·보상 한도는 예고 없이 바뀔 수 있습니다.
 - 공모주 일정·경쟁률은 38커뮤니케이션과 각 유튜브 채널 공개 내용을 기준으로 합니다.
 
