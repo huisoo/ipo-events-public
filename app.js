@@ -430,6 +430,26 @@
       '</article>';
   }
 
+  /* 장 시작 전(07:30~09:00) 상장 예정 — 시초가·종가·직전 체결가가 모두 아직 없다.
+   * 이때는 큰 가격 자리에 '09:00 상장 예정'을 두고, 공모가 기준 가격제한폭을 함께 적습니다. */
+  function isPreMarket(l) {
+    return !has(l.openPrice) && !has(l.closePrice) && !has(l.earlyPrice);
+  }
+
+  /* 가격제한폭 — priceBand 가 있으면 그대로, 없으면 공모가×0.6 ~ ×4 로 계산.
+   * 상장일 07:30 수집분은 아직 시초가 전이라 priceBand 도 비어 있어 공모가에서 만듭니다
+   * (공모가가 범위·희망가처럼 한 값이 아니면 계산하지 않습니다). */
+  function bandText(l) {
+    var band = has(l.priceBand) ? String(l.priceBand).trim() : '';
+    if (band && !shareUnknown(band)) return band;
+    var price = String(l.ipoPrice == null ? '' : l.ipoPrice);
+    if (!price || /[~∼]|희망/.test(price)) return '';
+    var n = parseInt(price.replace(/[^0-9]/g, ''), 10);
+    if (!(n > 0)) return '';
+    return Math.floor(n * 0.6).toLocaleString('ko-KR') + '원 ~ '
+      + (n * 4).toLocaleString('ko-KR') + '원 (60~400%)';
+  }
+
   /* 오늘 상장 카드 — 청약이 없는 날의 1레벨 (하단 띠는 청약 카드와 동일하게 다음 청약·다음 상장) */
   function listingHero(l, ipo, today) {
     var badge = String(l.badge || '').replace(/^오늘\s*상장\s*/, '');
@@ -443,10 +463,19 @@
         (has(l.openChange) ? ' <span class="chg sm ' + dirOf(l.openChange) + '">' + esc(l.openChange) + '</span>' : '') +
         '</dd></div>';
     }
-    /* 큰 가격은 종가(장 마감 뒤) — 아직 종가가 없으면 직전 체결가(earlyPrice) */
+    /* 큰 가격은 종가(장 마감 뒤) — 아직 종가가 없으면 직전 체결가(earlyPrice).
+       장 시작 전에는 둘 다 없으므로 빈 가격 대신 상장 시각·가격제한폭을 보여 줍니다. */
     var lastPrice = has(l.closePrice) ? l.closePrice : (l.earlyPrice || '');
     var lastChange = has(l.closeChange) ? l.closeChange
       : (has(l.closePrice) ? '' : (l.earlyChange || ''));
+    var band = bandText(l);
+    var priceHtml = has(lastPrice)
+      ? '<div class="hprice"><b>' + esc(lastPrice) + '</b>' +
+          (lastChange ? '<span class="chg ' + dirOf(lastChange) + '">' + esc(lastChange) + '</span>' : '') +
+        '</div>'
+      : '<div class="hprice is-pre"><b>09:00 상장 예정</b>' +
+          (band ? '<span>가격제한폭 ' + esc(band) + '</span>' : '') +
+        '</div>';
     return '<article class="hero is-list">' +
         '<div class="flags"><span class="flag is-list">오늘 상장</span>' +
           (badge ? '<span class="flag is-soft">' + esc(badge) + '</span>' : '') +
@@ -455,9 +484,7 @@
           (has(l.code) ? '<span class="hmarket">' + esc(l.code) + '</span>' : '') +
           (has(l.market) ? '<span class="hmarket">' + esc(l.market) + '</span>' : '') +
         '</div>' +
-        '<div class="hprice"><b>' + esc(lastPrice) + '</b>' +
-          (lastChange ? '<span class="chg ' + dirOf(lastChange) + '">' + esc(lastChange) + '</span>' : '') +
-        '</div>' +
+        priceHtml +
         (meta ? '<dl class="hmeta">' + meta + '</dl>' : '') +
         pts +
         brokerAppLinks(l.brokers) +
@@ -1419,8 +1446,12 @@
     var head = '📈 ' + String(l.name).trim() + (when ? ' (' + when + ' 상장)' : '');
 
     var bullets = [];
+    /* 장 시작 전 — 시초·종가가 없어 아래에 가격 줄이 없으므로 상장 시각을 먼저 적습니다 */
+    if (isPreMarket(l)) bullets.push('* 상장 시각: 09:00 (장 시작 전)');
     LISTING_FIELDS.forEach(function (f) {
-      var v = listingValue(l, f[0], f[2]);
+      var v = f[0] === 'priceBand'
+        ? (shareValue(l, f[0]) || (isPreMarket(l) ? bandText(l) : ''))
+        : listingValue(l, f[0], f[2]);
       if (v) bullets.push('* ' + f[1] + ': ' + v);
     });
     return bullets.length ? head + '\n\n' + bullets.join('\n') : head;

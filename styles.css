@@ -256,6 +256,16 @@ h1 em{font-style:normal; color:inherit}
 }
 .hprice b{font-size:29px; font-weight:700; letter-spacing:-.04em; line-height:1.1; white-space:nowrap}
 .hprice span{font-size:11.5px; font-weight:500; color:var(--ink3)}
+/* 장 시작 전(07:30~09:00) — 시초가 전이라 큰 가격 대신 상장 시각과 공모가 기준 가격제한폭 */
+.hprice.is-pre{display:block}
+.hprice.is-pre b{
+  display:block; font-size:20px; font-weight:700; letter-spacing:-.03em; line-height:1.25;
+  color:var(--ink); white-space:normal;
+}
+.hprice.is-pre span{
+  display:block; margin-top:3px;
+  font-size:11.5px; font-weight:500; color:var(--ink3); line-height:1.45;
+}
 .chg{font-size:15px; font-weight:700; white-space:nowrap; font-variant-numeric:tabular-nums}
 .chg.dn{color:var(--blue)}
 .chg.up{color:var(--red)}
@@ -857,6 +867,7 @@ html[data-theme="dark"] .toast.ok{background:rgba(62,207,142,.96); color:#0d1117
   .brand-mark{width:20px; height:20px}
   .hname{font-size:29px}
   .hprice b{font-size:32px}
+  .hprice.is-pre b{font-size:22px}
   .tabs{margin-bottom:16px}
   .tab{font-size:13.5px}
 }

@@ -60,6 +60,7 @@ import datetime as dt
 import functools
 import http.server
 import json
+import math
 import re
 import socketserver
 import sys
@@ -530,6 +531,17 @@ MOCK_LISTING_SPARSE = (
     "* 종가: 8,900원 (+27.1%)\n"
 )
 
+# 장 시작 전(07:30~09:00) 상장 예정 mock — 시초·종가 줄 대신 상장 시각, 가격제한폭은 공모가에서 계산
+MOCK_LISTING_PREMARKET = (
+    "📈 하나에어로다이내믹스 (11/20 상장)\n"
+    "\n"
+    "* 상장 시각: 09:00 (장 시작 전)\n"
+    "* 공모가: 5,700원\n"
+    "* 최종 확약률: 72.69%\n"
+    "* 상장일 유통물량: 17.30% (약 175억)\n"
+    "* 가격제한폭: 3,420원 ~ 22,800원 (60~400%)\n"
+)
+
 
 def listing_day(body):
     """오늘 상장만 있는 날 — 왼쪽(청약)은 비활성, 오른쪽(상장)은 풀 필드."""
@@ -564,6 +576,34 @@ def listing_sparse_day(body):
         "shareSummary": "",
     }
     return body
+
+
+def listing_premarket_day(body, band=""):
+    """장 시작 전(07:30~09:00) 상장 예정 — 시초가·종가·직전 체결가가 모두 비어 있는 상태.
+    data.json 의 07:30 수집분과 같은 모양(openPrice·closePrice·priceBand 빈 문자열)입니다."""
+    body = json.loads(json.dumps(body))
+    ipo = body.setdefault("ipo", {})
+    ipo["subscribe"] = []
+    ipo["next"] = {}
+    ipo["listing"] = {
+        "hasListing": True, "date": "2026-11-20", "name": "하나에어로다이내믹스",
+        "code": "271160", "market": "코스닥 · 벤처기업부", "badge": "오늘 상장",
+        "brokers": "IBK투자증권", "ipoPrice": "5,700원",
+        "openPrice": "", "openChange": "", "closePrice": "", "closeChange": "",
+        "earlyPrice": "", "earlyChange": "",
+        "lockupRate": "72.69%", "floatSummary": "17.30% (약 175억)",
+        "priceBand": band, "shareSummary": "",
+        "points": [
+            "오늘 흐름: 09:00 코스닥 상장 예정 · 공모가 5,700원 기준 가격제한폭 3,420~22,800원",
+            "물량·확약: 첫날 유통 17.30%(약 175억) · 최종 확약 72.69%",
+        ],
+    }
+    return body
+
+
+def listing_premarket_band_day(body):
+    """장 시작 전인데 priceBand 는 이미 적힌 날 — 같은 폭을 두 번 쓰지 않고 그대로 표시."""
+    return listing_premarket_day(body, band="3,420원 ~ 22,800원 (60~400%)")
 
 
 def broker_day(body):
@@ -729,6 +769,27 @@ def listing_value(item, key, chg_key):
     return f"{v} ({c})" if c else v
 
 
+def listing_pre(item):
+    """장 시작 전(07:30~09:00) — 시초가·종가·직전 체결가가 모두 비어 있음(app.js isPreMarket)."""
+    return not any(item.get(k) is not None and str(item.get(k)) != ""
+                   for k in ("openPrice", "closePrice", "earlyPrice"))
+
+
+def listing_band(item):
+    """가격제한폭 — priceBand 그대로, 없으면 공모가×0.6~×4 (app.js bandText)."""
+    band = str(item.get("priceBand") or "").strip()
+    if band and not UNKNOWN.match(band):
+        return band
+    price = str(item.get("ipoPrice") or "")
+    if not price or any(t in price for t in ("~", "∼", "희망")):
+        return ""
+    digits = re.sub(r"[^0-9]", "", price)
+    if not digits or int(digits) <= 0:
+        return ""
+    n = int(digits)
+    return f"{math.floor(n * 0.6):,}원 ~ {n * 4:,}원 (60~400%)"
+
+
 def listing_block(data):
     ipo = data.get("ipo") or {}
     l = ipo.get("listing") or {}
@@ -736,8 +797,12 @@ def listing_block(data):
         return ""
     when = mdd(l.get("date") or l.get("listingDate") or ipo.get("date") or "")
     head = "📈 " + str(l.get("name")).strip() + (f" ({when} 상장)" if when else "")
-    bullets = [f"* {label}: {v}" for key, label, chg in LISTING_FIELDS
-               if (v := listing_value(l, key, chg))]
+    bullets = ["* 상장 시각: 09:00 (장 시작 전)"] if listing_pre(l) else []
+    for key, label, chg in LISTING_FIELDS:
+        v = (share_value(l, key) or (listing_band(l) if listing_pre(l) else "")) \
+            if key == "priceBand" else listing_value(l, key, chg)
+        if v:
+            bullets.append(f"* {label}: {v}")
     return head + ("\n\n" + "\n".join(bullets) if bullets else "")
 
 
@@ -1623,6 +1688,8 @@ async def main():
             })()""")
             await gpage.locator("#share").screenshot(
                 path=str(ROOT / "preview-mobile-share-off.png"))
+            results["lday_hprice_class"] = await gpage.get_attribute(".hero .hprice", "class")
+            results["lday_price_text"] = (await gpage.inner_text(".hero .hprice b")).strip()
             results["listing_mock_errors"] = g_errors
             await gctx.close()
 
@@ -1637,6 +1704,89 @@ async def main():
                 s in sclip for s in ("미정", "확인 필요", "None", "undefined"))
             results["sparse_errors"] = s2_errors
             await sctx2.close()
+
+            # ── 2.7c 장 시작 전(07:30~09:00) 상장 예정 — 빈 가격 줄 대신 '09:00 상장 예정' ────
+            # 시초가 전에는 openPrice·closePrice·earlyPrice 가 모두 비어 있다.
+            # 예전에는 <div class="hprice"><b></b></div> 로 빈 줄이 생겼으니 그 자리를 대체 문구로 바꿨는지 봅니다.
+            pctx, ppage, p_errors = await open_page(browser, mutate=listing_premarket_day)
+            await ppage.wait_for_timeout(250)
+            results["pre_hero_class"] = await ppage.get_attribute(".hero", "class")
+            results["pre_hprice_class"] = await ppage.get_attribute(".hero .hprice", "class")
+            results["pre_price_text"] = (await ppage.inner_text(".hero .hprice b")).strip()
+            results["pre_band_text"] = (await ppage.inner_text(".hero .hprice span")).strip()
+            results["pre_price_box"] = await ppage.evaluate("""(() => {
+                const b = document.querySelector('.hero .hprice b');
+                const s = document.querySelector('.hero .hprice span');
+                const r = b.getBoundingClientRect(), h = document.querySelector('.hero .hprice');
+                return {
+                    w: Math.round(r.width), h: Math.round(r.height),
+                    fs: getComputedStyle(b).fontSize,
+                    b_fit: b.scrollWidth <= Math.round(r.width) + 1,
+                    s_fit: s.scrollWidth <= h.clientWidth + 1,
+                };
+            })()""")
+            results["pre_meta"] = (await ppage.inner_text(".hero .hmeta")).replace("\n", " ")
+            results["pre_flags"] = await ppage.eval_on_selector_all(
+                ".hero .flag", "els => els.map(e => e.textContent.trim())")
+            results["pre_overflow"] = await ppage.evaluate(
+                "document.documentElement.scrollWidth > window.innerWidth + 1")
+            await ppage.locator(".hero").screenshot(
+                path=str(ROOT / "preview-mobile-listing-premarket.png"))
+            await ppage.locator("#share-listing").click()
+            await ppage.wait_for_timeout(350)
+            pclip = await ppage.evaluate("navigator.clipboard.readText()")
+            results["pre_share"] = pclip
+            results["pre_share_exact"] = pclip == f"{MOCK_LISTING_PREMARKET}{SITE_URL}"
+            results["pre_share_band_once"] = pclip.count("* 가격제한폭:") == 1
+            results["pre_share_no_blank"] = not any(
+                ln.strip() == "*" for ln in pclip.split("\n"))
+            results["pre_errors"] = p_errors
+            await pctx.close()
+
+            # priceBand 가 이미 적힌 장 시작 전 — 공모가에서 다시 계산해 두 번 쓰지 않음
+            bctx, bpage, b_errors = await open_page(browser, mutate=listing_premarket_band_day)
+            await bpage.wait_for_timeout(250)
+            results["pre_band_day_text"] = (await bpage.inner_text(".hero .hprice span")).strip()
+            await bpage.locator("#share-listing").click()
+            await bpage.wait_for_timeout(350)
+            results["pre_band_day_exact"] = (await bpage.evaluate(
+                "navigator.clipboard.readText()")) == f"{MOCK_LISTING_PREMARKET}{SITE_URL}"
+            results["pre_band_errors"] = b_errors
+            await bctx.close()
+
+            # 다크·데스크톱에서도 같은 자리·같은 문구 (카드 배경·글자색만 바뀜)
+            dctx, dpage, d_errors = await open_page(browser, mutate=listing_premarket_day,
+                                                    init_script=DARK_PREF)
+            await dpage.wait_for_timeout(250)
+            results["pre_dark"] = await dpage.evaluate("""(() => {
+                const b = document.querySelector('.hero .hprice.is-pre b');
+                const c = document.querySelector('.hero');
+                return b ? { color: getComputedStyle(b).color,
+                             bg: getComputedStyle(c).backgroundColor,
+                             text: b.textContent.trim() } : null;
+            })()""")
+            results["pre_dark_overflow"] = await dpage.evaluate(
+                "document.documentElement.scrollWidth > window.innerWidth + 1")
+            await dpage.locator(".hero").screenshot(
+                path=str(ROOT / "preview-mobile-listing-premarket-dark.png"))
+            results["pre_dark_errors"] = d_errors
+            await dctx.close()
+
+            kctx, kpage, k_errors = await open_page(browser, mutate=listing_premarket_day,
+                                                    viewport={"width": 1280, "height": 900},
+                                                    is_mobile=False, has_touch=False,
+                                                    user_agent=DESKTOP_UA)
+            await kpage.wait_for_timeout(250)
+            results["pre_desktop"] = await kpage.evaluate("""(() => {
+                const b = document.querySelector('.hero .hprice.is-pre b');
+                return b ? { fs: getComputedStyle(b).fontSize, text: b.textContent.trim() } : null;
+            })()""")
+            results["pre_desktop_overflow"] = await kpage.evaluate(
+                "document.documentElement.scrollWidth > window.innerWidth + 1")
+            await kpage.locator(".hero").screenshot(
+                path=str(ROOT / "preview-desktop-listing-premarket.png"))
+            results["pre_desktop_errors"] = k_errors
+            await kctx.close()
 
             # ── 2.8 청약도 다음 청약도 없음 → 왼쪽 '오늘 청약 없음' 비활성 ────────
             nctx, npage, _ = await open_page(browser, mutate=no_ipo_day)
@@ -2455,6 +2605,34 @@ async def main():
         'results["disabled_muted"]',
         'results["lsparse_exact"]',
         'results["lsparse_dropped"]',
+        # ── 장 시작 전(07:30~09:00) 상장 예정 — 빈 가격 줄 대신 상장 시각·가격제한폭 ────
+        'results["lday_hprice_class"] == "hprice"',
+        'results["lday_price_text"] == "6,050원"',
+        'results["pre_hero_class"] == "hero is-list"',
+        'results["pre_hprice_class"] == "hprice is-pre"',
+        'results["pre_price_text"] == "09:00 상장 예정"',
+        'results["pre_band_text"] == "가격제한폭 3,420원 ~ 22,800원 (60~400%)"',
+        'results["pre_price_box"]["w"] > 100 and results["pre_price_box"]["h"] > 0',
+        'results["pre_price_box"]["fs"] == "20px"',
+        'results["pre_price_box"]["b_fit"] and results["pre_price_box"]["s_fit"]',
+        '"공모가" in results["pre_meta"] and "5,700원" in results["pre_meta"]',
+        'results["pre_flags"] == ["오늘 상장"]',
+        'not results["pre_overflow"]',
+        'results["pre_share_exact"]',
+        'results["pre_share_band_once"]',
+        'results["pre_share_no_blank"]',
+        'not results["pre_errors"]',
+        'results["pre_band_day_text"] == "가격제한폭 3,420원 ~ 22,800원 (60~400%)"',
+        'results["pre_band_day_exact"]',
+        'not results["pre_band_errors"]',
+        'results["pre_dark"]["text"] == "09:00 상장 예정"',
+        'results["pre_dark"]["bg"] == "rgb(23, 23, 28)"',
+        'not results["pre_dark_overflow"]',
+        'not results["pre_dark_errors"]',
+        'results["pre_desktop"]["text"] == "09:00 상장 예정"',
+        'results["pre_desktop"]["fs"] == "22px"',
+        'not results["pre_desktop_overflow"]',
+        'not results["pre_desktop_errors"]',
         'results["no_ipo_share_visible"]',
         'results["no_ipo_disabled"] == [True, True]',
         'results["no_ipo_btns"][0] == "오늘 청약 없음"',
@@ -2675,8 +2853,7 @@ async def main():
         'results["wk_desktop_items"] == len(wk["items"])',
         'not results["wk_desktop_overflow"]',
         'not results["wk_desktop_errors"]',
-        'results["wk_weekday_absent"] == 0',
-        'results["wk_weekday_hero"] in ("hero is-list", "hero is-empty", "hero")',
+        'results["wk_weekday_absent"] == 0',        'results["wk_weekday_hero"] in ("hero is-list", "hero is-empty", "hero")',
         'not results["wk_weekday_errors"]',
         '("is-weekend" in results["real_kst_class"]) == results["real_kst_weekend"]',
         'not results["real_kst_errors"]',
