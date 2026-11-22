@@ -1,15 +1,15 @@
 {
-  "date": "2026-11-20",
-  "dateLabel": "2026년 11월 20일 금요일",
-  "updatedLabel": "16:15",
+  "date": "2026-11-23",
+  "dateLabel": "2026년 11월 23일 월요일",
+  "updatedLabel": "07:33",
   "draft": false,
-  "draftNote": "공모주 08:42 기준 · 증권사 혜택 11/19 확인",
+  "draftNote": "공모주 07:33 기준 · 증권사 혜택 11/21 확인",
   "benefitsAsOf": "2026-11-21",
   "ipo": {
-    "date": "2026-11-20",
-    "dateLabel": "2026년 11월 20일 금요일",
-    "updatedAt": "2026-11-20T16:15:00+09:00",
-    "updatedLabel": "16:15",
+    "date": "2026-11-23",
+    "dateLabel": "2026년 11월 23일 월요일",
+    "updatedAt": "2026-11-23T07:33:00+09:00",
+    "updatedLabel": "07:33",
     "subscribe": [],
     "cancelled": [
       {
@@ -19,37 +19,17 @@
       }
     ],
     "listing": {
-      "hasListing": true,
-      "date": "2026-11-20",
-      "name": "하나에어로다이내믹스",
-      "code": "271160",
-      "market": "코스닥 · 벤처기업부",
-      "badge": "오늘 상장",
-      "brokers": "IBK투자증권",
-      "ipoPrice": "5,700원",
-      "openPrice": "10,130원",
-      "openChange": "+77.7%",
-      "closePrice": "6,050원",
-      "closeChange": "+6.14%",
-      "lockupRate": "72.69%",
-      "floatSummary": "17.30% (약 175억)",
-      "priceBand": "3,420원 ~ 22,800원 (60~400%)",
-      "shareSummary": "장 초반 +98% 급등 후 마감 · 12/5 15일 확약 물량 주의",
-      "points": [
-        "오늘 흐름: 시초 10,130원(+77.7%) · 최고 11,300원 · 종가 6,050원(+6.1%)",
-        "물량·확약: 첫날 유통 17.30%(약 175억) · 최종 확약 72.69%",
-        "주의할 점: 12/5경 15일 확약 물량(169만 주) 해제 예정"
-      ]
+      "hasListing": false
     },
     "hanjan": {
       "channel": "공모주한잔",
       "channelUrl": "https://www.youtube.com/@공모주한잔",
       "items": [],
-      "note": "오늘 청약 종목 없음 · 하나에어로다이내믹스 종가 6,050원(+6.14%) (11/09 분석: 풀 청약·목표 12,000~15,000원)",
+      "note": "오늘 청약·상장 종목 없음 · 다음 청약 11/24(화) 케이엠에프 · 다음 상장 11/24(화) 엠비디",
       "video": {
-        "title": "[오늘의공모주] 하나에어로다이내믹스 (상장일 다이내믹할지라도)",
-        "url": "https://www.youtube.com/watch?v=K8T8ykKKH8k",
-        "date": "2026-11-09"
+        "title": "[오늘의 공모주] 유캐스트 (공모가 밴드 하단이 결정적 판단 기준)",
+        "url": "https://www.youtube.com/watch?v=TM8NPtVp4WU",
+        "date": "2026-11-17"
       }
     },
     "gongmorin": {},
@@ -83,7 +63,7 @@
       "memo": "화요일 상장"
     },
     "upcoming": {
-      "asOf": "2026-11-22",
+      "asOf": "2026-11-23",
       "windowLabel": "11/24(화) ~ 12/18(금)",
       "source": {
         "label": "38커뮤니케이션 공모주 청약일정",
