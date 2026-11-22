@@ -30,10 +30,18 @@
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="마이돈 — 오늘의 공모주 1분 요약">
 <meta name="twitter:description" content="오늘 청약·상장 여부, 균등·비례 결론, 주관사별 최소 증거금, 다음 청약 D-day까지 한 장에.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='26' fill='%233182f6'/%3E%3Crect x='23' y='52' width='13' height='26' rx='5' fill='%23fff'/%3E%3Crect x='43.5' y='38' width='13' height='40' rx='5' fill='%23fff'/%3E%3Crect x='64' y='23' width='13' height='55' rx='5' fill='%23fff'/%3E%3C/svg%3E">
+<!-- 홈 화면에 추가(PWA) — 매니페스트·아이콘·iOS 메타 (아이콘은 scripts/generate_icons.py 가 만든다) -->
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
+<meta name="application-name" content="마이돈 공모주">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="마이돈 공모주">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-<link rel="stylesheet" href="styles.css?v=20261122g">
+<link rel="stylesheet" href="styles.css?v=20261122h">
 </head>
 <body>
 <div class="wrap">
@@ -108,6 +116,22 @@
         <span class="ben-link-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg></span>
       </a>
 
+      <!-- 홈 화면에 앱으로 추가 (PWA) — 오늘 요약 하단 한 줄
+           · 이미 홈 화면에서 연 상태(standalone)면 app.js 가 숨깁니다
+           · Android: beforeinstallprompt 가 뜬 뒤에만 보이고, 누르면 네이티브 설치 창
+           · iOS: 설치 API 가 없어 누르면 '공유 → 홈 화면에 추가' 안내를 펼칩니다
+           · × 를 누르면 localStorage(mydon-install-hide)에 남겨 다시 띄우지 않습니다 -->
+      <div class="install" id="install" hidden>
+        <div class="inst-row">
+          <span class="inst-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6.5" y="2.5" width="11" height="19" rx="2.6"/><path d="M10.6 5.4h2.8"/><path d="M12 17.6h.01"/></svg></span>
+          <button type="button" class="inst-btn" id="install-btn" aria-expanded="false" aria-controls="install-tip">홈 화면에 앱으로 추가</button>
+          <button type="button" class="inst-x" id="install-x" aria-label="홈 화면 추가 안내 닫기">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></svg>
+          </button>
+        </div>
+        <p class="inst-tip" id="install-tip" hidden>하단 공유(□↑) 버튼 → '홈 화면에 추가'를 누르면 앱처럼 바로 열려요</p>
+      </div>
+
       <!-- 2.5레벨 · 블로그 배너 퍼가기 (오늘 요약 맨 아래 · 접힘)
            banner.png 는 scripts/generate_banner.py 가 data.json 으로 매일 다시 만듭니다.
            티스토리·워드프레스는 HTML 코드, 네이버 블로그는 이미지 URL·저장 후 첨부 -->
@@ -174,6 +198,6 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-<script src="app.js?v=20261122g"></script>
+<script src="app.js?v=20261122h"></script>
 </body>
 </html>

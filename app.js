@@ -14,6 +14,9 @@
  *                   | 혜택(#panel-benefits, data.json benefits[] — 증권사·금융 / 간편 이벤트·설문)
  * 전체 일정 맨 위 .cash  균등 최소증거금(이번 달/전체 · 스팩 제외) — 피크 자금 강조 + 종목별 예상 증거금
  * 오늘 요약 하단  .ben-link  '증권사 개설·현금성 혜택 N건 보기 →' 한 줄 배너 (혜택 탭으로 전환)
+ * 오늘 요약 하단  .install  '홈 화면에 앱으로 추가' 한 줄 (standalone 이면 숨김 /
+ *                            Android 는 beforeinstallprompt 가 뜰 때만 네이티브 설치 창,
+ *                            iOS 는 공유 → '홈 화면에 추가' 안내 / × 는 localStorage 에 저장)
  * 오늘 요약 맨 아래 .banner-embed  '블로그 배너 퍼가기' (기본 접힘 — banner.png 미리보기 +
  *                                  HTML 코드/이미지 URL 복사·저장. banner.png 는
  *                                  scripts/generate_banner.py 가 data.json 으로 매일 다시 만든다)
@@ -1636,9 +1639,125 @@
     });
   });
 
+  /* ── 홈 화면에 앱으로 추가 (PWA) ───────────────
+   * 표시 조건
+   *   · 이미 홈 화면(standalone)에서 열었으면 설치할 것이 없으니 숨긴다.
+   *   · ×로 닫으면 localStorage('mydon-install-hide')에 남겨 다시 띄우지 않는다.
+   *   · Android·데스크톱 크롬: beforeinstallprompt 가 올 때만 보이고, 누르면 네이티브 설치 창.
+   *   · iOS(Safari): 설치 API 가 없으므로 버튼을 누르면 아래에 공유 → '홈 화면에 추가' 안내를 편다.
+   *   · 그 밖(설치 불가 환경)은 조용히 숨긴 채로 둔다.
+   */
+  var INSTALL_HIDE_KEY = 'mydon-install-hide';
+  var deferredInstall = null;
+
+  function isStandalone() {
+    try {
+      if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) return true;
+    } catch (e) { /* noop */ }
+    return window.navigator.standalone === true;
+  }
+
+  /* 아이패드(iPadOS 13+)는 UA 가 Macintosh 로 오므로 터치 지원까지 함께 본다 */
+  function isIOS() {
+    var ua = navigator.userAgent || '';
+    if (/iPhone|iPad|iPod/.test(ua)) return true;
+    return navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1;
+  }
+
+  /* 카톡·인스타·네이버 같은 인앱 브라우저는 '홈 화면에 추가'가 없으므로 iOS 에서는 안내를 꺼내지 않는다 */
+  function isInAppBrowser() {
+    return /KAKAOTALK|Instagram|FBAN|FB_IAB|FBAV|NAVER\(inapp|Line\/|DaumApps/i.test(navigator.userAgent || '');
+  }
+
+  function installDismissed() {
+    try { return localStorage.getItem(INSTALL_HIDE_KEY) === '1'; } catch (e) { return false; }
+  }
+
+  function rememberInstallDismissed() {
+    try { localStorage.setItem(INSTALL_HIDE_KEY, '1'); } catch (e) { /* noop */ }
+  }
+
+  function initInstall() {
+    var card = $('install');
+    if (!card) return;
+    if (isStandalone() || installDismissed()) { card.hidden = true; return; }
+
+    var btn = $('install-btn'), tip = $('install-tip'), x = $('install-x');
+
+    function show() {
+      card.hidden = false;
+      if (tip) { tip.hidden = true; }
+      if (btn) { btn.setAttribute('aria-expanded', 'false'); }
+    }
+    function hide() { card.hidden = true; }
+
+    /* Android·데스크톱 크롬 — 설치 가능해지는 순간 브라우저가 알려 준다 */
+    window.addEventListener('beforeinstallprompt', function (e) {
+      e.preventDefault();
+      deferredInstall = e;
+      if (isStandalone() || installDismissed()) return;
+      show();
+    });
+
+    /* 실제로 설치되면 더 보여 줄 이유가 없다 */
+    window.addEventListener('appinstalled', function () {
+      deferredInstall = null;
+      rememberInstallDismissed();
+      hide();
+    });
+
+    if (btn) {
+      btn.addEventListener('click', function () {
+        if (deferredInstall) {
+          var p = deferredInstall;
+          deferredInstall = null;
+          try { p.prompt(); } catch (err) { hide(); return; }
+          var choice = p.userChoice;
+          if (!choice || !choice.then) { hide(); return; }
+          choice.then(function (r) {
+            if (r && r.outcome === 'accepted') {
+              rememberInstallDismissed();
+              hide();
+              toast('홈 화면에 추가하고 있어요', 'ok');
+            } else {
+              /* 사용자가 설치 창을 닫음 — 한 번 더 재촉하지 않고 이번 화면에서만 숨긴다 */
+              hide();
+            }
+          }, hide);
+          return;
+        }
+        if (!tip) { hide(); return; }
+        /* iOS — 설치 API 가 없으니 공유 버튼 → '홈 화면에 추가' 안내를 편다 */
+        var open = btn.getAttribute('aria-expanded') === 'true';
+        btn.setAttribute('aria-expanded', open ? 'false' : 'true');
+        tip.hidden = open;
+      });
+    }
+
+    if (x) {
+      x.addEventListener('click', function () {
+        rememberInstallDismissed();
+        hide();
+      });
+    }
+
+    /* iOS 는 beforeinstallprompt 가 없으므로 바로 안내를 꺼내 둔다 (Safari 일 때만) */
+    if (isIOS() && !isInAppBrowser()) show();
+  }
+
+  /* 서비스 워커 등록 — Android 크롬 설치 조건. https(또는 localhost)에서만 동작한다. */
+  function initServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
+    try {
+      navigator.serviceWorker.register('/sw.js').catch(function () { /* 설치 배너는 SW 없이도 동작 */ });
+    } catch (e) { /* noop */ }
+  }
+
   /* ── 시작 ─────────────────────────────── */
   initTheme();
   initBanner();
+  initInstall();
+  initServiceWorker();
   fetch('data.json?t=' + Math.floor(Date.now() / 60000), { cache: 'no-store' })
     .then(function (r) {
       if (!r.ok) throw new Error('HTTP ' + r.status);

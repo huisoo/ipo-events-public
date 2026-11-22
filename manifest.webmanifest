@@ -1,0 +1,27 @@
+{
+  "id": "/",
+  "name": "마이돈 — 오늘의 공모주 1분 요약",
+  "short_name": "마이돈 공모주",
+  "description": "오늘 청약·상장하는 공모주와 균등·비례 결론, 주관사별 최소 증거금, 다음 청약 D-day까지 한 화면에.",
+  "lang": "ko",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4f6f8",
+  "theme_color": "#3182f6",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

@@ -963,6 +963,119 @@ async def main():
         real_kst = dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).date()
         res["real_kst_day"] = real_kst.isoformat()
         res["real_weekend"] = real_kst.weekday() >= 5
+        # ── 홈 화면에 앱으로 추가 (PWA) ─────────────────────────
+        # 배포본에서 매니페스트·서비스 워커·아이콘이 200 으로 열리고,
+        # 설치 안내 한 줄이 숨김 → (설치 이벤트) 표시 → prompt() 로 이어지는지.
+        pxctx = await browser.new_context(
+            viewport={"width": 390, "height": 844}, device_scale_factor=2,
+            is_mobile=True, has_touch=True, user_agent=UA,
+            locale="ko-KR", timezone_id="Asia/Seoul")
+        ppage = await pxctx.new_page()
+        p_errors = []
+        ppage.on("console", lambda m: p_errors.append(f"console.{m.type}: {m.text}")
+                 if m.type == "error" else None)
+        ppage.on("pageerror", lambda e: p_errors.append(f"pageerror: {e}"))
+        await ppage.goto(DATED, wait_until="networkidle", timeout=45000)
+        await ppage.wait_for_selector("#main:not([hidden])", timeout=15000)
+
+        _pm = await pxctx.request.get(SITE_URL + "/manifest.webmanifest")
+        res["pwa_manifest_status"] = _pm.status
+        res["pwa_manifest_type"] = _pm.headers.get("content-type", "")
+        try:
+            _pmj = await _pm.json()
+        except Exception:
+            _pmj = {}
+        res["pwa_manifest"] = {k: _pmj.get(k) for k in (
+            "name", "short_name", "start_url", "scope", "display",
+            "background_color", "theme_color")}
+        res["pwa_manifest_icons"] = [(i.get("src"), i.get("sizes"))
+                                     for i in (_pmj.get("icons") or [])]
+
+        def _png_dims(b):
+            return ((int.from_bytes(b[16:20], "big"), int.from_bytes(b[20:24], "big"))
+                    if len(b) > 24 and b[:8] == b"\x89PNG\r\n\x1a\n" else None)
+
+        res["pwa_icons"] = {}
+        for _p in ("/icons/icon-192.png", "/icons/icon-512.png", "/icons/apple-touch-icon.png"):
+            _ri = await pxctx.request.get(SITE_URL + _p)
+            res["pwa_icons"][_p] = {
+                "status": _ri.status,
+                "type": _ri.headers.get("content-type", ""),
+                "cache": _ri.headers.get("cache-control", ""),
+                "dims": _png_dims(await _ri.body()),
+            }
+        _pms = await pxctx.request.get(SITE_URL + "/manifest.webmanifest")
+        res["pwa_manifest_cache"] = _pms.headers.get("cache-control", "")
+        _psw = await pxctx.request.get(SITE_URL + "/sw.js")
+        res["pwa_sw_status"] = _psw.status
+        res["pwa_sw_type"] = _psw.headers.get("content-type", "")
+        _pst = await _psw.text()
+        res["pwa_sw_fetch"] = "addEventListener('fetch'" in _pst
+        res["pwa_sw_no_cache_storage"] = ("caches.open" not in _pst
+                                          and "addAll" not in _pst
+                                          and "cache.put" not in _pst)
+        # Pages 원본(pages.dev)에서도 같은 파일이 열려야 합니다
+        res["pwa_origin"] = {}
+        for _p in ("/manifest.webmanifest", "/sw.js", "/icons/icon-192.png"):
+            _ro = await pxctx.request.get(ORIGIN + _p)
+            res["pwa_origin"][_p] = (_ro.status, _ro.headers.get("content-type", ""))
+
+        res["pwa_head"] = await ppage.evaluate("""(() => {
+            const m = document.querySelector("link[rel='manifest']");
+            const a = document.querySelector("link[rel='apple-touch-icon']");
+            const f = document.querySelector("link[rel='icon']");
+            const meta = n => { const e = document.querySelector(`meta[name='${n}']`);
+                                return e ? e.getAttribute('content') : null; };
+            return { manifest: m && m.getAttribute('href'),
+                     apple: a && a.getAttribute('href'),
+                     apple_sizes: a && a.getAttribute('sizes'),
+                     icon: f && f.getAttribute('href'),
+                     apple_capable: meta('apple-mobile-web-app-capable'),
+                     mobile_capable: meta('mobile-web-app-capable') };
+        })()""")
+        res["install_closed"] = await ppage.evaluate("""(() => {
+            const c = document.querySelector('#install');
+            return { hidden: c.hidden, visible: !!(c.offsetWidth && c.offsetHeight),
+                     label: document.querySelector('#install-btn').textContent.trim() };
+        })()""")
+        await ppage.wait_for_timeout(1000)
+        res["pwa_sw_scopes"] = await ppage.evaluate(
+            "navigator.serviceWorker ? navigator.serviceWorker.getRegistrations()"
+            ".then(rs => rs.map(r => r.scope)) : []")
+        await ppage.evaluate("""(() => {
+            window.__prompted = 0;
+            const e = new Event('beforeinstallprompt');
+            e.prompt = () => { window.__prompted += 1; };
+            e.userChoice = Promise.resolve({ outcome: 'accepted' });
+            window.dispatchEvent(e);
+        })()""")
+        await ppage.wait_for_timeout(250)
+        res["install_android"] = await ppage.evaluate("""(() => {
+            const c = document.querySelector('#install');
+            const b = document.querySelector('#install-btn');
+            const r = c.getBoundingClientRect();
+            const bl = document.querySelector('#ben-link').getBoundingClientRect();
+            const be = document.querySelector('#banner-embed').getBoundingClientRect();
+            return { visible: !!(c.offsetWidth && c.offsetHeight), hidden: c.hidden,
+                     label: b.textContent.trim(), btn_h: Math.round(b.getBoundingClientRect().height),
+                     card_h: Math.round(r.height),
+                     placed: bl.bottom <= r.top + 1 && r.bottom <= be.top + 1 };
+        })()""")
+        await ppage.locator("#install").scroll_into_view_if_needed()
+        await ppage.wait_for_timeout(150)
+        await ppage.locator("#install").screenshot(
+            path=str(OUT / "preview-prod-mobile-install.png"))
+        await ppage.click("#install-btn")
+        await ppage.wait_for_timeout(300)
+        res["install_prompt_called"] = await ppage.evaluate("window.__prompted")
+        res["install_after_accept"] = await ppage.evaluate("""(() => ({
+            hidden: document.querySelector('#install').hidden,
+            stored: localStorage.getItem('mydon-install-hide')}))()""")
+        res["install_overflow"] = await ppage.evaluate(
+            "document.documentElement.scrollWidth > window.innerWidth + 1")
+        res["pwa_errors"] = p_errors
+        await pxctx.close()
+
         await browser.close()
 
 
@@ -1278,6 +1391,47 @@ async def main():
         'res["dark_support_visible"]',
         'res["dark_support_btn_style"]["bg"] == "rgb(254, 229, 0)"',
         'res["dark_support_btn_style"]["color"] == "rgb(25, 25, 25)"',
+        # ── 홈 화면에 앱으로 추가 (PWA) ─────────────────────
+        'res["pwa_manifest_status"] == 200',
+        '("manifest" in res["pwa_manifest_type"] or "json" in res["pwa_manifest_type"])',
+        'res["pwa_manifest"]["name"] == "마이돈 — 오늘의 공모주 1분 요약"',
+        'res["pwa_manifest"]["short_name"] == "마이돈 공모주"',
+        'res["pwa_manifest"]["start_url"] == "/"',
+        'res["pwa_manifest"]["scope"] == "/"',
+        'res["pwa_manifest"]["display"] == "standalone"',
+        'res["pwa_manifest"]["background_color"] == "#f4f6f8"',
+        'res["pwa_manifest"]["theme_color"] == "#3182f6"',
+        'res["pwa_manifest_icons"] == [("/icons/icon-192.png", "192x192"), ("/icons/icon-512.png", "512x512")]',
+        'res["pwa_icons"]["/icons/icon-192.png"]["status"] == 200',
+        'res["pwa_icons"]["/icons/icon-192.png"]["dims"] == (192, 192)',
+        'res["pwa_icons"]["/icons/icon-512.png"]["status"] == 200',
+        'res["pwa_icons"]["/icons/icon-512.png"]["dims"] == (512, 512)',
+        'res["pwa_icons"]["/icons/apple-touch-icon.png"]["status"] == 200',
+        'res["pwa_icons"]["/icons/apple-touch-icon.png"]["dims"] == (180, 180)',
+        'all("image/png" in v["type"] for v in res["pwa_icons"].values())',
+        'res["pwa_sw_status"] == 200',
+        'res["pwa_sw_fetch"]',
+        'res["pwa_sw_no_cache_storage"]',
+        'all(v[0] == 200 for v in res["pwa_origin"].values())',
+        'res["pwa_origin"]["/icons/icon-192.png"][1].startswith("image/png")',
+        'res["pwa_head"]["manifest"] == "/manifest.webmanifest"',
+        'res["pwa_head"]["apple"] == "/icons/apple-touch-icon.png"',
+        'res["pwa_head"]["apple_sizes"] == "180x180"',
+        'res["pwa_head"]["icon"] == "/icons/icon-192.png"',
+        'res["pwa_head"]["apple_capable"] == "yes"',
+        'res["pwa_head"]["mobile_capable"] == "yes"',
+        'res["pwa_sw_scopes"] == [SITE_URL + "/"]',
+        'res["install_closed"]["hidden"] and not res["install_closed"]["visible"]',
+        'res["install_closed"]["label"] == "홈 화면에 앱으로 추가"',
+        'res["install_android"]["visible"]',
+        'res["install_android"]["label"] == "홈 화면에 앱으로 추가"',
+        'res["install_android"]["btn_h"] >= 44',
+        'res["install_android"]["placed"]',
+        'res["install_prompt_called"] == 1',
+        'res["install_after_accept"]["hidden"]',
+        'res["install_after_accept"]["stored"] == "1"',
+        'not res["install_overflow"]',
+        'not res["pwa_errors"]',
         'not res["console_errors"]',
         'res["doc_width"] == res["viewport_width"]',
         'not res["desktop_h_overflow"]',

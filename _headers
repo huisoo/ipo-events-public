@@ -15,3 +15,17 @@
 # (블로그 글에 박힌 이미지가 하루 종일 옛 요약으로 남지 않게.)
 /banner.png
   Cache-Control: public, max-age=60, must-revalidate
+
+# PWA 매니페스트·서비스 워커 — 배포 직후 설치 안내가 바뀌어도 바로 반영되게 짧게 캐시한다.
+# (서비스 워커 스크립트 자체는 브라우저가 캐시를 우회해 갱신 여부를 확인한다.)
+/manifest.webmanifest
+  Content-Type: application/manifest+json; charset=utf-8
+  Cache-Control: public, max-age=60, must-revalidate
+
+/sw.js
+  Content-Type: application/javascript; charset=utf-8
+  Cache-Control: public, max-age=60, must-revalidate
+
+# 홈 화면 추가 아이콘 — 파일명이 고정이라 오래 캐시해도 된다. 디자인을 바꾸면 파일명과 함께 갱신한다.
+/icons/*
+  Cache-Control: public, max-age=604800

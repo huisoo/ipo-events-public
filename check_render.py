@@ -92,6 +92,43 @@ PLAY_ENC = "https%3A%2F%2Fplay.google.com%2Fstore%2Fapps%2Fdetails"
 # 다크 화면을 보려면 문서 스크립트보다 먼저 저장값을 심어 둔다(인라인 head 스크립트가 곧 data-theme 부여).
 DARK_PREF = "try{localStorage.setItem('mydon-theme','dark')}catch(e){}"
 
+# ── 홈 화면에 앱으로 추가(PWA) 검증용 ───────────────────
+# 헤드리스 크롬은 설치 조건을 스스로 판단하지 않으므로( beforeinstallprompt 자동 발생 없음),
+# 브라우저가 보내는 것과 같은 모양의 이벤트를 직접 던져 app.js 의 처리를 봅니다.
+KAKAO_UA = ("Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 "
+            "(KHTML, like Gecko) Mobile/15E148 KAKAOTALK 10.4.5")
+INSTALL_TIP = "하단 공유(□↑) 버튼 → '홈 화면에 추가'를 누르면 앱처럼 바로 열려요"
+INSTALL_LABEL = "홈 화면에 앱으로 추가"
+
+PROMPT_JS = """(() => {
+  window.__prompted = 0;
+  window.__installEvents = (window.__installEvents || 0) + 1;
+  const e = new Event('beforeinstallprompt');
+  e.prompt = () => { window.__prompted += 1; };
+  e.userChoice = Promise.resolve({ outcome: window.__choice || 'accepted' });
+  window.dispatchEvent(e);
+  return true;
+})()"""
+
+IOS_PROMPT_JS = PROMPT_JS.replace("'accepted'", "'dismissed'")   # iOS 에서는 이벤트가 오지 않지만 대비
+
+STANDALONE_JS = """(() => {
+  const orig = window.matchMedia.bind(window);
+  window.matchMedia = function (q) {
+    if (String(q).indexOf('display-mode: standalone') >= 0) {
+      return { matches: true, media: String(q), onchange: null,
+               addListener() {}, removeListener() {},
+               addEventListener() {}, removeEventListener() {},
+               dispatchEvent() { return false; } };
+    }
+    return orig(q);
+  };
+})();"""
+
+IOS_STANDALONE_JS = """(() => {
+  try { Object.defineProperty(window.navigator, 'standalone', { get: () => true }); } catch (e) {}
+})();"""
+
 
 def play_url(pkg):
     """앱 BROWSABLE 딥링크를 확인하지 못한 증권사 — Play 스토어 앱 페이지."""
@@ -391,6 +428,11 @@ def week_preview(ipo, today):
 
 
 def serve():
+    # .webmanifest 를 Cloudflare Pages 와 같은 타입으로 내려 준다(기본은 octet-stream).
+    http.server.SimpleHTTPRequestHandler.extensions_map = {
+        **http.server.SimpleHTTPRequestHandler.extensions_map,
+        ".webmanifest": "application/manifest+json",
+    }
     handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(ROOT))
     socketserver.TCPServer.allow_reuse_address = True
     httpd = socketserver.TCPServer(("127.0.0.1", PORT), handler)
@@ -2204,6 +2246,257 @@ async def main():
             await dkctx.close()
             await brctx.close()
 
+            # ── 홈 화면에 앱으로 추가 (PWA) ────────────────────────
+            # 파일(매니페스트·서비스 워커·아이콘 3종)은 로컬 서버가 그대로 내려 주고,
+            # 설치는 OS별 경로를 브라우저 이벤트(Android) / 공유 안내(iOS)로 나눠 확인합니다.
+            ictx, ipage, i_errors = await open_page(browser)
+            _mf_resp = await ictx.request.get(BASE + "manifest.webmanifest")
+            results["pwa_manifest_status"] = _mf_resp.status
+            results["pwa_manifest_type"] = _mf_resp.headers.get("content-type", "")
+            try:
+                _mf = await _mf_resp.json()
+            except Exception:
+                _mf = {}
+            results["pwa_manifest"] = {k: _mf.get(k) for k in (
+                "name", "short_name", "start_url", "scope", "display",
+                "background_color", "theme_color", "lang")}
+            results["pwa_manifest_icons"] = [
+                (i.get("src"), i.get("sizes"), i.get("type"), i.get("purpose"))
+                for i in (_mf.get("icons") or [])]
+
+            def _png_size_bytes(b):
+                return ((int.from_bytes(b[16:20], "big"), int.from_bytes(b[20:24], "big"))
+                        if len(b) > 24 and b[:8] == b"\x89PNG\r\n\x1a\n" else None)
+
+            _icon_files = {}
+            for _p in ("icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"):
+                _r = await ictx.request.get(BASE + _p)
+                _b = await _r.body()
+                _icon_files[_p] = {"status": _r.status,
+                                   "type": _r.headers.get("content-type", ""),
+                                   "size": _png_size_bytes(_b)}
+            results["pwa_icons"] = _icon_files
+
+            _sw_resp = await ictx.request.get(BASE + "sw.js")
+            results["pwa_sw_status"] = _sw_resp.status
+            _sw_text = await _sw_resp.text()
+            results["pwa_sw_fetch"] = "addEventListener('fetch'" in _sw_text
+            # 옛 HTML·data.json 을 고정하지 않는지 — Cache Storage 를 아예 쓰지 않아야 합니다
+            results["pwa_sw_no_cache_storage"] = (
+                "caches.open" not in _sw_text and "addAll" not in _sw_text
+                and "cache.put" not in _sw_text)
+            results["pwa_sw_passthrough"] = "fetch(req)" in _sw_text or "fetch(e.request)" in _sw_text
+
+            # 앱 화면(모바일 안드로이드)의 <head> 연결과 기본 숨김 상태
+            results["pwa_head"] = await ipage.evaluate("""(() => {
+                const m = document.querySelector("link[rel='manifest']");
+                const a = document.querySelector("link[rel='apple-touch-icon']");
+                const f = document.querySelector("link[rel='icon']");
+                const meta = n => { const e = document.querySelector(`meta[name='${n}']`);
+                                    return e ? e.getAttribute('content') : null; };
+                return {
+                    manifest: m && m.getAttribute('href'),
+                    apple: a && { href: a.getAttribute('href'), sizes: a.getAttribute('sizes') },
+                    icon: f && { href: f.getAttribute('href'), type: f.getAttribute('type'),
+                                 sizes: f.getAttribute('sizes') },
+                    apple_capable: meta('apple-mobile-web-app-capable'),
+                    apple_title: meta('apple-mobile-web-app-title'),
+                    mobile_capable: meta('mobile-web-app-capable'),
+                };
+            })()""")
+            await ipage.wait_for_timeout(700)
+            results["pwa_sw_scopes"] = await ipage.evaluate(
+                "navigator.serviceWorker ? navigator.serviceWorker.getRegistrations().then(rs => rs.map(r => r.scope)) : []")
+            # 설치 안내는 beforeinstallprompt 가 오기 전(일반 방문)에는 숨김
+            results["install_closed"] = await ipage.evaluate("""(() => {
+                const c = document.querySelector('#install');
+                const b = document.querySelector('#install-btn');
+                return { hidden: c.hidden, visible: !!(c.offsetWidth && c.offsetHeight),
+                         label: b.textContent.trim(),
+                         expanded: b.getAttribute('aria-expanded') };
+            })()""")
+
+            # Android — 설치 창이 뜰 수 있는 상태가 되면 한 줄이 나타나고, 누르면 네이티브 prompt()
+            await ipage.evaluate(PROMPT_JS)
+            await ipage.wait_for_timeout(250)
+            results["install_android"] = await ipage.evaluate("""(() => {
+                const c = document.querySelector('#install');
+                const b = document.querySelector('#install-btn');
+                const r = c.getBoundingClientRect(), rb = b.getBoundingClientRect();
+                const bl = document.querySelector('#ben-link').getBoundingClientRect();
+                const be = document.querySelector('#banner-embed').getBoundingClientRect();
+                return {
+                    hidden: c.hidden, visible: !!(c.offsetWidth && c.offsetHeight),
+                    label: b.textContent.trim(), btn_h: Math.round(rb.height),
+                    tip_hidden: document.querySelector('#install-tip').hidden,
+                    svg_icons: c.querySelectorAll('svg').length,
+                    placed: bl.bottom <= r.top + 1 && r.bottom <= be.top + 1,
+                    card_h: Math.round(r.height),
+                    bg: getComputedStyle(c).backgroundColor,
+                    radius: getComputedStyle(c).borderRadius,
+                };
+            })()""")
+            results["install_emoji"] = await ipage.evaluate(
+                "/[\\u{1F300}-\\u{1FAFF}\\u{2600}-\\u{27BF}]/u.test(document.querySelector('#install').textContent)")
+            await ipage.locator("#install").scroll_into_view_if_needed()
+            await ipage.wait_for_timeout(200)
+            await ipage.locator("#install").screenshot(path=str(ROOT / "preview-mobile-install.png"))
+            await ipage.screenshot(path=str(ROOT / "preview-mobile-install-context.png"))
+
+            await ipage.click("#install-btn")
+            await ipage.wait_for_timeout(300)
+            results["install_prompt_called"] = await ipage.evaluate("window.__prompted")
+            results["install_after_accept"] = await ipage.evaluate("""(() => ({
+                hidden: document.querySelector('#install').hidden,
+                stored: localStorage.getItem('mydon-install-hide'),
+                toast: document.querySelector('#toast').textContent.trim()}))()""")
+            # 가로 넘침 없음(설치 줄이 들어간 뒤에도)
+            results["install_overflow"] = await ipage.evaluate(
+                "document.documentElement.scrollWidth > window.innerWidth + 1")
+            results["install_errors"] = i_errors
+            await ictx.close()
+
+            # 설치 창을 닫은 경우(거절) — 이번 화면에서만 숨기고 저장하지는 않는다
+            rctx, rpage, _ = await open_page(browser)
+            await rpage.evaluate(PROMPT_JS.replace("'accepted'", "'dismissed'"))
+            await rpage.wait_for_timeout(200)
+            await rpage.click("#install-btn")
+            await rpage.wait_for_timeout(250)
+            results["install_after_dismiss"] = await rpage.evaluate("""(() => ({
+                hidden: document.querySelector('#install').hidden,
+                stored: localStorage.getItem('mydon-install-hide')}))()""")
+            await rctx.close()
+
+            # × 로 닫으면 localStorage 에 남아 새로고침·재방문에도 다시 뜨지 않는다
+            xctx, xpage, _ = await open_page(browser)
+            await xpage.evaluate(PROMPT_JS)
+            await xpage.wait_for_timeout(200)
+            await xpage.click("#install-x")
+            await xpage.wait_for_timeout(150)
+            results["install_dismiss"] = await xpage.evaluate("""(() => ({
+                hidden: document.querySelector('#install').hidden,
+                stored: localStorage.getItem('mydon-install-hide')}))()""")
+            await xpage.evaluate(PROMPT_JS)          # 설치 알림이 다시 와도
+            await xpage.wait_for_timeout(200)
+            results["install_dismiss_sticks"] = await xpage.evaluate(
+                "document.querySelector('#install').hidden")
+            await xpage.reload(wait_until="networkidle")
+            await xpage.wait_for_selector("#main:not([hidden])", timeout=8000)
+            await xpage.evaluate(PROMPT_JS)          # 새로고침 뒤에도
+            await xpage.wait_for_timeout(200)
+            results["install_dismiss_persist"] = await xpage.evaluate(
+                "document.querySelector('#install').hidden")
+            await xctx.close()
+
+            # iOS(Safari) — 설치 API 가 없으니 버튼이 '공유 → 홈 화면에 추가' 안내를 편다
+            cctx, cpage, c_errors = await open_page(browser, user_agent=IOS_UA)
+            results["install_ios"] = await cpage.evaluate("""(() => {
+                const c = document.querySelector('#install');
+                const b = document.querySelector('#install-btn');
+                return { hidden: c.hidden, visible: !!(c.offsetWidth && c.offsetHeight),
+                         label: b.textContent.trim(), expanded: b.getAttribute('aria-expanded'),
+                         tip_hidden: document.querySelector('#install-tip').hidden,
+                         tip_text: document.querySelector('#install-tip').textContent.trim() };
+            })()""")
+            await cpage.click("#install-btn")
+            await cpage.wait_for_timeout(250)
+            results["install_ios_open"] = await cpage.evaluate("""(() => {
+                const t = document.querySelector('#install-tip');
+                const r = t.getBoundingClientRect();
+                return { tip_hidden: t.hidden, tip_text: t.textContent.trim(),
+                         tip_visible: !!(t.offsetWidth && t.offsetHeight),
+                         tip_fit: t.scrollWidth <= t.clientWidth + 1,
+                         expanded: document.querySelector('#install-btn').getAttribute('aria-expanded'),
+                         tip_h: Math.round(r.height) };
+            })()""")
+            results["install_ios_overflow"] = await cpage.evaluate(
+                "document.documentElement.scrollWidth > window.innerWidth + 1")
+            await cpage.locator("#install").screenshot(
+                path=str(ROOT / "preview-mobile-install-ios.png"))
+            await cpage.click("#install-btn")          # 한 번 더 누르면 접힘
+            await cpage.wait_for_timeout(200)
+            results["install_ios_close"] = await cpage.evaluate("""(() => ({
+                tip_hidden: document.querySelector('#install-tip').hidden,
+                expanded: document.querySelector('#install-btn').getAttribute('aria-expanded')}))()""")
+            results["install_ios_errors"] = c_errors
+            await cctx.close()
+
+            # 카톡·인스타 인앱 브라우저 — '홈 화면에 추가'가 없으니 안내를 꺼내지 않는다
+            kctx, kpage, _ = await open_page(browser, user_agent=KAKAO_UA)
+            results["install_kakao_hidden"] = await kpage.evaluate(
+                "document.querySelector('#install').hidden")
+            await kctx.close()
+
+            # 이미 홈 화면(standalone)에서 열었으면 설치 안내는 필요 없음
+            sctx, spage, _ = await open_page(browser, init_script=STANDALONE_JS)
+            await spage.evaluate(PROMPT_JS)
+            await spage.wait_for_timeout(200)
+            results["install_standalone_hidden"] = await spage.evaluate(
+                "document.querySelector('#install').hidden")
+            await sctx.close()
+            tctx, tpage, _ = await open_page(browser, user_agent=IOS_UA,
+                                             init_script=IOS_STANDALONE_JS)
+            results["install_ios_standalone_hidden"] = await tpage.evaluate(
+                "document.querySelector('#install').hidden")
+            await tctx.close()
+
+            # 데스크톱 — 설치 창이 뜰 수 있는 브라우저(크롬)일 때만 보이고, 아니면 숨김
+            gctx, gpage, g_errors = await open_page(
+                browser, user_agent=DESKTOP_UA, viewport={"width": 1280, "height": 900},
+                is_mobile=False, has_touch=False, device_scale_factor=1, permissions=[])
+            results["install_desktop_default"] = await gpage.evaluate(
+                "document.querySelector('#install').hidden")
+            await gpage.evaluate(PROMPT_JS)
+            await gpage.wait_for_timeout(250)
+            results["install_desktop"] = await gpage.evaluate("""(() => {
+                const c = document.querySelector('#install');
+                return { hidden: c.hidden, visible: !!(c.offsetWidth && c.offsetHeight),
+                         label: document.querySelector('#install-btn').textContent.trim() };
+            })()""")
+            results["install_desktop_overflow"] = await gpage.evaluate(
+                "document.documentElement.scrollWidth > window.innerWidth + 1")
+            results["install_desktop_errors"] = g_errors
+            await gctx.close()
+
+            # 다크 모드에서도 같은 한 줄·같은 위계
+            vctx, vpage, v_errors = await open_page(browser, init_script=DARK_PREF)
+            await vpage.evaluate(PROMPT_JS)
+            await vpage.wait_for_timeout(250)
+            results["install_dark"] = await vpage.evaluate("""(() => {
+                const c = document.querySelector('#install');
+                return { visible: !!(c.offsetWidth && c.offsetHeight),
+                         bg: getComputedStyle(c).backgroundColor,
+                         radius: getComputedStyle(c).borderRadius };
+            })()""")
+            results["install_dark_overflow"] = await vpage.evaluate(
+                "document.documentElement.scrollWidth > window.innerWidth + 1")
+            await vpage.locator("#install").screenshot(
+                path=str(ROOT / "preview-mobile-install-dark.png"))
+            results["install_dark_errors"] = v_errors
+            await vctx.close()
+
+            # 서비스 워커가 실제로 오프라인을 받아 주는지(캐시 없이 패스스루 + 안내 한 장)
+            fctx, fpage, f_errors = await open_page(browser)
+            await fpage.wait_for_timeout(1200)
+            _ctrl = await fpage.evaluate(
+                "navigator.serviceWorker.controller ? navigator.serviceWorker.controller.scriptURL : null")
+            results["pwa_sw_controller"] = _ctrl
+            if _ctrl:
+                await fctx.set_offline(True)
+                try:
+                    await fpage.goto(BASE, wait_until="domcontentloaded", timeout=15000)
+                    await fpage.wait_for_timeout(400)
+                    results["pwa_offline_fallback"] = "인터넷 연결이 끊겼어요" in (
+                        await fpage.inner_text("body"))
+                except Exception as _e:
+                    results["pwa_offline_fallback"] = f"error: {type(_e).__name__}"
+                finally:
+                    await fctx.set_offline(False)
+            else:
+                results["pwa_offline_fallback"] = None      # 컨트롤러가 없으면 판정 보류
+            results["pwa_sw_errors"] = f_errors
+            await fctx.close()
+
             # ── 주말 모드 · 다음 주 청약 미리보기 (?date=토·일) ─
             # 평일 화면은 위에서 수집일(금)로 고정해 검증했고, 여기서는 같은 data.json 으로
             # 토요일·일요일에 첫 카드가 '주말 휴장 · 다음 주 청약 미리보기'로 바뀌는지 본다.
@@ -2803,6 +3096,91 @@ async def main():
         'not results["clipped"]',
         'not results["privacy_hits"]',
         'not results["desktop_h_overflow"]',
+        # ── 홈 화면에 앱으로 추가 (PWA) ─────────────────────
+        'results["pwa_manifest_status"] == 200',
+        '"manifest" in results["pwa_manifest_type"] or "json" in results["pwa_manifest_type"]',
+        'results["pwa_manifest"]["name"] == "마이돈 — 오늘의 공모주 1분 요약"',
+        'results["pwa_manifest"]["short_name"] == "마이돈 공모주"',
+        'results["pwa_manifest"]["start_url"] == "/"',
+        'results["pwa_manifest"]["scope"] == "/"',
+        'results["pwa_manifest"]["display"] == "standalone"',
+        'results["pwa_manifest"]["background_color"] == "#f4f6f8"',
+        'results["pwa_manifest"]["theme_color"] == "#3182f6"',
+        'results["pwa_manifest_icons"] == [("/icons/icon-192.png", "192x192", "image/png", "any"), '
+        '("/icons/icon-512.png", "512x512", "image/png", "any")]',
+        'results["pwa_icons"]["icons/icon-192.png"]["status"] == 200',
+        'results["pwa_icons"]["icons/icon-192.png"]["size"] == (192, 192)',
+        'results["pwa_icons"]["icons/icon-512.png"]["status"] == 200',
+        'results["pwa_icons"]["icons/icon-512.png"]["size"] == (512, 512)',
+        'results["pwa_icons"]["icons/apple-touch-icon.png"]["status"] == 200',
+        'results["pwa_icons"]["icons/apple-touch-icon.png"]["size"] == (180, 180)',
+        'all("image/png" in v["type"] for v in results["pwa_icons"].values())',
+        'results["pwa_sw_status"] == 200',
+        'results["pwa_sw_fetch"]',
+        'results["pwa_sw_no_cache_storage"]',
+        'results["pwa_sw_passthrough"]',
+        'results["pwa_head"]["manifest"] == "/manifest.webmanifest"',
+        'results["pwa_head"]["apple"] == {"href": "/icons/apple-touch-icon.png", "sizes": "180x180"}',
+        'results["pwa_head"]["icon"] == {"href": "/icons/icon-192.png", "type": "image/png", "sizes": "192x192"}',
+        'results["pwa_head"]["apple_capable"] == "yes"',
+        'results["pwa_head"]["mobile_capable"] == "yes"',
+        'results["pwa_head"]["apple_title"] == "마이돈 공모주"',
+        'results["pwa_sw_scopes"] in ([SITE_URL + "/"], [BASE])',
+        'results["pwa_offline_fallback"] in (True, None)',
+        # 설치 안내 한 줄 — 기본 숨김 → Android 는 이벤트 뒤 표시·누르면 prompt()
+        'results["install_closed"]["hidden"] and not results["install_closed"]["visible"]',
+        'results["install_closed"]["label"] == INSTALL_LABEL',
+        'not results["install_android"]["hidden"]',
+        'results["install_android"]["visible"]',
+        'results["install_android"]["label"] == INSTALL_LABEL',
+        'results["install_android"]["btn_h"] >= 44',
+        'results["install_android"]["tip_hidden"]',
+        'results["install_android"]["svg_icons"] >= 2',
+        'results["install_android"]["placed"]',
+        'results["install_android"]["card_h"] <= 72',
+        'results["install_android"]["bg"] == "rgb(255, 255, 255)"',
+        'results["install_android"]["radius"] == "14px"',
+        'not results["install_emoji"]',
+        'results["install_prompt_called"] == 1',
+        'results["install_after_accept"]["hidden"]',
+        'results["install_after_accept"]["stored"] == "1"',
+        '"홈 화면에 추가" in results["install_after_accept"]["toast"]',
+        'not results["install_overflow"]',
+        'not results["install_errors"]',
+        'results["install_after_dismiss"]["hidden"]',
+        'results["install_after_dismiss"]["stored"] is None',
+        'results["install_dismiss"]["hidden"]',
+        'results["install_dismiss"]["stored"] == "1"',
+        'results["install_dismiss_sticks"]',
+        'results["install_dismiss_persist"]',
+        # iOS — 버튼을 누를 때만 공유 안내가 펼쳐지고, 다시 누르면 접힘
+        'results["install_ios"]["visible"]',
+        'results["install_ios"]["label"] == INSTALL_LABEL',
+        'results["install_ios"]["expanded"] == "false"',
+        'results["install_ios"]["tip_hidden"]',
+        'not results["install_ios_open"]["tip_hidden"]',
+        'results["install_ios_open"]["tip_visible"]',
+        'results["install_ios_open"]["tip_text"] == INSTALL_TIP',
+        'results["install_ios_open"]["tip_fit"]',
+        'results["install_ios_open"]["expanded"] == "true"',
+        'results["install_ios_open"]["tip_h"] > 0',
+        'not results["install_ios_overflow"]',
+        'results["install_ios_close"] == {"tip_hidden": True, "expanded": "false"}',
+        'not results["install_ios_errors"]',
+        'results["install_kakao_hidden"]',
+        'results["install_standalone_hidden"]',
+        'results["install_ios_standalone_hidden"]',
+        'results["install_desktop_default"]',
+        'results["install_desktop"]["visible"]',
+        'results["install_desktop"]["label"] == INSTALL_LABEL',
+        'not results["install_desktop_overflow"]',
+        'not results["install_desktop_errors"]',
+        'results["install_dark"]["visible"]',
+        'results["install_dark"]["bg"] == "rgb(23, 23, 28)"',
+        'results["install_dark"]["radius"] == "14px"',
+        'not results["install_dark_overflow"]',
+        'not results["install_dark_errors"]',
+        'not results["pwa_sw_errors"]',
         # ── 주말 모드 · 다음 주 청약 미리보기 ────────────────────
         'results["wk_hero_class"] == "hero is-weekend"',
         'results["wk_hero_count"] == 1',

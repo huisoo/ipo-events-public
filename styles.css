@@ -499,6 +499,49 @@ html[data-theme="dark"] .share-btn.done{background:var(--green-soft); color:var(
 }
 .ben-link-arrow svg{width:16px; height:16px; display:block}
 
+/* ── 홈 화면에 앱으로 추가 (PWA) — 오늘 요약 하단 한 줄 ────
+   조건이 맞을 때만 app.js 가 hidden 을 풉니다(standalone·닫음·미지원이면 그대로 숨김).
+   카드가 아니라 얇은 한 줄로 두어 1레벨 히어로의 무게를 건드리지 않습니다. */
+.install{
+  margin-top:14px; padding:8px 8px 8px 14px;
+  background:var(--card);
+  border:1px solid var(--line); border-radius:14px;
+  box-shadow:var(--shadow);
+}
+.inst-row{display:flex; align-items:center; gap:8px}
+.inst-ico{
+  flex:none; display:inline-flex; align-items:center; justify-content:center;
+  width:16px; height:16px; color:var(--blue);
+}
+.inst-ico svg{width:16px; height:16px; display:block}
+.inst-btn{
+  -webkit-appearance:none; appearance:none;
+  flex:1; min-width:0; min-height:44px; padding:0;
+  font:inherit; font-size:13px; font-weight:600; letter-spacing:-.02em;
+  text-align:left; color:var(--ink);
+  background:none; border:0; border-radius:8px;
+  cursor:pointer; -webkit-tap-highlight-color:transparent;
+}
+.inst-btn:active{color:var(--blue-ink)}
+.inst-btn:focus-visible{outline:2px solid var(--blue); outline-offset:2px}
+.inst-x{
+  -webkit-appearance:none; appearance:none;
+  flex:none; display:inline-flex; align-items:center; justify-content:center;
+  width:36px; height:36px; padding:0;
+  color:var(--ink3); background:none; border:0; border-radius:8px;
+  cursor:pointer; -webkit-tap-highlight-color:transparent;
+  transition:background .15s ease, color .15s ease;
+}
+.inst-x svg{width:15px; height:15px; display:block}
+.inst-x:hover{background:var(--sunken); color:var(--ink2)}
+.inst-x:focus-visible{outline:2px solid var(--blue); outline-offset:2px}
+/* iOS 안내 — 공유 버튼을 찾아 누르는 한 줄 (누를 때만 펼칩니다) */
+.inst-tip{
+  margin:6px 6px 4px 0; padding:9px 10px;
+  font-size:11.5px; line-height:1.55; letter-spacing:-.01em;
+  color:var(--ink2); background:var(--sunken); border-radius:9px;
+}
+
 /* ── 2.5레벨 · 블로그 배너 퍼가기 (오늘 요약 맨 아래 · 기본 접힘) ────
    이미지(banner.png)는 scripts/generate_banner.py 가 매일 다시 만들므로
    이 블록은 코드·주소만 고정입니다. 이모지 없이 인라인 SVG 아이콘만 씁니다. */
