@@ -58,6 +58,10 @@ self.addEventListener('fetch', function (event) {
   /* 우리 사이트만 다룬다 — Pretendard CDN 같은 외부 요청은 브라우저에 그대로 맡긴다 */
   if (url.origin !== self.location.origin) return;
 
+  /* 검색엔진 수집용 파일(robots.txt·sitemap.xml)은 서비스 워커가 가로채지 않고
+     네트워크로 그대로 보낸다 — 오프라인 안내 HTML 이 대신 나가지 않게. */
+  if (url.pathname === '/robots.txt' || url.pathname === '/sitemap.xml') return;
+
   event.respondWith(
     fetch(req).catch(function () {
       /* 오프라인: 화면 이동이면 안내 한 장, 그 밖(데이터·이미지)은 조용히 실패 */

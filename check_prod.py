@@ -4,6 +4,7 @@
 """
 import asyncio
 import datetime as dt
+import re
 from pathlib import Path
 
 from playwright.async_api import async_playwright
@@ -148,6 +149,31 @@ async def main():
         res["draft_badge_visible"] = await page.locator("#draft").is_visible()
         res["robots"] = await page.get_attribute("meta[name='robots']", "content")
         res["canonical"] = await page.get_attribute("link[rel='canonical']", "href")
+        # 검색 노출용 메타 — OG 이미지·구조화 데이터·robots/sitemap 이 라이브에 실렸는지
+        res["og_image"] = await page.get_attribute("meta[property='og:image']", "content")
+        res["og_image_size"] = [
+            await page.get_attribute("meta[property='og:image:width']", "content"),
+            await page.get_attribute("meta[property='og:image:height']", "content")]
+        res["jsonld"] = await page.evaluate("""(() => {
+            const el = document.querySelector('script[type="application/ld+json"]');
+            if (!el) return null;
+            try {
+                const j = JSON.parse(el.textContent);
+                return (j['@graph'] || [j]).map(x => x['@type']);
+            } catch (e) { return 'parse_error'; }
+        })()""")
+        _rb = await page.request.get(SITE_URL + "/robots.txt")
+        _rb_text = await _rb.text()
+        res["robots_txt_status"] = _rb.status
+        res["robots_txt_has_sitemap"] = "Sitemap: https://ipo.mydon.kr/sitemap.xml" in _rb_text
+        res["robots_txt_allows_all"] = ("User-agent: *" in _rb_text and "Allow: /" in _rb_text)
+        _sm = await page.request.get(SITE_URL + "/sitemap.xml")
+        _sm_text = await _sm.text()
+        res["sitemap_status"] = _sm.status
+        res["sitemap_loc"] = "<loc>https://ipo.mydon.kr/</loc>" in _sm_text
+        _lm = re.search(r"<lastmod>(\d{4}-\d{2}-\d{2})</lastmod>", _sm_text)
+        res["sitemap_lastmod"] = _lm.group(1) if _lm else ""
+        res["sitemap_lastmod_ok"] = bool(_lm) and _lm.group(1) == str(res["prod_date"])[:10]
 
         # 1레벨 히어로
         res["hero"] = await page.locator(".hero").count()
@@ -1188,12 +1214,11 @@ async def main():
         'res["ios_app_btns"] and all( b["href"].startswith("https://apps.apple.com/kr/app/id") for b in res["ios_app_btns"])',
         'not res["ios_h_overflow"]',
         'res["desktop_app_btns"] and all( b["href"].startswith("https://play.google.com/store/apps/details?id=") and b["target"] == "_blank" and "noopener" in b["rel"] for b in res["desktop_app_btns"])',
-        '"1분 요약" in res["title"]',
+        'res["title"] == "공모주 청약 일정·균등 최소증거금 — 마이돈 오늘의 공모주"',
         # 마이돈 브랜드·공유 제목·캐시 버스터가 라이브에 실렸는지
         'res["brand"] == "마이돈 · 공모주"',
         'res["brand_nowrap"] == "nowrap"',
-        'res["title"].startswith("마이돈 — 오늘의 공모주 1분 요약")',
-        'res["og_title"] == "마이돈 — 오늘의 공모주 1분 요약"',
+        'res["og_title"] == "오늘의 공모주 청약 일정 — 마이돈"',
         'res["og_site_name"] == "마이돈"',
         '"?v=" in (res["css_href"] or "")',
         '"?v=" in (res["js_src"] or "")',
@@ -1208,6 +1233,16 @@ async def main():
         '"noindex" not in res["robots"]',
         '"index" in res["robots"]',
         'res["canonical"] == URL',
+        # 검색엔진 대비 — OG 이미지 · 구조화 데이터 · robots.txt · sitemap.xml
+        'res["og_image"] == "https://ipo.mydon.kr/banner.png"',
+        'res["og_image_size"] == ["800", "280"]',
+        'res["jsonld"] == ["WebSite", "Organization", "WebApplication"]',
+        'res["robots_txt_status"] == 200',
+        'res["robots_txt_has_sitemap"]',
+        'res["robots_txt_allows_all"]',
+        'res["sitemap_status"] == 200',
+        'res["sitemap_loc"]',
+        'res["sitemap_lastmod_ok"]',
         'not res["draft_badge_visible"]',
         'not res["has_draft_word"]',
         'res["hero"] == 1',

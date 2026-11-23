@@ -305,6 +305,21 @@ BROWSABLE 딥링크가 확인된 앱(2026-11-21 기준 — 근거는 `handoffs/�
 3레벨 응원 카드는 고지문 바로 위에 한 장만 두고, 누르면 카카오페이 송금 QR 링크가 새 탭으로 열립니다(`_blank`, `rel="noopener noreferrer"`).
 검색 노출을 위해 `robots: index, follow` 와 canonical URL 을 두었습니다.
 
+### 검색엔진 대비 (SEO)
+
+| 항목 | 내용 |
+| --- | --- |
+| `<title>` | `공모주 청약 일정·균등 최소증거금 — 마이돈 오늘의 공모주` (검색 키워드를 앞에) |
+| `description` · `og:*` · `twitter:*` | 청약 일정·상장일 시초가·균등 최소 필요금액(증거금)·증권사 앱 바로가기 키워드를 담은 90자 안팎 설명 |
+| `og:image` | `https://ipo.mydon.kr/banner.png` (800×280, `generate_banner.py` 가 매일 다시 만드는 배너) · `twitter:image` 는 아이콘 512 |
+| JSON-LD | `WebSite` + `Organization` + `WebApplication`(`FinanceApplication`, 무료) — 화면에는 영향 없음 |
+| `robots.txt` | 전체 허용 + `Sitemap: https://ipo.mydon.kr/sitemap.xml` |
+| `sitemap.xml` | 루트 1건 · `<lastmod>` 는 `fetch_ipo_feeds.py --sync-data` 가 data.json 이 바뀔 때 수집일로 갱신 |
+| `sw.js` | `robots.txt`·`sitemap.xml` 요청은 가로채지 않고 네트워크로 그대로 보냄 |
+
+검색엔진 등록(구글 서치콘솔·네이버 서치어드바이저)은 사이트 소유 확인이 필요해 계정 주인이 직접 해야 합니다.
+`https://ipo.mydon.kr/sitemap.xml` 을 제출하면 됩니다.
+
 ## 헤더의 갱신 시각
 
 | 표시 | 값의 출처 | 의미 |

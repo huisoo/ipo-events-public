@@ -1,3 +1,5 @@
+# 마이돈 — 오늘의 공모주 1분 요약 (https://ipo.mydon.kr)
+# 검색엔진(Googlebot · 네이버 Yeti · Bingbot) 전체 허용
 User-agent: *
 Allow: /
 

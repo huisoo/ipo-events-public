@@ -563,6 +563,29 @@ def sync_ipo_data(data: dict, schedule: list, new_listings: list, link_nos: dict
     return changed, notes
 
 
+def touch_sitemap_lastmod(here: str, day: str) -> bool:
+    """sitemap.xml 의 <lastmod> 를 수집일(day, YYYY-MM-DD)로 맞춥니다.
+
+    화면 내용이 바뀔 때만 부르므로 lastmod 가 실제 갱신일과 어긋나지 않습니다.
+    (파일이 없거나 바꿀 것이 없으면 False)
+    """
+    path = os.path.join(here, "sitemap.xml")
+    try:
+        with open(path, encoding="utf-8") as fp:
+            body = fp.read()
+    except FileNotFoundError:
+        return False
+    new = re.sub(r"<lastmod>\d{4}-\d{2}-\d{2}</lastmod>", f"<lastmod>{day}</lastmod>", body, count=1)
+    if new == body:
+        if "<lastmod>" not in body:
+            new = body.replace("</loc>", f"</loc>\n    <lastmod>{day}</lastmod>", 1)
+        if new == body:
+            return False
+    with open(path, "w", encoding="utf-8") as fp:
+        fp.write(new)
+    return True
+
+
 def regenerate_banner(here: str) -> bool:
     """generate_banner.py 로 banner.png 를 다시 만듭니다 (성공하면 True)."""
     script = os.path.join(here, "scripts", "generate_banner.py")
@@ -720,6 +743,8 @@ def main() -> int:
                     with open(args.data, "w", encoding="utf-8") as fp:
                         fp.write(payload)
                     print(f"\n저장: {args.data} (전체 일정 {len(data['ipo']['upcoming']['subscribe'])}건 · 상장 예정 {len(data['ipo']['upcoming']['listing'])}건)")
+                    if touch_sitemap_lastmod(here, now.strftime("%Y-%m-%d")):
+                        print("sitemap.xml lastmod 갱신")
                     if args.no_banner:
                         print("banner.png 는 --no-banner 로 그대로 뒀습니다.")
                     else:

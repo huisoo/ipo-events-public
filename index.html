@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<title>마이돈 — 오늘의 공모주 1분 요약</title>
+<title>공모주 청약 일정·균등 최소증거금 — 마이돈 오늘의 공모주</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light">
 <meta name="theme-color" content="#f4f6f8" id="theme-color">
@@ -18,18 +18,26 @@
   }catch(e){}
 })();
 </script>
-<meta name="description" content="오늘 청약·상장하는 공모주와 균등·비례 결론, 주관사별 최소 증거금, 공모주한잔·공모주린이 요약, 다음 청약 D-day까지 한 화면에 정리합니다.">
+<meta name="description" content="오늘 청약·상장하는 공모주와 이번 주 청약 일정, 상장일 시초가, 균등 최소 필요금액(증거금), 증권사 앱 바로가기를 한 화면에. 평일 07:30·16:05 갱신.">
 <meta name="robots" content="index, follow, max-image-preview:large">
 <link rel="canonical" href="https://ipo.mydon.kr/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="마이돈">
 <meta property="og:locale" content="ko_KR">
 <meta property="og:url" content="https://ipo.mydon.kr/">
-<meta property="og:title" content="마이돈 — 오늘의 공모주 1분 요약">
-<meta property="og:description" content="오늘 청약·상장 여부, 균등·비례 결론, 주관사별 최소 증거금, 다음 청약 D-day까지 한 장에.">
+<meta property="og:title" content="오늘의 공모주 청약 일정 — 마이돈">
+<meta property="og:description" content="오늘 청약·상장하는 공모주, 이번 주 청약 일정, 확정 공모가, 상장일 시초가, 균등 최소 필요금액(증거금)까지 한 화면에. 평일 07:30·16:05 갱신.">
+<!-- 링크 미리보기 이미지 — scripts/generate_banner.py 가 매일 data.json 으로 다시 만드는 800×280 배너 -->
+<meta property="og:image" content="https://ipo.mydon.kr/banner.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="800">
+<meta property="og:image:height" content="280">
+<meta property="og:image:alt" content="마이돈 — 오늘의 공모주 청약 일정·균등 최소증거금 요약 배너">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="마이돈 — 오늘의 공모주 1분 요약">
-<meta name="twitter:description" content="오늘 청약·상장 여부, 균등·비례 결론, 주관사별 최소 증거금, 다음 청약 D-day까지 한 장에.">
+<meta name="twitter:title" content="오늘의 공모주 청약 일정 — 마이돈">
+<meta name="twitter:description" content="오늘 청약·상장하는 공모주, 이번 주 청약 일정, 상장일 시초가, 균등 최소 필요금액까지 한 화면에.">
+<meta name="twitter:image" content="https://ipo.mydon.kr/icons/icon-512.png">
+<meta name="twitter:image:alt" content="마이돈 공모주">
 <!-- 홈 화면에 추가(PWA) — 매니페스트·아이콘·iOS 메타 (아이콘은 scripts/generate_icons.py 가 만든다) -->
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
@@ -42,6 +50,50 @@
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <link rel="stylesheet" href="styles.css?v=20261122h">
+<!-- 구조화 데이터 — 검색엔진이 사이트 이름·성격(무료 웹 앱·금융 정보)을 읽게 한다.
+     화면에는 아무 영향이 없고, 값은 위 title·description 과 같은 내용만 담는다. -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://ipo.mydon.kr/#website",
+      "url": "https://ipo.mydon.kr/",
+      "name": "마이돈 — 오늘의 공모주 1분 요약",
+      "alternateName": ["마이돈 공모주", "마이돈 공모주 청약 일정", "ipo.mydon.kr"],
+      "description": "오늘 청약·상장하는 공모주와 이번 주 공모주 청약 일정, 확정 공모가, 상장일 시초가, 균등배정 최소 필요금액(증거금)을 한 화면에 정리합니다.",
+      "inLanguage": "ko-KR",
+      "publisher": { "@id": "https://ipo.mydon.kr/#organization" }
+    },
+    {
+      "@type": "Organization",
+      "@id": "https://ipo.mydon.kr/#organization",
+      "name": "마이돈",
+      "url": "https://ipo.mydon.kr/",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://ipo.mydon.kr/icons/icon-512.png",
+        "width": 512,
+        "height": 512
+      }
+    },
+    {
+      "@type": "WebApplication",
+      "@id": "https://ipo.mydon.kr/#app",
+      "name": "마이돈 공모주",
+      "url": "https://ipo.mydon.kr/",
+      "description": "공모주 청약 일정·상장 일정·확정 공모가·균등 최소증거금·증권사 앱 바로가기를 매일 정리하는 무료 웹 앱.",
+      "applicationCategory": "FinanceApplication",
+      "operatingSystem": "Web",
+      "browserRequirements": "HTML·JavaScript를 지원하는 최신 브라우저",
+      "inLanguage": "ko-KR",
+      "isAccessibleForFree": true,
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "KRW" }
+    }
+  ]
+}
+</script>
 </head>
 <body>
 <div class="wrap">
