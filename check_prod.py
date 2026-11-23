@@ -115,6 +115,8 @@ async def main():
         res["js_src"] = await page.get_attribute("script[src*='app.js']", "src")
         # 캐시 버스터가 저장소 index.html 의 현재 값과 같은지 (Cloudflare 존 캐시 우회 확인)
         _idx = (OUT / "index.html").read_text(encoding="utf-8")
+        _tm = re.search(r"<title>(.*?)</title>", _idx)
+        res["static_title"] = _tm.group(1).strip() if _tm else ""
         res["local_css_v"] = _idx.split("styles.css?v=")[1].split('"')[0] if "styles.css?v=" in _idx else ""
         res["local_js_v"] = _idx.split("app.js?v=")[1].split('"')[0] if "app.js?v=" in _idx else ""
         res["css_v_deployed"] = res["local_css_v"] in (res["css_href"] or "")
@@ -1214,7 +1216,9 @@ async def main():
         'res["ios_app_btns"] and all( b["href"].startswith("https://apps.apple.com/kr/app/id") for b in res["ios_app_btns"])',
         'not res["ios_h_overflow"]',
         'res["desktop_app_btns"] and all( b["href"].startswith("https://play.google.com/store/apps/details?id=") and b["target"] == "_blank" and "noopener" in b["rel"] for b in res["desktop_app_btns"])',
-        'res["title"] == "공모주 청약 일정·균등 최소증거금 — 마이돈 오늘의 공모주"',
+        'res["title"].startswith("마이돈 — 공모주 청약 일정·상장일")',
+        # 정적 <title>(JS 실행 전)에도 검색 키워드가 들어 있는지
+        'res["static_title"] == "공모주 청약 일정·균등 최소증거금 — 마이돈 오늘의 공모주"',
         # 마이돈 브랜드·공유 제목·캐시 버스터가 라이브에 실렸는지
         'res["brand"] == "마이돈 · 공모주"',
         'res["brand_nowrap"] == "nowrap"',

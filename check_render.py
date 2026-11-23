@@ -2679,7 +2679,7 @@ async def main():
         'results["brand"] == "마이돈 · 공모주"',
         'results["brand_nowrap"] == "nowrap"',
         'results["brand_text_lines"] == 1',
-        'results["title"] == "공모주 청약 일정·균등 최소증거금 — 마이돈 오늘의 공모주"',
+        'results["title"].startswith("마이돈 — 공모주 청약 일정·상장일")',
         'results["og_title"] == "오늘의 공모주 청약 일정 — 마이돈"',
         'results["tw_title"] == "오늘의 공모주 청약 일정 — 마이돈"',
         'results["og_site_name"] == "마이돈"',

@@ -1130,7 +1130,7 @@
     var liveEvents = allEvents.filter(function (ev) { return !isExpired(ev, today); });
     var hiddenEvents = allEvents.length - liveEvents.length;
     var liveSec = liveEvents.filter(function (ev) { return benefitCat(ev) === 'securities'; }).length;
-    var title = '마이돈 — 오늘의 공모주 1분 요약';
+    var title = '마이돈 — 공모주 청약 일정·상장일';
     var weekend = isWeekend(today);
     document.title = title + (weekend || d.date ? ' · ' + shortDay(dayKey(today)) : '');
 
