@@ -489,6 +489,13 @@ def sync_ipo_data(data: dict, schedule: list, new_listings: list, link_nos: dict
     sub_items = build_subscribe(schedule, today)
     list_items = build_upcoming_listings(new_listings, today)
 
+    # 철회(ipo.cancelled)된 종목은 38 표에 잠시 남아 있어도 다시 넣지 않습니다.
+    # (예: 케이엠에프 — 2026-11-23 철회신고서 제출 후에도 38 청약일정 표에는 며칠 더 남음.
+    #  다시 추적하려면 ipo.cancelled 에서 그 항목을 지우면 됩니다.)
+    cancelled_names = {c.get("name") for c in (ipo.get("cancelled") or []) if c.get("name")}
+    if cancelled_names:
+        sub_items = [it for it in sub_items if it["name"] not in cancelled_names]
+
     old_subs = up.get("subscribe") or []
     old_lists = up.get("listing") or []
 
