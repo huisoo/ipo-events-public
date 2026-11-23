@@ -1,5 +1,5 @@
 {
- "updated_at": "2026-11-21T12:19:42+09:00",
+ "updated_at": "2026-11-24T04:12:34+09:00",
  "channels": [
   {
    "name": "공모주한잔",
@@ -95,17 +95,9 @@
   "url": "http://www.38.co.kr/html/fund/index.htm?o=k",
   "items": [
    {
-    "name": "케이엠에프",
-    "period": "2026.11.24~11.25",
-    "price_fixed": "-",
-    "price_band": "15,000~17,800",
-    "competition": "",
-    "brokers": "IBK투자증권"
-   },
-   {
     "name": "신영스팩12호",
     "period": "2026.11.24~11.25",
-    "price_fixed": "-",
+    "price_fixed": "2,000",
     "price_band": "2,000~2,000",
     "competition": "",
     "brokers": "신영증권"

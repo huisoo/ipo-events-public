@@ -39,16 +39,16 @@
     },
     "gongmorin": {},
     "next": {
-      "name": "신영스팩12호",
-      "period": "11/24(화)~11/25(수)",
-      "price": "희망 2,000원",
-      "minShares": 50,
-      "brokers": "신영증권",
-      "memo": "스팩(SPAC) · 환불 11/27(금)",
-      "closeDate": "2026-11-25",
-      "closeDateLabel": "11/25",
+      "name": "에이엔에이치스트럭쳐",
+      "period": "11/27(금)~11/30(월)",
+      "price": "희망 11,200~13,600원",
+      "brokers": "NH투자증권",
+      "memo": "",
+      "closeDate": "2026-11-30",
+      "closeDateLabel": "11/30",
       "closeNote": "예정",
-      "ipoPrice": "희망 2,000원",
+      "ipoPrice": "희망 11,200~13,600원",
+      "minShares": "",
       "lockupRate": "",
       "marketCap": "",
       "minSubscription": "",
@@ -57,19 +57,19 @@
       "expectedProRata": "",
       "proRata10Shares": "",
       "fullSubscription": "",
-      "refundDate": "11/27",
+      "refundDate": "12/02",
       "listingDate": "",
       "opinion": ""
     },
     "nextListing": {
-      "name": "엠비디",
-      "period": "11/24(화)",
-      "price": "확정 7,000원",
-      "brokers": "하나증권",
-      "memo": "화요일 상장"
+      "name": "유캐스트",
+      "period": "11/30(월)",
+      "price": "확정 19,000원",
+      "brokers": "유진투자증권 · 신영증권",
+      "memo": "월요일 상장"
     },
     "upcoming": {
-      "asOf": "2026-11-23",
+      "asOf": "2026-11-24",
       "windowLabel": "11/24(화) ~ 12/18(금)",
       "source": {
         "label": "38커뮤니케이션 공모주 청약일정",
@@ -80,7 +80,7 @@
           "name": "신영스팩12호",
           "start": "2026-11-24",
           "end": "2026-11-25",
-          "price": "희망 2,000원",
+          "price": "확정 2,000원",
           "minShares": 50,
           "brokers": "신영증권",
           "market": "코스닥",
@@ -240,13 +240,6 @@
         }
       ],
       "listing": [
-        {
-          "name": "엠비디",
-          "date": "2026-11-24",
-          "price": "확정 7,000원",
-          "brokers": "하나증권",
-          "market": "코스닥"
-        },
         {
           "name": "유캐스트",
           "date": "2026-11-30",
