@@ -162,6 +162,8 @@ def deposit_of(item):
     shares = raw if raw > 0 else DEFAULT_MIN_SHARES
     rate = DEPOSIT_RATE_SPAC if is_spac(item) else DEPOSIT_RATE
     return {"amount": int(round(p["value"] * shares * rate)),
+            "shares": shares, "shares_estimated": raw <= 0,
+            "price_estimated": p["estimated"],
             "estimated": p["estimated"] or raw <= 0}
 
 
@@ -235,7 +237,7 @@ def month_peak(ipo, today):
             rows.append((it, dep, until))
     peak = peak_of(rows, first_day=today)
     return {"scope": f"이번 달 ({today.month}월)" if month else "전체 예정",
-            "peak": peak, "count": len(rows)}
+            "peak": peak, "count": len(rows), "rows": rows}
 
 
 def week_peak(ipo, today):
@@ -301,7 +303,7 @@ def build_content(data, today):
             ends = [d for d in ends if d]
             span = (f"{short_day(min(days))}~{short_day(max(ends))}" if days and ends else wk["label"])
             line2 = span + (" · " + " · ".join(br[:3]) + (f" 외 {len(br) - 3}" if len(br) > 3 else "") if br else "")
-            card = _peak_card(wk["peak"], "다음 주 균등 증거금 피크")
+            card = _peak_card(wk["peak"], "다음 주 균등 증거금 피크", rows=wk["rows"])
         else:
             head = "다음 주 청약 0건"
             line1 = "월요일 07:30 갱신 뒤 다시 확인하세요"
@@ -326,7 +328,7 @@ def build_content(data, today):
         refunds = [r for r in refunds if r]
         line2 = "환불 " + refunds[0] if refunds else ""
         mp = month_peak(ipo, today)
-        card = _peak_card(mp["peak"], "균등 최소증거금 피크", scope=mp["scope"])
+        card = _peak_card(mp["peak"], "균등 최소증거금 피크", scope=mp["scope"], rows=mp["rows"])
         return {"kicker": "오늘 청약", "headline": head,
                 "line1": line1, "line2": line2, "meta": meta, "card": card}
 
@@ -353,7 +355,7 @@ def build_content(data, today):
         if not line2 and nxt.get("name"):
             line2 = f"다음 청약 {nxt['name']} {nxt.get('period') or ''}".strip()
         mp = month_peak(ipo, today)
-        card = _peak_card(mp["peak"], "균등 최소증거금 피크", scope=mp["scope"])
+        card = _peak_card(mp["peak"], "균등 최소증거금 피크", scope=mp["scope"], rows=mp["rows"])
         return {"kicker": "오늘 상장", "headline": head,
                 "line1": line1, "line2": line2, "meta": meta, "card": card}
 
@@ -362,7 +364,7 @@ def build_content(data, today):
         line1 = " · ".join([x for x in [nxt.get("period"), nxt.get("price")] if x])
         line2 = " · ".join([x for x in [nxt.get("brokers"), ("환불 " + str(nxt["refund"])) if nxt.get("refund") else ""] if x])
         mp = month_peak(ipo, today)
-        card = _peak_card(mp["peak"], "균등 최소증거금 피크", scope=mp["scope"])
+        card = _peak_card(mp["peak"], "균등 최소증거금 피크", scope=mp["scope"], rows=mp["rows"])
         return {"kicker": "오늘 청약·상장 없음", "headline": head,
                 "line1": line1, "line2": line2, "meta": meta, "card": card}
 
@@ -371,7 +373,7 @@ def build_content(data, today):
             "meta": meta, "card": None}
 
 
-def _peak_card(peak, label, scope=""):
+def _peak_card(peak, label, scope="", rows=None):
     if not peak:
         return None
     day, cell = peak
@@ -379,7 +381,21 @@ def _peak_card(peak, label, scope=""):
     names = cell["names"]
     return {"label": label, "scope": scope, "amount": "약 " + won_short(cell["amount"]),
             "when": when,
-            "names": (names_short(names, 3) if len(names) > 1 else "")}
+            "names": (names_short(names, 3) if len(names) > 1 else ""),
+            "basis": deposit_basis_note(rows)}
+
+
+def deposit_basis_note(rows):
+    """카드 아래 기준 줄 — 최소 주수가 모두 확인됐는지에 따라 말이 달라집니다.
+
+    app.js 의 '10주 추정' 표기와 같: 하나라도 미확인이면 추정이 섞였다고 적습니다.
+    """
+    if not rows:
+        return "신고서 최소 주수 · 희망가 상단 기준"
+    est = sum(1 for _it, dep, _u in rows if dep.get("shares_estimated"))
+    price_est = any(dep.get("price_estimated") for _it, dep, _u in rows)
+    head = "10주 추정 포함" if est else "신고서 최소 주수"
+    return head + (" · 희망가 상단 기준" if price_est else " · 확정가 기준")
 
 
 # ── 그리기 ──────────────────────────────────────────────────────────────
@@ -462,7 +478,7 @@ def render(content, out: Path):
         size, text = _fit(d, card.get("names") or "", inner, 11, False, 9)
         if text:
             d.text((cx * S, 162 * S), text, font=font(size, False), fill=INK3, anchor="la")
-        d.text((cx * S, 182 * S), "희망가 상단·10주 기준 추정",
+        d.text((cx * S, 182 * S), card.get("basis") or "신고서 최소 주수 기준",
                font=font(9.5, False), fill=INK3, anchor="la")
 
     # 아래 띠 — 주소 · 갱신 안내
@@ -505,7 +521,14 @@ def _self_test():
 
     cases = [
         ("평일 청약", data([sub], upcoming=[sub, other]), dt.date(2026, 11, 24),
-         {"kicker": "오늘 청약", "headline": "케이엠에프", "card": "약 8.9만원"}),
+         {"kicker": "오늘 청약", "headline": "케이엠에프", "card": "약 8.9만원",
+          "basis": "10주 추정 포함"}),
+        ("평일 청약 · 최소 주수 확인",
+         data([dict(sub, minShares=50)],
+              upcoming=[dict(sub, minShares=50), dict(other, minShares=20)]),
+         dt.date(2026, 11, 24),
+         {"kicker": "오늘 청약", "headline": "케이엠에프", "card": "약 44.5만원",
+          "basis": "신고서 최소 주수"}),
         ("평일 상장", data(has_listing=True, updated="16:15", date="2026-11-20"), dt.date(2026, 11, 20),
          {"kicker": "오늘 상장", "headline": "하나에어로다이내믹스", "line1": "6,050원"}),
         ("평일 일정 없음", data(), dt.date(2026, 11, 23),
@@ -522,7 +545,8 @@ def _self_test():
             size = Image.open(out).size
             got = {"kicker": content.get("kicker", ""), "headline": content.get("headline", ""),
                    "line1": content.get("line1", ""), "line2": content.get("line2", ""),
-                   "card": (content.get("card") or {}).get("amount", "")}
+                   "card": (content.get("card") or {}).get("amount", ""),
+                   "basis": (content.get("card") or {}).get("basis", "")}
             misses = []
             for k, want in expect.items():
                 if want not in got[k]:

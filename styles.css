@@ -245,6 +245,10 @@ h1 em{font-style:normal; color:inherit}
   font-size:9.5px; font-weight:500; letter-spacing:0; color:var(--ink3);
   background:var(--bg2); border-radius:4px; padding:0 4px;
 }
+.wk-shares{
+  font-size:9.5px; font-weight:600; letter-spacing:0; color:var(--ink2);
+  background:var(--bg2); border-radius:4px; padding:0 4px;
+}
 .wk-sub{margin-top:2px; font-size:10.5px; font-weight:400; color:var(--ink3); line-height:1.45}
 .wk-note{margin:6px 2px 0; font-size:10.5px; line-height:1.5; color:var(--ink3)}
 .wk-empty{margin:12px 0 14px}
@@ -797,6 +801,11 @@ html[data-theme="dark"] .be-btn.done{background:var(--green-soft); color:var(--g
 }
 .sc-est{
   font-size:9.5px; font-weight:500; letter-spacing:0; color:var(--ink3);
+  background:var(--bg2); border-radius:4px; padding:0 4px;
+}
+/* 최소 주수 칩 — 확인된 값은 증거금률 표시와 같은 모양, 진한 글자로 */
+.sc-shares{
+  font-size:9.5px; font-weight:600; letter-spacing:0; color:var(--ink2);
   background:var(--bg2); border-radius:4px; padding:0 4px;
 }
 /* 스팩은 증거금률 100% — 금액 옆에 붙는 작은 표시 */

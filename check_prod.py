@@ -1322,6 +1322,7 @@ async def main():
         'res["cash_count"] == str(plan_m["count"])',
         'res["cash_scope"] == plan_m["month_label"]',
         '"추정치입니다" in res["cash_note"]',
+        '"증권신고서 기준" in res["cash_note"] and "10주 기준" in res["cash_note"]',
         'res["cash_chips"][0] == [plan_m["month_label"], "true"]',
         'res["cash_chips"][1] == [plan_m["all_label"], "false"]',
         'res["cash_chips"][2][1] == "true"',

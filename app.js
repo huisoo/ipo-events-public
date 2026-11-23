@@ -516,7 +516,7 @@
   /* ── 주말 모드 · 다음 주 청약 미리보기 ────────
    * 토·일에는 시장이 쉬므로 '오늘 요약'의 첫 카드를 다음 주 청약 미리보기로 바꿉니다.
    *   · 대상 : ipo.upcoming.subscribe 중 start 가 다음 주(월~일)인 종목
-   *   · 금액 : 종목별 균등 최소증거금(depositOf — 공모가×최소청약주수×증거금률 50%/스팩 100%)을
+   *   · 금액 : 종목별 균등 최소증거금(depositOf — 공모가×최소청약주수(신고서 확인, 없으면 10주 추정)×증거금률 50%/스팩 100%)을
    *            다음 주 안에서 날짜별로 더해 가장 많이 묶이는 날(피크)을 보여 줍니다
    *            (start ≤ d < 환불일 — 환불일 당일 돈이 돌아옴)
    *   · 직전 영업일(수집일)의 상장·철회는 히어로 아래 보조 카드로 라벨을 낮춰 둡니다.
@@ -573,11 +573,8 @@
     var mid = '';
     if (has(it.price)) mid += '<span class="wk-price">' + esc(it.price) + '</span>';
     if (dep) {
-      var reason = depositReason(dep);
-      mid += '<span class="wk-dep" title="' + esc(depositBasis(dep)) + '">균등 ' +
-        (reason ? '약 ' : '') + wonShort(dep.amount) +
-        (reason ? ' <span class="wk-est" title="' + esc(reason) + '">추정</span>' : '') +
-        '</span>' + rateTag(dep, 'wk-rate');
+      mid += '<span class="wk-dep" title="' + esc(depositBasis(dep)) + '">' +
+        depositText(dep, 'wk') + '</span>' + rateTag(dep, 'wk-rate');
     }
     var sub = [];
     if (has(it.brokers)) sub.push(esc(it.brokers));
@@ -609,7 +606,8 @@
             (w.peak.names.length > 1 ? ' · ' + w.peak.names.length + '종목 겹침' : '') +
             ' <em>' + esc(cashNames(w.peak.names)) + '</em></span>' +
         '</div>' +
-        '<p class="wk-note">※ 희망가 상단·10주(일반 50%·스팩 100%) 기준 추정 · 스팩 포함</p>';
+        '<p class="wk-note">※ 최소 주수 확인 종목은 신고서 기준, 미확인은 10주 추정 · ' +
+          '희망가 상단 · 일반 50%·스팩 100% · 스팩 포함</p>';
     }
 
     var body = n
@@ -735,8 +733,9 @@
    * ipo.upcoming.subscribe[] 종목마다
    *   증거금 = 공모가 × 최소청약주수 × 증거금률
    *     · 일반 공모주 50% · 스팩(기업인수목적회사) 100%
-   * 을 계산합니다. 최소청약주수(minShares)나 확정 공모가가 없으면
-   * 10주 · 희망가 상단으로 추정하고 금액 옆에 '추정'을 붙입니다.
+   * 을 계산합니다. 최소청약주수는 증권신고서에서 확인된 값(minShares)을 쓰고,
+   * 확인되지 않은 종목만 10주로 추정해 금액 옆에 '10주 추정'을 붙입니다.
+   * 공모가가 아직 희망가면 상단을 쓰고 금액 앞에 '약'을 붙입니다.
    *
    * 자금은 청약 시작일 ~ 환불일 전날까지 묶이는 것으로 봅니다
    * (start <= d < refund — 환불일 당일 돈이 돌아와 그날 청약에 쓸 수 있음).
@@ -803,26 +802,45 @@
     };
   }
 
-  /* 금액의 근거 — 툴팁용. '희망가 상단·10주·증거금 100%(스팩) 기준' */
+  /* 금액의 근거 — 툴팁용. '희망가 상단 · 증권신고서 최소 50주 · 증거금 100%(스팩) 기준'
+     주수를 못 찾은 종목은 '최소 청약 주수 미확인 · 10주 기준 추정'으로 적습니다. */
   function depositBasis(dep) {
     if (!dep) return '';
     var price = dep.priceRange ? '희망가 상단' : (dep.priceEstimated ? '희망가' : '확정가');
-    return price + '·' + dep.shares + '주·증거금 ' + Math.round(dep.rate * 100) + '%' +
+    var shares = dep.sharesEstimated
+      ? '최소 청약 주수 미확인 · ' + dep.shares + '주 기준 추정'
+      : '증권신고서 최소 ' + dep.shares + '주';
+    return price + ' · ' + shares + ' · 증거금 ' + Math.round(dep.rate * 100) + '%' +
       (dep.spac ? '(스팩)' : '') + ' 기준';
+  }
+
+  /* 금액 앞 '약' — 공모가가 아직 희망가일 때만 (주수가 확인되면 금액의 근거는 확정) */
+  function amountApprox(dep) {
+    return dep && dep.priceEstimated ? '약 ' : '';
+  }
+
+  /* 최소 주수 표시 — 확인된 값은 '50주', 확인 전이면 '10주 추정' 칩.
+     10주(확인)면 금액이 곧 기준이라 칩을 붙이지 않습니다. */
+  function sharesTag(dep, prefix) {
+    if (!dep) return '';
+    if (dep.sharesEstimated) {
+      return '<span class="' + prefix + '-est" title="최소 청약 주수 미확인 · 10주 기준 추정">' +
+        '10주 추정</span>';
+    }
+    if (dep.shares === DEFAULT_MIN_SHARES) return '';
+    return '<span class="' + prefix + '-shares" title="증권신고서 최소 ' + dep.shares +
+      '주 · ' + dep.shares + '주부터 청약">' + dep.shares + '주</span>';
+  }
+
+  /* 금액 한 덩어리 — '균등 약 10만원 50주' / '균등 약 6.8만원 10주 추정' */
+  function depositText(dep, prefix) {
+    return '균등 ' + amountApprox(dep) + wonShort(dep.amount) + ' ' + sharesTag(dep, prefix);
   }
 
   /* 스팩 금액 옆에 붙는 증거금률 표시 */
   function rateTag(dep, cls) {
     if (!dep || !dep.spac) return '';
     return '<span class="' + cls + '" title="스팩은 청약증거금률이 100%입니다">증거금 100%</span>';
-  }
-
-  /* 추정 이유 — 희망가 / 10주 가정 */
-  function depositReason(dep) {
-    if (dep.priceEstimated && dep.sharesEstimated) return '희망가·10주 가정';
-    if (dep.priceEstimated) return '희망가 가정';
-    if (dep.sharesEstimated) return '10주 가정';
-    return '';
   }
 
   /* 자금이 묶이는 끝(다음 날 = 환불일, 그날 돈이 돌아옴). 환불일이 없으면 마감일까지. */
@@ -960,8 +978,8 @@
             (cashNoSpac ? '<span class="ck" aria-hidden="true">✓</span>' : '') +
             '스팩 제외</button>' +
         '</div>' +
-        '<p class="cash-note" id="cash-note">※ 최소청약주수·확정가 미공시 종목은 ' +
-          '희망가 상단·10주(일반 50%·스팩 100%) 기준 추정치입니다.</p>' +
+        '<p class="cash-note" id="cash-note">※ 최소 주수 확인 종목은 증권신고서 기준, ' +
+          '미확인 종목은 10주 기준 추정치입니다 · 희망가면 상단 · 일반 50%·스팩 100%.</p>' +
       '</div>';
   }
 
@@ -983,11 +1001,8 @@
     if (!isList) {
       var dep = depositOf(item);
       if (dep) {
-        var reason = depositReason(dep);
-        depHtml = '<span class="sc-dep" title="' + esc(depositBasis(dep)) + '">균등 ' +
-          (reason ? '약 ' : '') + wonShort(dep.amount) +
-          (reason ? ' <span class="sc-est" title="' + esc(reason) + '">추정</span>' : '') +
-          '</span>' + rateTag(dep, 'sc-rate');
+        depHtml = '<span class="sc-dep" title="' + esc(depositBasis(dep)) + '">' +
+          depositText(dep, 'sc') + '</span>' + rateTag(dep, 'sc-rate');
       }
     }
 

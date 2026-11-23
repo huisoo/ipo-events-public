@@ -32,7 +32,8 @@ data.json 을 로컬 HTTP 로 띄워 확인합니다(파일 직접 열면 fetch 
   preview-mobile-share.png / preview-mobile-share-dark.png / preview-mobile-share-full.png /
   preview-mobile-share-off.png (양쪽 비활성)
 - 전체 일정 최상단 필요 금액 카드(#cash-card): 증거금 = 공모가 × 최소청약주수 × 증거금률
-  (일반 50%·스팩 100%, minShares 없으면 10주·추정, 희망가면 상단) — 종목 행마다 `균등 약 8.9만원 추정`,
+  (일반 50%·스팩 100%, 최소 주수는 증권신고서 확인값, 없으면 10주 추정, 희망가면 상단) —
+  종목 행마다 `균등 약 10만원 50주`(확인) / `균등 약 6.8만원 10주 추정`(미확인, 툴팁 `최소 청약 주수 미확인 · 10주 기준 추정`),
   날짜별 동시 묶임(start ≤ d < 환불일)의 최댓값(피크)·피크 날짜·겹치는 종목·단순 합계,
   이번 달/전체·스팩 제외 칩이 같은 데이터로 즉시 재계산(기대값은 data.json 에서 같은 규칙으로 계산),
   가로 잘림 없음, 다크·데스크톱 동일 값
@@ -250,15 +251,23 @@ def cash_deposit(item):
     }
 
 
-def cash_reason(dep):
-    """app.js depositReason — 희망가 / 10주 가정."""
-    if dep["price_estimated"] and dep["shares_estimated"]:
-        return "희망가·10주 가정"
-    if dep["price_estimated"]:
-        return "희망가 가정"
+def cash_shares_tag(dep, prefix="sc"):
+    """app.js sharesTag — 확인된 주수는 '50주', 확인 전이면 '10주 추정' 칩."""
     if dep["shares_estimated"]:
-        return "10주 가정"
-    return ""
+        return "10주 추정"
+    if dep["shares"] == DEFAULT_MIN_SHARES:
+        return ""
+    return f"{dep['shares']}주"
+
+
+def cash_row_text(item):
+    """종목 행의 `.sc-dep` 문자열 — '균등 약 10만원 50주' / '균등 약 6.8만원 10주 추정'."""
+    dep = cash_deposit(item)
+    if not dep:
+        return None
+    text = "균등 " + ("약 " if dep["price_estimated"] else "") + won_short(dep["amount"])
+    tag = cash_shares_tag(dep)
+    return (text + " " + tag) if tag else text
 
 
 def cash_lock_until(item):
@@ -349,6 +358,30 @@ def cash_plan(ipo, today, range_=None, no_spac=True):
     }
 
 
+def cash_dep_title(item):
+    """app.js depositBasis — `.sc-dep` 툴팁 문자열."""
+    dep = cash_deposit(item)
+    if not dep:
+        return None
+    price = ("희망가 상단" if dep["price_range"]
+             else ("희망가" if dep["price_estimated"] else "확정가"))
+    shares = ("최소 청약 주수 미확인 · 10주 기준 추정" if dep["shares_estimated"]
+              else f"증권신고서 최소 {dep['shares']}주")
+    rate = int(round(dep["rate"] * 100))
+    return (f"{price} · {shares} · 증거금 {rate}%" + ("(스팩)" if dep["spac"] else "") + " 기준")
+
+
+def cash_shares_rows(items):
+    """`.sc-shares` 칩이 붙는 행 — 확인된 최소 주수가 10주가 아닌 종목만."""
+    out = []
+    for it in sorted(items, key=lambda x: str(x.get("start") or "9999")):
+        dep = cash_deposit(it)
+        if dep and not dep["shares_estimated"] and dep["shares"] != DEFAULT_MIN_SHARES:
+            out.append([it["name"], f"{dep['shares']}주",
+                        f"증권신고서 최소 {dep['shares']}주 · {dep['shares']}주부터 청약"])
+    return out
+
+
 def cash_peak_text(plan):
     return ("약 " + won_short(plan["peak"][1]["amount"])) if plan["peak"] else "0원"
 
@@ -362,15 +395,6 @@ def kor_day(d):
     """2026년 11월 22일 일요일 — JS korDay 와 같은 표기."""
     return (f"{d.year}년 {d.month}월 {d.day}일 "
             + "일월화수목금토"[(d.weekday() + 1) % 7] + "요일")
-
-
-def cash_row_text(item):
-    dep = cash_deposit(item)
-    if not dep:
-        return None
-    reason = cash_reason(dep)
-    return ("균등 " + ("약 " if reason else "") + won_short(dep["amount"])
-            + (" 추정" if reason else ""))
 
 
 # ── 주말 모드 · 다음 주 청약 미리보기 기대값 ─────────────
@@ -535,6 +559,24 @@ def subscribe_day(body):
          "lockupRate": "미정", "marketCap": "확인 필요", "expectedProRata": ""},
     ]
     ipo["listing"] = {"hasListing": False}
+    return body
+
+
+def min_shares_day(body):
+    """최소 주수 표기 mock — 신영스팩12호는 증권신고서 50주(확인), 에이엔에이치스트럭쳐는 minShares 없음(추정).
+
+    실제 data.json 은 예정 종목 전부의 minShares 가 채워져 있어 '10주 추정' 표기를 볼 수 없으므로,
+    확인/미확인이 한 목록에서 구분되는지 이 mock 으로 고정합니다.
+    """
+    body = json.loads(json.dumps(body))
+    for it in ((body.get("ipo") or {}).get("upcoming") or {}).get("subscribe") or []:
+        if it.get("name") == "신영스팩12호":
+            it["minShares"] = 50
+            it["price"] = "희망 2,000원"
+            it["spac"] = True
+        elif it.get("name") == "에이엔에이치스트럭쳐":
+            it.pop("minShares", None)
+            it["price"] = "희망 11,200~13,600원"
     return body
 
 
@@ -1505,6 +1547,22 @@ async def main():
                 "#sch-subscribe .sc .sc-dep",
                 "els => els.map(e => e.textContent.replace(/\\s+/g, ' ').trim())")
             results["cash_est_rows"] = await page.locator("#sch-subscribe .sc .sc-est").count()
+            # 최소 주수 칩 — 확인된 값(50주·100주…)은 `.sc-shares`, 확인 전은 `.sc-est`('10주 추정')
+            results["cash_shares_rows"] = await page.evaluate("""(() =>
+                [...document.querySelectorAll('#sch-subscribe .sc')]
+                  .filter(li => li.querySelector('.sc-shares'))
+                  .map(li => [li.querySelector('.sc-name').textContent.trim(),
+                              li.querySelector('.sc-shares').textContent.trim(),
+                              li.querySelector('.sc-shares').title])
+            )()""")
+            results["cash_est_chips"] = await page.evaluate("""(() =>
+                [...document.querySelectorAll('#sch-subscribe .sc-est')]
+                  .map(e => [e.textContent.trim(), e.title])
+            )()""")
+            results["cash_dep_titles"] = await page.evaluate("""(() =>
+                [...document.querySelectorAll('#sch-subscribe .sc .sc-dep')]
+                  .map(e => e.title)
+            )()""")
             # 스팩 행 — 금액 옆 `증거금 100%` 표시(일반 공모주 50%와 구분)
             results["cash_rate_rows"] = await page.evaluate("""(() =>
                 [...document.querySelectorAll('#sch-subscribe .sc')]
@@ -1715,6 +1773,28 @@ async def main():
                 path=str(ROOT / "preview-mobile-share-full.png"))
             results["sub_errors"] = v_errors
             await vctx.close()
+
+            # ── 2.65 최소 주수 표기 — 확인된 50주와 미확인(10주 추정)이 한 목록에서 구분되는지 ──
+            sctx, spage, s_errors = await open_page(
+                browser, path="?tab=schedule", mutate=min_shares_day)
+            await spage.wait_for_timeout(250)
+            results["ms_rows"] = await spage.evaluate("""(() =>
+                [...document.querySelectorAll('#sch-subscribe .sc')]
+                  .map(li => [li.querySelector('.sc-name').textContent.trim(),
+                              (li.querySelector('.sc-dep')?.textContent || '').replace(/\\s+/g, ' ').trim(),
+                              li.querySelector('.sc-dep')?.title || '',
+                              li.querySelector('.sc-shares')?.textContent.trim() || '',
+                              li.querySelector('.sc-est')?.textContent.trim() || '',
+                              li.querySelector('.sc-est')?.title || ''])
+                  .filter(r => r[0] === '신영스팩12호' || r[0] === '에이엔에이치스트럭쳐')
+            )()""")
+            results["ms_note"] = await spage.inner_text("#cash-note")
+            # 추정 행은 금액에서 빠지지 않고 '10주 추정'으로만 표시됩니다
+            results["ms_estimate_peak"] = await spage.inner_text("#cash-peak")
+            results["ms_estimate_plan"] = cash_peak_text(
+                cash_plan(min_shares_day(json.loads(json.dumps(DATA)))["ipo"], TODAY))
+            results["ms_errors"] = s_errors
+            await sctx.close()
 
             # ── 2.7 상장일 — 오른쪽 버튼 활성/포맷 일치, 왼쪽은 '오늘 청약 없음' ────
             gctx, gpage, g_errors = await open_page(browser, mutate=listing_day)
@@ -2810,12 +2890,16 @@ async def main():
         'results["cash_count"] == str(plan_m["count"])',
         'results["cash_scope"] == plan_m["month_label"]',
         '"추정치입니다" in results["cash_note"]',
+        '"증권신고서 기준" in results["cash_note"] and "10주 기준" in results["cash_note"]',
         'results["cash_chips"][0] == [plan_m["month_label"], "true"]',
         'results["cash_chips"][1] == [plan_m["all_label"], "false"]',
         'results["cash_chips"][2][1] == "true"',
         '"스팩 제외" in results["cash_chips"][2][0]',
         'results["cash_rows"] == [cash_row_text(it) for it in sorted(IPO["upcoming"]["subscribe"], key=lambda x: str(x.get("start") or "9999"))]',
-        'results["cash_est_rows"] >= 1',
+        'results["cash_est_rows"] == len([1 for it in IPO["upcoming"]["subscribe"] if (cash_deposit(it) or {}).get("shares_estimated")])',
+        'results["cash_est_chips"] == [["10주 추정", "최소 청약 주수 미확인 · 10주 기준 추정"]] * results["cash_est_rows"]',
+        'results["cash_shares_rows"] == cash_shares_rows(IPO["upcoming"]["subscribe"])',
+        'results["cash_dep_titles"] == [cash_dep_title(it) for it in sorted(IPO["upcoming"]["subscribe"], key=lambda x: str(x.get("start") or "9999")) if cash_deposit(it)]',
         'results["cash_rate_rows"] == [[it["name"], "증거금 100%", cash_row_text(it)] for it in sorted(IPO["upcoming"]["subscribe"], key=lambda x: str(x.get("start") or "9999")) if is_spac(it) and cash_row_text(it)]',
         'results["cash_all_peak"] == cash_peak_text(plan_a)',
         'results["cash_all_when"].startswith(short_day(plan_a["peak"][0]))',
@@ -2958,6 +3042,15 @@ async def main():
         'results["no_ipo_clipboard_empty"]',
         'results["no_ipo_toast_empty"]',
         'not results["sub_errors"]',
+        'not results["ms_errors"]',
+        '''results["ms_rows"] == [
+            ["신영스팩12호", "균등 약 10만원 50주",
+             "희망가 · 증권신고서 최소 50주 · 증거금 100%(스팩) 기준", "50주", "", ""],
+            ["에이엔에이치스트럭쳐", "균등 약 6.8만원 10주 추정",
+             "희망가 상단 · 최소 청약 주수 미확인 · 10주 기준 추정 · 증거금 50% 기준",
+             "", "10주 추정", "최소 청약 주수 미확인 · 10주 기준 추정"]]''',
+        '"증권신고서 기준" in results["ms_note"] and "10주 기준 추정치" in results["ms_note"]',
+        'results["ms_estimate_peak"] == results["ms_estimate_plan"]',
         'not results["listing_mock_errors"]',
         'not results["sparse_errors"]',
         'bool(results["shared_payload"])',

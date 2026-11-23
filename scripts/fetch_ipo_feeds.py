@@ -16,6 +16,8 @@
   · 이미 채워진 정밀 필드(minShares·lockupRate·marketCap·minSubscription·fee·
     equalShares·expectedProRata·proRata10Shares·fullSubscription·opinion 등)는
     같은 종목명이면 지우지 않고 그대로 보존합니다.
+    - minShares(증권신고서 기준 최소 청약 주수)는 표에 없으므로 병합 후에도 남습니다.
+      새로 추가된 종목처럼 값이 비어 있으면 'minShares 미확인(10주 추정)' 으로 알려 줍니다.
   · 새로 나온 종목은 38 상세 페이지에서 시장구분·종목코드·환불일을 한 번 더 읽어 채웁니다.
   · 내용이 실제로 바뀌었을 때만 data.json 을 쓰고, scripts/generate_banner.py 로
     banner.png 도 함께 다시 만듭니다(--no-banner 로 생략).
@@ -58,10 +60,11 @@ WEEKDAY_KO = "일월화수목금토"          # date.weekday() 0=월
 MANUAL_NEXT_KEYS = [
     "lockupRate", "marketCap", "minSubscription", "fee", "equalShares",
     "expectedProRata", "proRata10Shares", "fullSubscription", "listingDate", "opinion",
+    "minShares",
 ]
 NEXT_ORDER = [
     "name", "period", "price", "brokers", "memo", "closeDate", "closeDateLabel",
-    "closeNote", "ipoPrice", *MANUAL_NEXT_KEYS[:8], "refundDate", "listingDate", "opinion",
+    "closeNote", "ipoPrice", "minShares", *MANUAL_NEXT_KEYS[:8], "refundDate", "listingDate", "opinion",
 ]
 NEXTLISTING_ORDER = ["name", "period", "price", "brokers", "memo"]
 
@@ -529,6 +532,10 @@ def sync_ipo_data(data: dict, schedule: list, new_listings: list, link_nos: dict
     for it in sub_items:
         if it["name"] not in {x.get("name") for x in old_subs}:
             notes.append(f"청약 예정에 추가: {it['name']} ({it['start']}~{it['end']}, {it['price']})")
+    # 최소 청약 주수를 못 채운 종목 — 화면은 10주 추정으로 그리므로, 증권신고서 확인이 필요하다고 알립니다
+    for it in subs:
+        if not (isinstance(it.get("minShares"), (int, float)) and it.get("minShares") > 0):
+            notes.append(f"minShares 미확인(10주 추정): {it['name']} — 증권신고서 최소 청약 주수 확인 필요")
     for it in list_items:
         if it["name"] not in {x.get("name") for x in old_lists}:
             notes.append(f"상장 예정에 추가: {it['name']} ({it['date']}, {it['price']})")
