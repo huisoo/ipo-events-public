@@ -31,8 +31,8 @@ data.json 을 로컬 HTTP 로 띄워 확인합니다(파일 직접 열면 fetch 
   preview-desktop.png / preview-toast.png / preview-mobile-schedule*.png / preview-mobile-cash.png /
   preview-mobile-share.png / preview-mobile-share-dark.png / preview-mobile-share-full.png /
   preview-mobile-share-off.png (양쪽 비활성)
-- 전체 일정 최상단 필요 금액 카드(#cash-card): 증거금 = 공모가 × 최소청약주수 × 0.5
-  (minShares 없으면 10주·추정, 희망가면 상단) — 종목 행마다 `균등 약 8.9만원 추정`,
+- 전체 일정 최상단 필요 금액 카드(#cash-card): 증거금 = 공모가 × 최소청약주수 × 증거금률
+  (일반 50%·스팩 100%, minShares 없으면 10주·추정, 희망가면 상단) — 종목 행마다 `균등 약 8.9만원 추정`,
   날짜별 동시 묶임(start ≤ d < 환불일)의 최댓값(피크)·피크 날짜·겹치는 종목·단순 합계,
   이번 달/전체·스팩 제외 칩이 같은 데이터로 즉시 재계산(기대값은 data.json 에서 같은 규칙으로 계산),
   가로 잘림 없음, 다크·데스크톱 동일 값
@@ -195,8 +195,19 @@ def png_size(path):
 # ── 전체 일정 · 균등 최소증거금 기대값 ──────────────────────
 # app.js 의 offerPrice·depositOf·lockUntil·wonShort·cashPlan 과 같은 규칙입니다.
 # (check_prod.py 도 이 함수들을 가져다 씁니다.)
-CASH_RATE = 0.5
+CASH_RATE = 0.5          # 일반 공모주(리츠 포함) — 청약증거금 50%
+CASH_RATE_SPAC = 1.0     # 스팩(기업인수목적회사) — 청약증거금 100%
 DEFAULT_MIN_SHARES = 10
+
+
+def is_spac(item):
+    """app.js isSpac — 종목명에 '스팩'·'기업인수목적'(리츠는 플래그만 있고 증거금률이 달라 제외)."""
+    name = str((item or {}).get("name") or "")
+    return ("스팩" in name) or ("기업인수목적" in name)
+
+
+def cash_rate(item):
+    return CASH_RATE_SPAC if is_spac(item) else CASH_RATE
 
 
 def parse_iso(v):
@@ -220,7 +231,7 @@ def cash_price(text):
 
 
 def cash_deposit(item):
-    """최소청약 증거금 = 공모가 × 최소청약주수 × 0.5 (없으면 10주)."""
+    """최소청약 증거금 = 공모가 × 최소청약주수 × 증거금률 (없으면 10주)."""
     p = cash_price((item or {}).get("price"))
     if not p:
         return None
@@ -229,9 +240,11 @@ def cash_deposit(item):
     except (TypeError, ValueError):
         raw = 0
     shares = raw if raw > 0 else DEFAULT_MIN_SHARES
+    rate = cash_rate(item)
     return {
-        "amount": int(round(p["value"] * shares * CASH_RATE)),
-        "price": p["value"], "shares": shares,
+        "amount": int(round(p["value"] * shares * rate)),
+        "price": p["value"], "shares": shares, "rate": rate,
+        "spac": rate == CASH_RATE_SPAC,
         "shares_estimated": raw <= 0, "price_estimated": p["estimated"],
         "price_range": p["range"],
     }
@@ -299,7 +312,7 @@ def cash_plan(ipo, today, range_=None, no_spac=True):
              and (parse_iso(it.get("start")) or dt.date.min).year == today.year]
     rng = range_ or ("month" if month else "all")
     picked = month if rng == "month" else allitems
-    scoped = [it for it in picked if not it.get("spac")] if no_spac else picked
+    scoped = [it for it in picked if not is_spac(it)] if no_spac else picked
 
     rows = []
     for it in scoped:
@@ -411,7 +424,7 @@ def week_preview(ipo, today):
         "end": end,
         "items": items,
         "names": [it.get("name") for it in items],
-        "spac": [it.get("name") for it in items if it.get("spac")],
+        "spac": [it.get("name") for it in items if is_spac(it)],
         "label": short_day(mon) + "~" + short_day(mon + dt.timedelta(days=4)),
         "peak": peak,
         "peak_text": ("약 " + won_short(peak[1]["amount"])) if peak else None,
@@ -1492,6 +1505,14 @@ async def main():
                 "#sch-subscribe .sc .sc-dep",
                 "els => els.map(e => e.textContent.replace(/\\s+/g, ' ').trim())")
             results["cash_est_rows"] = await page.locator("#sch-subscribe .sc .sc-est").count()
+            # 스팩 행 — 금액 옆 `증거금 100%` 표시(일반 공모주 50%와 구분)
+            results["cash_rate_rows"] = await page.evaluate("""(() =>
+                [...document.querySelectorAll('#sch-subscribe .sc')]
+                  .filter(li => li.querySelector('.sc-rate'))
+                  .map(li => [li.querySelector('.sc-name').textContent.trim(),
+                              li.querySelector('.sc-rate').textContent.trim(),
+                              li.querySelector('.sc-dep').textContent.replace(/\\s+/g, ' ').trim()])
+            )()""")
             results["cash_chip_h"] = await page.eval_on_selector_all(
                 "#cash-chips .cash-chip", "els => els.map(e => Math.round(e.getBoundingClientRect().height))")
             results["cash_clipped"] = await page.evaluate("""(() => {
@@ -2533,6 +2554,9 @@ async def main():
             results["wk_spac_tags"] = await wpage.eval_on_selector_all(
                 "#wk-list .wk-i",
                 "els => els.map(e => e.querySelector('.wk-tag') ? e.querySelector('.wk-name').textContent.trim() : '')")
+            results["wk_rate_names"] = await wpage.eval_on_selector_all(
+                "#wk-list .wk-i",
+                "els => els.map(e => e.querySelector('.wk-rate') ? e.querySelector('.wk-name').textContent.trim() : '')")
             results["wk_peak"] = await opt_text(wpage, "#wk-peak")
             results["wk_peak_when"] = (await opt_text(wpage, "#wk-peak-when")).replace("\n", " ")
             results["wk_cash_note"] = await opt_text(wpage, ".wk-note")
@@ -2792,6 +2816,7 @@ async def main():
         '"스팩 제외" in results["cash_chips"][2][0]',
         'results["cash_rows"] == [cash_row_text(it) for it in sorted(IPO["upcoming"]["subscribe"], key=lambda x: str(x.get("start") or "9999"))]',
         'results["cash_est_rows"] >= 1',
+        'results["cash_rate_rows"] == [[it["name"], "증거금 100%", cash_row_text(it)] for it in sorted(IPO["upcoming"]["subscribe"], key=lambda x: str(x.get("start") or "9999")) if is_spac(it)]',
         'results["cash_all_peak"] == cash_peak_text(plan_a)',
         'results["cash_all_when"].startswith(short_day(plan_a["peak"][0]))',
         'results["cash_all_total"] == won_short(plan_a["total"])',
@@ -3196,6 +3221,7 @@ async def main():
         'results["wk_whens"] == wk["whens"]',
         'results["wk_deps"] == wk["deps"]',
         'all(t in results["wk_spac_tags"] for t in wk["spac"])',
+        '[n for n in results["wk_rate_names"] if n] == wk["spac"]',
         'results["wk_peak"] == wk["peak_text"]',
         'results["wk_peak_when"].startswith(short_day(wk["peak"][0]))',
         'all(n in results["wk_peak_when"] for n in wk["peak"][1]["names"][:3])',

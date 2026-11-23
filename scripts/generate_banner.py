@@ -10,7 +10,8 @@ data.json 을 읽어 800×280 PNG 한 장을 만듭니다. 블로그 본문 상�
   python3 scripts/generate_banner.py --out /tmp/b.png    # 경로 바꾸기
 
 계산 규칙은 app.js · check_render.py 와 같습니다.
-  · 증거금 = 공모가 × 최소청약주수(minShares, 없으면 10주) × 50% / 희망가면 상단
+  · 증거금 = 공모가 × 최소청약주수(minShares, 없으면 10주) × 증거금률 / 희망가면 상단
+    (일반 공모주 50%, 스팩·기업인수목적회사 100%)
   · 자금이 묶이는 구간은 청약 시작일 ≤ d < 환불일
   · 피크 = 날짜별로 동시에 묶이는 금액의 최댓값
   · 평일은 '이번 달 · 스팩 제외'(전체 일정 탭 카드와 같은 조건),
@@ -47,6 +48,7 @@ BLUE = "#3182f6"
 BLUE_INK = "#1b64da"
 
 DEPOSIT_RATE = 0.5
+DEPOSIT_RATE_SPAC = 1.0          # 스팩(기업인수목적회사) — 청약증거금 100%
 DEFAULT_MIN_SHARES = 10
 WEEKDAY_KO = "월화수목금토일"          # date.weekday() 0=월
 
@@ -142,8 +144,14 @@ def offer_price(text):
     return {"value": max(vals), "estimated": ("확정" not in s) or ("희망" in s)}
 
 
+def is_spac(item):
+    """종목명에 '스팩'·'기업인수목적' — app.js isSpac 과 같은 규칙(리츠는 증거금률이 달라 기본 50%)."""
+    name = str((item or {}).get("name") or "")
+    return ("스팩" in name) or ("기업인수목적" in name)
+
+
 def deposit_of(item):
-    """종목 하나의 최소청약 증거금 — 공모가 × 주수 × 50%."""
+    """종목 하나의 최소청약 증거금 — 공모가 × 주수 × 증거금률(일반 50%·스팩 100%)."""
     p = offer_price((item or {}).get("price"))
     if not p:
         return None
@@ -152,7 +160,8 @@ def deposit_of(item):
     except (TypeError, ValueError):
         raw = 0
     shares = raw if raw > 0 else DEFAULT_MIN_SHARES
-    return {"amount": int(round(p["value"] * shares * DEPOSIT_RATE)),
+    rate = DEPOSIT_RATE_SPAC if is_spac(item) else DEPOSIT_RATE
+    return {"amount": int(round(p["value"] * shares * rate)),
             "estimated": p["estimated"] or raw <= 0}
 
 
@@ -166,18 +175,20 @@ def lock_until(item):
 
 
 def won_short(v):
-    """89000 → 9.9만원 (JS wonShort 와 같은 표기)."""
-    if not (v > 0):
-        return "0원"
+    """89000 → 9.9만원 (JS wonShort 와 같은 표기 — 0.05 단위는 반올림)."""
+    from fractions import Fraction
 
-    def tenths(n):
-        s = f"{round(n * 10) / 10:.1f}"
+    def tenths(fr):
+        n = int(fr + Fraction(1, 2))
+        s = f"{n // 10}.{n % 10}"
         return s[:-2] if s.endswith(".0") else s
 
+    if not (v > 0):
+        return "0원"
     if v >= 100000000:
-        return tenths(v / 100000000) + "억원"
+        return tenths(Fraction(v * 10, 100000000)) + "억원"
     if v >= 10000:
-        return tenths(v / 10000) + "만원"
+        return tenths(Fraction(v * 10, 10000)) + "만원"
     return f"{v:,}원"
 
 
@@ -216,7 +227,7 @@ def month_peak(ipo, today):
              if (parse_day(it.get("start")) or dt.date.min).month == today.month
              and (parse_day(it.get("start")) or dt.date.min).year == today.year]
     picked = month if month else live
-    scoped = [it for it in picked if not it.get("spac")]
+    scoped = [it for it in picked if not is_spac(it)]
     rows = []
     for it in scoped:
         dep, until = deposit_of(it), lock_until(it)

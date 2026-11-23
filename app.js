@@ -13,6 +13,7 @@
  * 상단 탭  .tabs  오늘 요약(#panel-today) | 전체 일정(#panel-schedule, data.json ipo.upcoming)
  *                   | 혜택(#panel-benefits, data.json benefits[] — 증권사·금융 / 간편 이벤트·설문)
  * 전체 일정 맨 위 .cash  균등 최소증거금(이번 달/전체 · 스팩 제외) — 피크 자금 강조 + 종목별 예상 증거금
+ *   증거금률은 일반 공모주 50%, 스팩(기업인수목적회사) 100% — 종목별로 다르게 계산합니다.
  * 오늘 요약 하단  .ben-link  '증권사 개설·현금성 혜택 N건 보기 →' 한 줄 배너 (혜택 탭으로 전환)
  * 오늘 요약 하단  .install  '홈 화면에 앱으로 추가' 한 줄 (standalone 이면 숨김 /
  *                            Android 는 beforeinstallprompt 가 뜰 때만 네이티브 설치 창,
@@ -515,7 +516,7 @@
   /* ── 주말 모드 · 다음 주 청약 미리보기 ────────
    * 토·일에는 시장이 쉬므로 '오늘 요약'의 첫 카드를 다음 주 청약 미리보기로 바꿉니다.
    *   · 대상 : ipo.upcoming.subscribe 중 start 가 다음 주(월~일)인 종목
-   *   · 금액 : 종목별 균등 최소증거금(depositOf — 공모가×최소청약주수×50%)을
+   *   · 금액 : 종목별 균등 최소증거금(depositOf — 공모가×최소청약주수×증거금률 50%/스팩 100%)을
    *            다음 주 안에서 날짜별로 더해 가장 많이 묶이는 날(피크)을 보여 줍니다
    *            (start ≤ d < 환불일 — 환불일 당일 돈이 돌아옴)
    *   · 직전 영업일(수집일)의 상장·철회는 히어로 아래 보조 카드로 라벨을 낮춰 둡니다.
@@ -573,9 +574,10 @@
     if (has(it.price)) mid += '<span class="wk-price">' + esc(it.price) + '</span>';
     if (dep) {
       var reason = depositReason(dep);
-      mid += '<span class="wk-dep">균등 ' + (reason ? '약 ' : '') + wonShort(dep.amount) +
+      mid += '<span class="wk-dep" title="' + esc(depositBasis(dep)) + '">균등 ' +
+        (reason ? '약 ' : '') + wonShort(dep.amount) +
         (reason ? ' <span class="wk-est" title="' + esc(reason) + '">추정</span>' : '') +
-        '</span>';
+        '</span>' + rateTag(dep, 'wk-rate');
     }
     var sub = [];
     if (has(it.brokers)) sub.push(esc(it.brokers));
@@ -607,7 +609,7 @@
             (w.peak.names.length > 1 ? ' · ' + w.peak.names.length + '종목 겹침' : '') +
             ' <em>' + esc(cashNames(w.peak.names)) + '</em></span>' +
         '</div>' +
-        '<p class="wk-note">※ 희망가 상단·10주(증거금 50%) 기준 추정 · 스팩 포함</p>';
+        '<p class="wk-note">※ 희망가 상단·10주(일반 50%·스팩 100%) 기준 추정 · 스팩 포함</p>';
     }
 
     var body = n
@@ -731,7 +733,8 @@
 
   /* ── 균등 최소증거금 요약 (전체 일정 최상단) ─────────────
    * ipo.upcoming.subscribe[] 종목마다
-   *   증거금 = 공모가 × 최소청약주수 × 0.5 (균등 청약 증거금 50%)
+   *   증거금 = 공모가 × 최소청약주수 × 증거금률
+   *     · 일반 공모주 50% · 스팩(기업인수목적회사) 100%
    * 을 계산합니다. 최소청약주수(minShares)나 확정 공모가가 없으면
    * 10주 · 희망가 상단으로 추정하고 금액 옆에 '추정'을 붙입니다.
    *
@@ -740,7 +743,8 @@
    * 날짜별로 동시에 묶이는 금액을 더해 최댓값(피크)과 그날 겹치는 종목,
    * 선택 범위의 단순 합계를 함께 보여 줍니다.
    */
-  var DEPOSIT_RATE = 0.5;
+  var DEPOSIT_RATE = 0.5;        /* 일반 공모주(리츠 포함) — 청약증거금 50% */
+  var DEPOSIT_RATE_SPAC = 1;     /* 스팩(기업인수목적회사) — 청약증거금 100% */
   var DEFAULT_MIN_SHARES = 10;
   var cashRange = '';      /* '' = 자동(이번 달 → 이번 달 일정이 없으면 전체) */
   var cashNoSpac = true;   /* 스팩 제외 기본 ON */
@@ -768,20 +772,49 @@
     };
   }
 
+  /* 스팩인가 — 종목명에 '스팩'·'기업인수목적' (data.json 의 spac 플래그는 리츠도 포함하므로
+     증거금률은 이름으로만 판별합니다. 리츠는 증거금률이 종목마다 달라 기본 50%로 둡니다) */
+  function isSpac(item) {
+    if (!item) return false;
+    return /스팩|기업인수목적/.test(String(item.name == null ? '' : item.name));
+  }
+
+  /* 종목별 청약증거금률 — 스팩은 공모가 전액(100%), 일반 공모주는 50% */
+  function depositRate(item) {
+    return isSpac(item) ? DEPOSIT_RATE_SPAC : DEPOSIT_RATE;
+  }
+
   /* 종목 하나의 최소청약 증거금 — 값이 없으면 null(금액에서 제외) */
   function depositOf(item) {
     var p = offerPrice(item && item.price);
     if (!p) return null;
     var raw = Number(item.minShares);
     var shares = raw > 0 ? Math.round(raw) : DEFAULT_MIN_SHARES;
+    var rate = depositRate(item);
     return {
-      amount: Math.round(p.value * shares * DEPOSIT_RATE),
+      amount: Math.round(p.value * shares * rate),
       price: p.value,
       shares: shares,
+      rate: rate,
+      spac: rate === DEPOSIT_RATE_SPAC,
       sharesEstimated: !(raw > 0),
       priceEstimated: p.estimated,
       priceRange: p.range
     };
+  }
+
+  /* 금액의 근거 — 툴팁용. '희망가 상단·10주·증거금 100%(스팩) 기준' */
+  function depositBasis(dep) {
+    if (!dep) return '';
+    var price = dep.priceRange ? '희망가 상단' : (dep.priceEstimated ? '희망가' : '확정가');
+    return price + '·' + dep.shares + '주·증거금 ' + Math.round(dep.rate * 100) + '%' +
+      (dep.spac ? '(스팩)' : '') + ' 기준';
+  }
+
+  /* 스팩 금액 옆에 붙는 증거금률 표시 */
+  function rateTag(dep, cls) {
+    if (!dep || !dep.spac) return '';
+    return '<span class="' + cls + '" title="스팩은 청약증거금률이 100%입니다">증거금 100%</span>';
   }
 
   /* 추정 이유 — 희망가 / 10주 가정 */
@@ -928,7 +961,7 @@
             '스팩 제외</button>' +
         '</div>' +
         '<p class="cash-note" id="cash-note">※ 최소청약주수·확정가 미공시 종목은 ' +
-          '희망가 상단·10주(증거금 50%) 기준 추정치입니다.</p>' +
+          '희망가 상단·10주(일반 50%·스팩 100%) 기준 추정치입니다.</p>' +
       '</div>';
   }
 
@@ -951,10 +984,10 @@
       var dep = depositOf(item);
       if (dep) {
         var reason = depositReason(dep);
-        depHtml = '<span class="sc-dep">균등 ' +
+        depHtml = '<span class="sc-dep" title="' + esc(depositBasis(dep)) + '">균등 ' +
           (reason ? '약 ' : '') + wonShort(dep.amount) +
           (reason ? ' <span class="sc-est" title="' + esc(reason) + '">추정</span>' : '') +
-          '</span>';
+          '</span>' + rateTag(dep, 'sc-rate');
       }
     }
 

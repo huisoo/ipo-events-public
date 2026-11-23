@@ -799,6 +799,11 @@ html[data-theme="dark"] .be-btn.done{background:var(--green-soft); color:var(--g
   font-size:9.5px; font-weight:500; letter-spacing:0; color:var(--ink3);
   background:var(--bg2); border-radius:4px; padding:0 4px;
 }
+/* 스팩은 증거금률 100% — 금액 옆에 붙는 작은 표시 */
+.sc-rate,.wk-rate{
+  flex:none; font-size:9.5px; font-weight:600; letter-spacing:0; color:var(--ink2);
+  background:var(--bg2); border-radius:4px; padding:0 4px; white-space:nowrap;
+}
 
 .sch-cancel{
   margin:16px 0 0; padding:12px 14px;
