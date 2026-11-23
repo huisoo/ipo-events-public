@@ -1511,7 +1511,7 @@ async def main():
                   .filter(li => li.querySelector('.sc-rate'))
                   .map(li => [li.querySelector('.sc-name').textContent.trim(),
                               li.querySelector('.sc-rate').textContent.trim(),
-                              li.querySelector('.sc-dep').textContent.replace(/\\s+/g, ' ').trim()])
+                              (li.querySelector('.sc-dep')?.textContent || '').replace(/\\s+/g, ' ').trim()])
             )()""")
             results["cash_chip_h"] = await page.eval_on_selector_all(
                 "#cash-chips .cash-chip", "els => els.map(e => Math.round(e.getBoundingClientRect().height))")
@@ -2816,7 +2816,7 @@ async def main():
         '"스팩 제외" in results["cash_chips"][2][0]',
         'results["cash_rows"] == [cash_row_text(it) for it in sorted(IPO["upcoming"]["subscribe"], key=lambda x: str(x.get("start") or "9999"))]',
         'results["cash_est_rows"] >= 1',
-        'results["cash_rate_rows"] == [[it["name"], "증거금 100%", cash_row_text(it)] for it in sorted(IPO["upcoming"]["subscribe"], key=lambda x: str(x.get("start") or "9999")) if is_spac(it)]',
+        'results["cash_rate_rows"] == [[it["name"], "증거금 100%", cash_row_text(it)] for it in sorted(IPO["upcoming"]["subscribe"], key=lambda x: str(x.get("start") or "9999")) if is_spac(it) and cash_row_text(it)]',
         'results["cash_all_peak"] == cash_peak_text(plan_a)',
         'results["cash_all_when"].startswith(short_day(plan_a["peak"][0]))',
         'results["cash_all_total"] == won_short(plan_a["total"])',
