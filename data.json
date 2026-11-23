@@ -1,16 +1,49 @@
 {
-  "date": "2026-11-23",
-  "dateLabel": "2026년 11월 23일 월요일",
-  "updatedLabel": "15:00",
+  "date": "2026-11-24",
+  "dateLabel": "2026년 11월 24일 화요일",
+  "updatedLabel": "07:37",
   "draft": false,
-  "draftNote": "공모주 15:00 기준(케이엠에프 철회 반영) · 증권사 혜택 11/21 확인",
+  "draftNote": "공모주 07:37 기준 · 증권사 혜택 11/21 확인",
   "benefitsAsOf": "2026-11-21",
   "ipo": {
-    "date": "2026-11-23",
-    "dateLabel": "2026년 11월 23일 월요일",
-    "updatedAt": "2026-11-23T15:00:00+09:00",
-    "updatedLabel": "15:00",
-    "subscribe": [],
+    "date": "2026-11-24",
+    "dateLabel": "2026년 11월 24일 화요일",
+    "updatedAt": "2026-11-24T07:37:00+09:00",
+    "updatedLabel": "07:37",
+    "subscribe": [
+      {
+        "name": "신영스팩12호",
+        "market": "코스닥 · 스팩",
+        "dayBadge": "청약 1일차",
+        "price": "2,000원",
+        "priceNote": "단일가 확정",
+        "period": "11/24(화) ~ 11/25(수)",
+        "brokers": "신영증권",
+        "refund": "11/27(금)",
+        "listing": "12/03(목) 예정",
+        "spac": true,
+        "minEqual": {
+          "shares": 50,
+          "deposit": "100,000원",
+          "basis": "50주 × 2,000원 × 증거금률 100%"
+        },
+        "closeDate": "2026-11-25",
+        "closeDateLabel": "11/25",
+        "closeNote": "",
+        "ipoPrice": "2,000원",
+        "lockupRate": "0.16%",
+        "marketCap": "127억",
+        "minSubscription": "50주 / 100,000원",
+        "fee": "2,000원",
+        "equalShares": "78.1만 주",
+        "expectedProRata": "",
+        "proRata10Shares": "",
+        "fullSubscription": "",
+        "refundDate": "11/27",
+        "listingDate": "12/03",
+        "opinion": ""
+      }
+    ],
     "cancelled": [
       {
         "badge": "상장 철회",
@@ -24,20 +57,47 @@
       }
     ],
     "listing": {
-      "hasListing": false
+      "hasListing": true,
+      "date": "2026-11-24",
+      "name": "엠비디",
+      "code": "498150",
+      "market": "코스닥 · 기술성장기업부",
+      "badge": "오늘 상장",
+      "brokers": "하나증권",
+      "ipoPrice": "7,000원",
+      "openPrice": "",
+      "openChange": "",
+      "closePrice": "",
+      "closeChange": "",
+      "lockupRate": "0.00%",
+      "floatSummary": "34.01% (약 341억)",
+      "priceBand": "4,200원 ~ 28,000원 (60~400%)",
+      "shareSummary": "공모가 하단 27% 할인 확정 · 기관 최종 확약 0.00% 전량 미확약",
+      "points": [
+        "물량·확약: 첫날 유통 34.01%(487.8만 주·약 341억) · 최종 확약 0.00%",
+        "수요예측·청약: 기관 187.10:1 · 일반 172.92:1 (밴드 하단 -27% 확정)",
+        "주의할 점: 기관 배정 150만 주 전량 미확약 · 기존주주 20.07% 출회 가능"
+      ]
     },
     "hanjan": {
       "channel": "공모주한잔",
       "channelUrl": "https://www.youtube.com/@공모주한잔",
       "items": [],
-      "note": "오늘 청약·상장 종목 없음 · 다음 청약 11/24(화) 신영스팩12호 · 다음 상장 11/24(화) 엠비디",
+      "note": "오늘 청약 신영스팩12호(1일차) · 오늘 상장 엠비디 (해당 종목 영상 미업로드)",
       "video": {
         "title": "[오늘의 공모주] 유캐스트 (공모가 밴드 하단이 결정적 판단 기준)",
         "url": "https://www.youtube.com/watch?v=TM8NPtVp4WU",
         "date": "2026-11-17"
       }
     },
-    "gongmorin": {},
+    "gongmorin": {
+      "channel": "공모주투자의법칙(공주)",
+      "channelUrl": "https://www.youtube.com/@공모주투자의법칙",
+      "live": {
+        "on": false,
+        "url": "https://www.youtube.com/@공모주투자의법칙/streams"
+      }
+    },
     "next": {
       "name": "에이엔에이치스트럭쳐",
       "period": "11/27(금)~11/30(월)",
