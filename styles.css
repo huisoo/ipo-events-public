@@ -84,7 +84,7 @@ body,input,button,select,textarea{font-variant-numeric:tabular-nums}
 }
 
 /* ── 헤더 ───────────────────────────────── */
-.site-head{padding:2px 2px 14px}
+.site-head{padding:2px 2px 10px}
 .brandbar{display:flex; align-items:center; gap:8px; min-height:22px}
 .brand{
   display:inline-flex; align-items:center; gap:6px;
@@ -117,8 +117,8 @@ body,input,button,select,textarea{font-variant-numeric:tabular-nums}
 html[data-theme="dark"] .theme-toggle .tt-moon{display:none}
 html[data-theme="dark"] .theme-toggle .tt-sun{display:block}
 h1{
-  margin:10px 0 4px;
-  font-size:25px; font-weight:700; letter-spacing:-.04em; line-height:1.24;
+  margin:8px 0 3px;
+  font-size:22px; font-weight:700; letter-spacing:-.04em; line-height:1.24;
   color:var(--ink);
 }
 h1 em{font-style:normal; color:inherit}
@@ -140,7 +140,7 @@ h1 em{font-style:normal; color:inherit}
 /* ── 상단 3탭 (세그먼트 컨트롤) ─────────── */
 .tabs{
   display:grid; grid-template-columns:repeat(3, 1fr); gap:2px;
-  margin:0 0 14px; padding:3px;
+  margin:0 0 10px; padding:3px;
   background:var(--track);
   border-radius:12px;
 }
@@ -149,7 +149,7 @@ h1 em{font-style:normal; color:inherit}
   font:inherit; font-size:13px; font-weight:600; letter-spacing:-.02em;
   color:var(--ink3); background:transparent;
   border:0; border-radius:9px;
-  min-height:44px; padding:0 2px;
+  min-height:42px; padding:0 2px;
   cursor:pointer; white-space:nowrap;
   -webkit-tap-highlight-color:transparent;
   transition:background .15s ease, color .15s ease, box-shadow .15s ease;
@@ -160,21 +160,23 @@ h1 em{font-style:normal; color:inherit}
 }
 .tab:focus-visible{outline:2px solid var(--blue); outline-offset:1px}
 
-/* ── 1레벨 카드 ─────────────────────────── */
+/* ── 1레벨 카드 ───────────────────────────
+ * 폰 첫 화면에 '오늘 청약 카드 + 오늘 상장 카드'가 같이 들어오도록
+ * 패딩·큰 글자·띠 여백을 줄인 컴팩트 기준입니다(데스크톱도 같은 카드 톤 유지). */
 .hero{
   position:relative;
   background:var(--card);
   border:1px solid var(--line);
   border-radius:18px;
   box-shadow:var(--shadow);
-  padding:16px 16px 0;
-  margin-bottom:12px;
+  padding:14px 14px 0;
+  margin-bottom:8px;
   overflow:hidden;
 }
 .hero.is-empty{padding-bottom:0}
 .hero.is-list{border-top:3px solid var(--green)}
 
-.flags{display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:8px}
+.flags{display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:6px}
 .flag{
   font-size:11px; font-weight:700; letter-spacing:-.01em;
   border-radius:6px; padding:2px 7px;
@@ -190,7 +192,7 @@ h1 em{font-style:normal; color:inherit}
 
 .hname{
   display:flex; align-items:baseline; gap:8px; flex-wrap:wrap;
-  font-size:26px; font-weight:700; letter-spacing:-.04em; line-height:1.2;
+  font-size:22px; font-weight:700; letter-spacing:-.04em; line-height:1.22;
   color:var(--ink);
 }
 .hname.sm{font-size:17px; letter-spacing:-.02em; line-height:1.35}
@@ -222,9 +224,9 @@ h1 em{font-style:normal; color:inherit}
 }
 .wk-day em{font-style:normal; font-weight:500; color:var(--ink3)}
 .wk-list{
-  margin:12px -16px 0; padding:0; list-style:none; border-top:1px solid var(--line);
+  margin:12px -14px 0; padding:0; list-style:none; border-top:1px solid var(--line);
 }
-.wk-i{padding:9px 16px 10px; border-bottom:1px solid var(--line)}
+.wk-i{padding:9px 14px 10px; border-bottom:1px solid var(--line)}
 .wk-i:last-child{border-bottom:0; padding-bottom:12px}
 .wk-top{display:flex; align-items:baseline; gap:6px; flex-wrap:wrap}
 .wk-when{
@@ -257,9 +259,9 @@ h1 em{font-style:normal; color:inherit}
 
 .hprice{
   display:flex; align-items:baseline; gap:7px; flex-wrap:wrap;
-  margin:6px 0 0; font-variant-numeric:tabular-nums;
+  margin:4px 0 0; font-variant-numeric:tabular-nums;
 }
-.hprice b{font-size:29px; font-weight:700; letter-spacing:-.04em; line-height:1.1; white-space:nowrap}
+.hprice b{font-size:26px; font-weight:700; letter-spacing:-.04em; line-height:1.1; white-space:nowrap}
 .hprice span{font-size:11.5px; font-weight:500; color:var(--ink3)}
 /* 장 시작 전(07:30~09:00) — 시초가 전이라 큰 가격 대신 상장 시각과 공모가 기준 가격제한폭 */
 .hprice.is-pre{display:block}
@@ -294,7 +296,7 @@ h1 em{font-style:normal; color:inherit}
 /* 주관사별 최소증거금 */
 .deposit{
   display:flex; align-items:center; flex-wrap:wrap; gap:4px 8px;
-  margin-top:12px; padding:9px 11px;
+  margin-top:9px; padding:8px 10px;
   background:var(--blue-soft);
   border-radius:10px;
   font-variant-numeric:tabular-nums;
@@ -306,17 +308,29 @@ h1 em{font-style:normal; color:inherit}
 .deposit .bi b{font-size:13.5px; font-weight:700; letter-spacing:-.02em; color:var(--ink); white-space:nowrap}
 .deposit .bi .sh{font-size:10px; font-weight:500; color:var(--ink3)}
 
-/* 청약 기간·환불·주관 */
+/* 청약 기간·환불·주관 — 3행 표 대신 한 줄 컴팩트 요약 */
 .hmeta{display:grid; gap:3px; margin:10px 0 0; font-size:12px; font-variant-numeric:tabular-nums}
 .hmeta > div{display:grid; grid-template-columns:46px minmax(0, 1fr); gap:8px; align-items:baseline}
 .hmeta dt{font-size:11.5px; font-weight:500; color:var(--ink3); margin:0}
 .hmeta dd{margin:0; color:var(--ink2); min-width:0}
 .hmeta dd b{font-weight:600; color:var(--ink)}
+.hspec{
+  display:flex; flex-wrap:wrap; align-items:baseline; gap:1px 7px;
+  margin:8px 0 0; font-size:11.5px; font-weight:500; line-height:1.45;
+  color:var(--ink2); font-variant-numeric:tabular-nums; letter-spacing:-.01em;
+}
+.hspec .hs{display:inline-flex; align-items:baseline; gap:4px; white-space:nowrap}
+.hspec em{font-style:normal; font-size:10.5px; font-weight:500; color:var(--ink3)}
+.hspec b{font-weight:700; color:var(--ink)}
+.hspec i{font-style:normal; color:var(--ink3); opacity:.5; font-size:10px}
 
-/* 유튜브 요약 */
-.yt{margin-top:13px; padding-top:12px; border-top:1px solid var(--line)}
+/* 유튜브 요약 — 채널 한 줄 + 영상 제목 한 줄(접힘). 첫 줄에 헤더를 두지 않아 높이를 줄입니다. */
+.yt{margin-top:8px; padding-top:8px; border-top:1px solid var(--line)}
 .yt-h{font-size:11px; font-weight:600; color:var(--ink3); margin-bottom:6px}
-.yt-row{display:flex; align-items:center; gap:5px; flex-wrap:wrap; margin-bottom:3px}
+.yt-row{display:flex; align-items:center; gap:5px; flex-wrap:wrap; margin-bottom:2px}
+.yt-date{font-size:10px; font-weight:500; color:var(--ink3); font-variant-numeric:tabular-nums}
+.yt-none{font-size:10.5px; font-weight:500; color:var(--ink3); letter-spacing:-.01em}
+.v.is-off{background:var(--bg2); color:var(--ink3)}
 .yt-name{font-size:11.5px; font-weight:600; color:var(--ink2)}
 .v{font-size:10.5px; font-weight:600; border-radius:5px; padding:1px 7px; white-space:nowrap}
 .v.pass{background:var(--bg2); color:var(--ink2)}
@@ -332,8 +346,8 @@ h1 em{font-style:normal; color:inherit}
 }
 .yt-link i{font-style:normal; margin-left:2px; opacity:.6}
 .yt-note{
-  margin:0 0 8px; font-size:11px; line-height:1.5; color:var(--ink3);
-  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+  margin:0 0 4px; font-size:11px; line-height:1.45; color:var(--ink3);
+  display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; overflow:hidden;
 }
 .yt-note:last-child{margin-bottom:0}
 
@@ -360,7 +374,7 @@ h1 em{font-style:normal; color:inherit}
 
 /* 다음 청약 · 다음 상장 — 카드 하단 띠 */
 .hero-next{
-  margin:14px -16px 0; padding:11px 16px 13px;
+  margin:8px -14px 0; padding:8px 14px 10px;
   background:var(--sunken);
   border-top:1px solid var(--line);
   display:grid; gap:3px;
@@ -433,8 +447,8 @@ html[data-theme="dark"] .share-btn.done{background:var(--green-soft); color:var(
 
 /* 오늘 상장 포인트 */
 .pts{
-  margin:10px 0 14px; padding:0; list-style:none;
-  display:grid; gap:3px; font-size:11.5px; line-height:1.5; color:var(--ink2);
+  margin:7px 0 8px; padding:0; list-style:none;
+  display:grid; gap:2px; font-size:11.5px; line-height:1.45; color:var(--ink2);
 }
 .pts li{position:relative; padding-left:10px}
 .pts li::before{
@@ -444,11 +458,11 @@ html[data-theme="dark"] .share-btn.done{background:var(--green-soft); color:var(
 
 /* 주관사 앱 열기 — 히어로 카드 안, 기기 OS 에 맞는 스토어(App Store / Google Play)로 이동.
    복수 주관사는 칩을 나란히, 좁은 화면에서는 다음 줄로 접힙니다(가로 스크롤 없음). */
-.app-open-row{display:flex; flex-wrap:wrap; gap:6px; margin:12px 0 14px}
+.app-open-row{display:flex; flex-wrap:wrap; gap:6px; margin:8px 0 10px}
 .app-open{
   display:inline-flex; align-items:center; gap:5px;
-  min-height:38px; padding:0 12px;
-  font-size:12.5px; font-weight:600; letter-spacing:-.02em; line-height:1.2;
+  min-height:34px; padding:0 11px;
+  font-size:12px; font-weight:600; letter-spacing:-.02em; line-height:1.2;
   color:var(--ink2); background:var(--card);
   border:1px solid var(--line2); border-radius:10px;
   text-decoration:none; white-space:nowrap;

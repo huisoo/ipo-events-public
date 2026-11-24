@@ -317,58 +317,171 @@
         '<span class="dk">주관사별 최소증거금</span>' + body + '</div>';
   }
 
-  /* 청약 기간·환불·주관 */
-  function metaRows(s) {
-    var rows = '';
-    if (has(s.period)) rows += '<div><dt>청약</dt><dd><b>' + esc(s.period) + '</b></dd></div>';
-    if (has(s.refund)) rows += '<div><dt>환불</dt><dd>' + esc(s.refund) + '</dd></div>';
-    if (has(s.brokers)) rows += '<div><dt>주관</dt><dd>' + esc(s.brokers) + '</dd></div>';
-    return rows ? '<dl class="hmeta">' + rows + '</dl>' : '';
+  /* 청약 기간·환불·주관 — 폰에서 한두 줄로 접히는 컴팩트 요약 (3행 dl 대신) */
+  function specBits(pairs) {
+    var bits = [];
+    pairs.forEach(function (p) {
+      if (!has(p[1])) return;
+      bits.push('<span class="hs"><em>' + esc(p[0]) + '</em>' +
+        (p[2] ? '<b>' + esc(p[1]) + '</b>' : esc(p[1])) + '</span>');
+    });
+    return bits.length ? '<div class="hspec">' + bits.join('<i aria-hidden="true">·</i>') + '</div>' : '';
   }
 
-  /* 유튜브 요약 — 공모주한잔 / 공모주린이 */
-  function ytBlock(ipo, name) {
+  function metaRows(s) {
+    return specBits([
+      ['청약', String(s.period || '').replace(/\s*~\s*/g, '~'), true],
+      ['환불', s.refund, false],
+      ['주관', s.brokers, false]
+    ]);
+  }
+
+  /* ── 유튜버 1줄 요약 (feeds.json 최신 영상 ↔ 오늘 종목명 매칭) ─────
+   * data.json 의 공모주한잔·공주 큐레이션(items·verdict)이 있으면 그 판단을 먼저 쓰고,
+   * 없으면 수집기(feeds.json)가 모은 최신 영상 중 종목명이 제목에 있는 것을 찾아
+   *   채널 · 제목에서 읽은 톤 · 영상 바로가기 · 영상 제목 한 줄  로 보여 줍니다.
+   * 예상 매도가·목표가 같은 숫자는 옮기지 않습니다(제목에 원화 금액·목표가가 있으면 요약을 생략). */
+  var FEEDS = null;
+  var FEED_MAX_AGE_DAYS = 75;
+
+  function normName(s) {
+    return String(s == null ? '' : s).replace(/[\s\-–·,.'"()]/g, '').toLowerCase();
+  }
+
+  function shortChannel(name) {
+    var s = String(name == null ? '' : name);
+    var m = s.match(/\(([^)]{1,6})\)/);
+    return m ? m[1] : s.replace(/\s+/g, '');
+  }
+
+  /* 영상 제목 → 한 줄 요약 (괄호 안 문구 우선, 없으면 대괄호 머리표만 제거) */
+  function videoLine(title) {
+    var t = String(title == null ? '' : title).trim();
+    if (!t) return '';
+    var m = t.match(/[（(]([^)）]{2,60})[)）]\s*$/);
+    var s = m ? m[1] : t.replace(/^\[[^\]]*\]\s*/, '');
+    /* 목표가·매도가·원화 금액이 들어간 문구는 요약으로 쓰지 않는다 */
+    if (/(목표\s*가|매도\s*가|예상\s*매도|익절|수익\s*실현)/.test(s)) return '';
+    if (/\d[\d,]*\s*원/.test(s)) return '';
+    s = s.replace(/\s+/g, ' ').trim();
+    return s.length > 42 ? s.slice(0, 41).trim() + '…' : s;
+  }
+
+  /* 제목에서만 읽히는 톤 — 판단이 아니라 영상 제목의 낱말 분류라는 뜻으로 짧게 */
+  function videoTone(text) {
+    var s = String(text == null ? '' : text);
+    if (/(철회|리스크|주의|우려|조심|신중|불확실|아쉬|힘\s*조절|부진|약세)/.test(s)) return { t: '신중', c: 'wait' };
+    if (/(경쟁률|수급|유통|확약|비례|물량|배정)/.test(s)) return { t: '수급', c: 'pass' };
+    if (/(기회|성공|희망|기대|관심|강세|훈풍|호조)/.test(s)) return { t: '기대', c: 'go' };
+    return null;
+  }
+
+  /* feeds.json → 종목명이 제목에 있는 채널별 최신 영상 (오래된 영상은 제외) */
+  function feedHits(name) {
+    var channels = (FEEDS && FEEDS.channels) || [];
+    var key = normName(name);
+    if (!key || !channels.length) return [];
+    var now = Date.now();
+    var out = [];
+    channels.forEach(function (ch) {
+      var best = null;
+      (ch.videos || []).forEach(function (v) {
+        if (!v || !v.title || !v.url) return;
+        if (normName(v.title).indexOf(key) < 0) return;
+        var ts = Date.parse(v.published || '');
+        if (!isFinite(ts)) ts = 0;
+        if (ts && (now - ts) > FEED_MAX_AGE_DAYS * 86400000) return;
+        if (!best || ts > best.ts) best = { v: v, ts: ts };
+      });
+      if (!best) return;
+      out.push({
+        name: shortChannel(ch.name || ch.channelTitle),
+        channel: ch.name || ch.channelTitle || '',
+        url: best.v.url,
+        title: best.v.title,
+        date: best.ts ? mdd(new Date(best.ts).toISOString()) : ''
+      });
+    });
+    return out;
+  }
+
+  /* 유튜브 요약 — 공모주한잔 / 공모주투자의법칙(공주)
+   * opts.listing: 상장 카드에서는 종목 단위로 매칭되는 feeds 영상만 쌓습니다
+   * (ipo.gongmorin 의 판단은 청약 종목 기준이라 상장 카드에 붙이지 않습니다). */
+  function ytBlock(ipo, name, opts) {
     var hanjan = ipo.hanjan || {};
     var gm = ipo.gongmorin || {};
     var hit = hanjanItem(ipo, name);
+    var hits = feedHits(name);
+    var used = {};
     var out = '';
+    var rows = 0;
+    var hanjanName = shortChannel(hanjan.channel) || '공모주한잔';
+    var gmName = shortChannel(gm.name) || '공주';
 
-    if (hit || has(hanjan.note)) {
-      var vObj = (hit && hit.video) || (hit ? hanjan.video : null);
-      var vUrl = (vObj && vObj.url) || '';
+    /* 큐레이션 판단이 있는 종목만 '영상 없음' 대신 판단 배지를 보입니다.
+       영상이 하나도 없으면 맨 아래에서 한 줄로 조용히 적습니다. */
+    if (hit) {
+      var vObj = hit.video || hanjan.video || {};
+      var vUrl = vObj.url || '';
       var vs = '';
-      if (hit && has(hit.equal)) vs += '<span class="v ' + tone(hit.equal) + '">균등 ' + esc(hit.equal) + '</span>';
-      if (hit && has(hit.proportional)) vs += '<span class="v ' + tone(hit.proportional) + '">비례 ' + esc(hit.proportional) + '</span>';
+      if (has(hit.equal)) vs += '<span class="v ' + tone(hit.equal) + '">균등 ' + esc(hit.equal) + '</span>';
+      if (has(hit.proportional)) vs += '<span class="v ' + tone(hit.proportional) + '">비례 ' + esc(hit.proportional) + '</span>';
       out += '<div class="yt-row">' +
-          '<span class="yt-name">' + esc(hanjan.channel || '공모주한잔') + '</span>' +
-          (hit ? vs : '<span class="v is-off">영상 없음</span>') +
+          '<span class="yt-name">' + esc(hanjanName) + '</span>' +
+          vs +
           (vUrl ? '<a class="yt-link" href="' + esc(vUrl) + '" target="_blank" rel="noopener"' +
             (vObj && vObj.title ? ' title="' + esc(vObj.title) + '"' : '') + '>' +
-            '분석 영상<i aria-hidden="true">›</i></a>' : '') +
+            '영상<i aria-hidden="true">›</i></a>' : '') +
         '</div>' +
         (has(hanjan.note) ? '<p class="yt-note">' + esc(hanjan.note) + '</p>' : '');
+      used[hanjanName] = 1;
+      rows++;
     }
 
-    if (has(gm.verdict) || has(gm.note) || (gm.video && gm.video.url)) {
+    if (!(opts && opts.listing) && (has(gm.verdict) || has(gm.note) || (gm.video && gm.video.url))) {
       var gUrl = (gm.video && gm.video.url) || '';
       out += '<div class="yt-row">' +
-          '<span class="yt-name">' + esc(gm.name || '공모주린이') + '</span>' +
+          '<span class="yt-name">' + esc(gmName) + '</span>' +
           (has(gm.verdict) ? '<span class="v ' + tone(gm.verdict) + '">' + esc(gm.verdict) + '</span>' : '') +
           (has(gm.score) ? '<span class="score ' + scoreTone(gm.score) + '">' + esc(gm.score) + '</span>' : '') +
-          (gUrl ? '<a class="yt-link" href="' + esc(gUrl) + '" target="_blank" rel="noopener">분석 영상<i aria-hidden="true">›</i></a>' : '') +
+          (gUrl ? '<a class="yt-link" href="' + esc(gUrl) + '" target="_blank" rel="noopener">영상<i aria-hidden="true">›</i></a>' : '') +
         '</div>' +
         (has(gm.note) ? '<p class="yt-note">' + esc(gm.note) + '</p>' : '');
+      used[gmName] = 1;
+      rows++;
     }
+
+    /* 큐레이션이 비어 있는 채널은 feeds.json 최신 영상으로 채웁니다 */
+    hits.forEach(function (h) {
+      if (used[h.name]) return;
+      used[h.name] = 1;
+      var line = videoLine(h.title);
+      var tn = videoTone(h.title);
+      out += '<div class="yt-row">' +
+          '<span class="yt-name">' + esc(h.name) + '</span>' +
+          (tn ? '<span class="v ' + tn.c + '" title="영상 제목에서 읽은 톤">' + tn.t + '</span>' : '') +
+          (h.date ? '<span class="yt-date">' + esc(h.date) + '</span>' : '') +
+          '<a class="yt-link" href="' + esc(h.url) + '" target="_blank" rel="noopener" title="' + esc(h.title) + '">' +
+            '영상<i aria-hidden="true">›</i></a>' +
+        '</div>' +
+        (line ? '<p class="yt-note">“' + esc(line) + '”</p>' : '');
+      rows++;
+    });
 
     if (gm.live && gm.live.on && (gm.live.url || gm.channelUrl)) {
       out += '<a class="live" href="' + esc(gm.live.url || gm.channelUrl) + '" target="_blank" rel="noopener">' +
           '<span class="dot" aria-hidden="true"></span>' +
           '<span>' + esc(gm.live.label || '실시간 경쟁률 보기') + '</span>' +
-          '<em>' + esc(gm.name || '공모주린이') + '</em>' +
+          '<em>' + esc(gmName) + '</em>' +
         '</a>';
     }
 
-    return out ? '<div class="yt"><div class="yt-h">유튜브 요약</div>' + out + '</div>' : '';
+    if (rows) return out ? '<div class="yt">' + out + '</div>' : '';
+
+    /* 어느 채널에도 관련 영상이 없을 때 — 한 줄로 조용히 */
+    return '<div class="yt"><div class="yt-row"><span class="yt-none">' +
+        esc(hanjanName + '·' + gmName) + ' 관련 영상 없음</span></div></div>';
   }
 
   /* '오늘 신규 상장 없음 — 다음은 11/20(금) 하나에어로다이내믹스' → '11/20(금) 하나에어로다이내믹스' */
@@ -379,10 +492,11 @@
     return s.trim();
   }
 
-  /* 다음 청약(D-day) · 다음 상장 — 히어로 하단 띠 */
-  function nextBand(ipo, today) {
+  /* 다음 청약(D-day) · 다음 상장 — 히어로 하단 띠
+   * opts.skipSub: 바로 위 청약 카드가 이미 '다음 청약'을 보여 준 경우 상장 카드에서는 생략 */
+  function nextBand(ipo, today, opts) {
     var rows = '';
-    var n = ipo.next;
+    var n = (opts && opts.skipSub) ? null : ipo.next;
     if (n) {
       var start = periodStart(n.period, today);
       var dd = start ? dday(start, today) : null;
@@ -462,13 +576,13 @@
     var pts = (l.points && l.points.length)
       ? '<ul class="pts">' + l.points.map(function (p) { return '<li>' + esc(p) + '</li>'; }).join('') + '</ul>'
       : '';
-    var meta = '';
-    if (has(l.ipoPrice)) meta += '<div><dt>공모가</dt><dd><b>' + esc(l.ipoPrice) + '</b></dd></div>';
-    if (has(l.openPrice)) {
-      meta += '<div><dt>시초</dt><dd>' + esc(l.openPrice) +
-        (has(l.openChange) ? ' <span class="chg sm ' + dirOf(l.openChange) + '">' + esc(l.openChange) + '</span>' : '') +
-        '</dd></div>';
-    }
+    var specPairs = [];
+    if (has(l.ipoPrice)) specPairs.push(['공모가', l.ipoPrice, true]);
+    /* 큰 가격이 시초가면 시초를 또 적지 않는다(종가·직전가면 시초를 남긴다) */
+    var lastIsOpen = !has(l.closePrice) && !has(l.earlyPrice) && has(l.openPrice);
+    if (has(l.openPrice) && !lastIsOpen) specPairs.push(['시초', l.openPrice, false]);
+    if (has(l.brokers)) specPairs.push(['주관', l.brokers, false]);
+    var meta = specBits(specPairs);
     /* 큰 가격은 종가(장 마감 뒤) — 없으면 직전 체결가(earlyPrice), 시초가만 있으면 시초가(openPrice).
        장 시작 전에는 셋 다 없으므로 빈 가격 대신 상장 시각·가격제한폭을 보여 줍니다. */
     var lastPrice = has(l.closePrice) ? l.closePrice : (has(l.earlyPrice) ? l.earlyPrice : (l.openPrice || ''));
@@ -491,10 +605,11 @@
           (has(l.market) ? '<span class="hmarket">' + esc(l.market) + '</span>' : '') +
         '</div>' +
         priceHtml +
-        (meta ? '<dl class="hmeta">' + meta + '</dl>' : '') +
+        meta +
         pts +
         brokerAppLinks(l.brokers) +
-        nextBand(ipo, today) +
+        ytBlock(ipo, l.name, { listing: true }) +
+        nextBand(ipo, today, { skipSub: ((ipo.subscribe || []).length > 0) }) +
       '</article>';
   }
 
@@ -1808,11 +1923,22 @@
   initBanner();
   initInstall();
   initServiceWorker();
-  fetch('data.json?t=' + Math.floor(Date.now() / 60000), { cache: 'no-store' })
-    .then(function (r) {
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return r.json();
+
+  /* data.json(사람이 쓰는 오늘 요약) + feeds.json(수집기가 모은 최신 유튜브 영상)
+     — 영상 목록을 먼저 받아 두고 한 번에 그립니다. feeds 가 실패해도 화면은 그대로 뜸니다. */
+  var stamp = '?t=' + Math.floor(Date.now() / 60000);
+  var pData = fetch('data.json' + stamp, { cache: 'no-store' }).then(function (r) {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  });
+  var pFeeds = fetch('feeds.json' + stamp)
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .catch(function () { return null; });
+
+  Promise.all([pData, pFeeds])
+    .then(function (res) {
+      FEEDS = res[1];
+      render(res[0]);
     })
-    .then(render)
     .catch(fail);
 })();
