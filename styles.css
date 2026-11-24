@@ -308,12 +308,8 @@ h1 em{font-style:normal; color:inherit}
 .deposit .bi b{font-size:13.5px; font-weight:700; letter-spacing:-.02em; color:var(--ink); white-space:nowrap}
 .deposit .bi .sh{font-size:10px; font-weight:500; color:var(--ink3)}
 
-/* 청약 기간·환불·주관 — 3행 표 대신 한 줄 컴팩트 요약 */
-.hmeta{display:grid; gap:3px; margin:10px 0 0; font-size:12px; font-variant-numeric:tabular-nums}
-.hmeta > div{display:grid; grid-template-columns:46px minmax(0, 1fr); gap:8px; align-items:baseline}
-.hmeta dt{font-size:11.5px; font-weight:500; color:var(--ink3); margin:0}
-.hmeta dd{margin:0; color:var(--ink2); min-width:0}
-.hmeta dd b{font-weight:600; color:var(--ink)}
+/* 청약 기간·환불·주관 — 3행 표 대신 한 줄 컴팩트 요약 (.hspec)
+ * 값이 길면 자연스럽게 다음 줄로 접히고, 항목 사이는 가운데점으로 이어집니다. */
 .hspec{
   display:flex; flex-wrap:wrap; align-items:baseline; gap:1px 7px;
   margin:8px 0 0; font-size:11.5px; font-weight:500; line-height:1.45;
