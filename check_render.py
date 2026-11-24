@@ -1868,7 +1868,7 @@ async def main():
                     s_fit: s.scrollWidth <= h.clientWidth + 1,
                 };
             })()""")
-            results["pre_meta"] = (await ppage.inner_text(".hero .hmeta")).replace("\n", " ")
+            results["pre_meta"] = (await ppage.inner_text(".hero .hspec")).replace("\n", " ")
             results["pre_flags"] = await ppage.eval_on_selector_all(
                 ".hero .flag", "els => els.map(e => e.textContent.trim())")
             results["pre_overflow"] = await ppage.evaluate(
