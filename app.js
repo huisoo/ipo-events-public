@@ -469,11 +469,11 @@
         (has(l.openChange) ? ' <span class="chg sm ' + dirOf(l.openChange) + '">' + esc(l.openChange) + '</span>' : '') +
         '</dd></div>';
     }
-    /* 큰 가격은 종가(장 마감 뒤) — 아직 종가가 없으면 직전 체결가(earlyPrice).
-       장 시작 전에는 둘 다 없으므로 빈 가격 대신 상장 시각·가격제한폭을 보여 줍니다. */
-    var lastPrice = has(l.closePrice) ? l.closePrice : (l.earlyPrice || '');
-    var lastChange = has(l.closeChange) ? l.closeChange
-      : (has(l.closePrice) ? '' : (l.earlyChange || ''));
+    /* 큰 가격은 종가(장 마감 뒤) — 없으면 직전 체결가(earlyPrice), 시초가만 있으면 시초가(openPrice).
+       장 시작 전에는 셋 다 없으므로 빈 가격 대신 상장 시각·가격제한폭을 보여 줍니다. */
+    var lastPrice = has(l.closePrice) ? l.closePrice : (has(l.earlyPrice) ? l.earlyPrice : (l.openPrice || ''));
+    var lastChange = has(l.closePrice) ? (l.closeChange || '')
+      : (has(l.earlyPrice) ? (l.earlyChange || '') : (l.openChange || ''));
     var band = bandText(l);
     var priceHtml = has(lastPrice)
       ? '<div class="hprice"><b>' + esc(lastPrice) + '</b>' +
