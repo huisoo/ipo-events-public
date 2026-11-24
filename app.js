@@ -333,22 +333,24 @@
     var hit = hanjanItem(ipo, name);
     var out = '';
 
-    if (hit || has(hanjan.note) || (hanjan.video && hanjan.video.url)) {
-      var vUrl = (hanjan.video && hanjan.video.url) || hanjan.channelUrl || '';
+    if (hit || has(hanjan.note)) {
+      var vObj = (hit && hit.video) || (hit ? hanjan.video : null);
+      var vUrl = (vObj && vObj.url) || '';
       var vs = '';
       if (hit && has(hit.equal)) vs += '<span class="v ' + tone(hit.equal) + '">균등 ' + esc(hit.equal) + '</span>';
       if (hit && has(hit.proportional)) vs += '<span class="v ' + tone(hit.proportional) + '">비례 ' + esc(hit.proportional) + '</span>';
       out += '<div class="yt-row">' +
-          '<span class="yt-name">' + esc(hanjan.channel || '공모주한잔') + '</span>' + vs +
+          '<span class="yt-name">' + esc(hanjan.channel || '공모주한잔') + '</span>' +
+          (hit ? vs : '<span class="v is-off">영상 없음</span>') +
           (vUrl ? '<a class="yt-link" href="' + esc(vUrl) + '" target="_blank" rel="noopener"' +
-            (hanjan.video && hanjan.video.title ? ' title="' + esc(hanjan.video.title) + '"' : '') + '>' +
-            (hanjan.video && hanjan.video.url ? '분석 영상' : '채널') + '<i aria-hidden="true">›</i></a>' : '') +
+            (vObj && vObj.title ? ' title="' + esc(vObj.title) + '"' : '') + '>' +
+            '분석 영상<i aria-hidden="true">›</i></a>' : '') +
         '</div>' +
         (has(hanjan.note) ? '<p class="yt-note">' + esc(hanjan.note) + '</p>' : '');
     }
 
     if (has(gm.verdict) || has(gm.note) || (gm.video && gm.video.url)) {
-      var gUrl = (gm.video && gm.video.url) || gm.channelUrl || '';
+      var gUrl = (gm.video && gm.video.url) || '';
       out += '<div class="yt-row">' +
           '<span class="yt-name">' + esc(gm.name || '공모주린이') + '</span>' +
           (has(gm.verdict) ? '<span class="v ' + tone(gm.verdict) + '">' + esc(gm.verdict) + '</span>' : '') +
