@@ -11,7 +11,7 @@ from playwright.async_api import async_playwright
 
 from check_render import (expected_copy, expected_listing_copy, IOS_UA, DESKTOP_UA,  # 공유문 기대값 규칙 공유
                           cash_plan, cash_peak_text, cash_row_text, short_day, won_short,
-                          week_preview, next_monday, mdd, DARK_PREF,
+                          week_preview, next_monday, mdd, DARK_PREF, sub_badge, hero_flag_text,
                           BANNER_URL, BANNER_HTML, png_size)
 
 URL = "https://ipo.mydon.kr/"
@@ -187,6 +187,9 @@ async def main():
             return 'subscribe';
         })()""")
         res["hero_name"] = (await page.inner_text(".hero .hname")).replace("\n", " ")
+        # 청약 카드 상단 배지 — '오늘 청약 2일차 · 마감' 처럼 날짜 상태가 붙는지
+        res["hero_flags"] = await page.eval_on_selector_all(
+            ".hero .flag", "els => els.map(e => e.textContent.trim())")
         res["verdict"] = await opt_text(page, ".hero .verdict")
         res["deposit"] = await opt_text(page, ".hero .deposit")
         res["listing_points"] = await page.locator(".hero .pts li").count()
@@ -290,23 +293,32 @@ async def main():
         await page.wait_for_timeout(1900)
         res["share_copy_label_back"] = (await page.inner_text("#share-sub .lbl")).strip()
 
-        # 오른쪽 버튼 — 상장 정보 포맷
-        await page.evaluate("navigator.clipboard.writeText('')")
-        await page.locator("#share-listing").click()
-        await page.wait_for_timeout(350)
-        lclip = await page.evaluate("navigator.clipboard.readText()")
-        res["list_clipboard"] = lclip
-        res["list_expect"] = expected_listing_copy(prod_data)
-        res["list_exact"] = lclip == res["list_expect"]
-        res["list_head_ok"] = (lclip.startswith("📈 ")
-                               and lclip.split("\n")[0].endswith(" 상장)"))
-        res["list_bullets"] = lclip.count("* ")
-        res["list_clip_last"] = lclip.split("\n")[-1]
-        res["list_copy_toast"] = await page.inner_text("#toast")
-        res["list_copy_label"] = (await page.inner_text("#share-listing .lbl")).strip()
-        res["list_privacy_hits"] = [t for t in TERMS + ALWAYS_TERMS if t in lclip]
-        await page.wait_for_timeout(1900)
-        res["list_copy_label_back"] = (await page.inner_text("#share-listing .lbl")).strip()
+        # 오른쪽 버튼 — 상장 정보 포맷 (오늘 상장 종목이 있는 날만)
+        # 상장이 없는 날은 버튼이 비활성이라 실제 데이터로는 확인할 수 없습니다(같은 경로는 로컬 mock).
+        LIST_TODAY = bool((prod_data.get("ipo") or {}).get("listing", {}).get("hasListing"))
+        if LIST_TODAY:
+            await page.evaluate("navigator.clipboard.writeText('')")
+            await page.locator("#share-listing").click()
+            await page.wait_for_timeout(350)
+            lclip = await page.evaluate("navigator.clipboard.readText()")
+            res["list_clipboard"] = lclip
+            res["list_expect"] = expected_listing_copy(prod_data)
+            res["list_exact"] = lclip == res["list_expect"]
+            res["list_head_ok"] = (lclip.startswith("📈 ")
+                                   and lclip.split("\n")[0].endswith(" 상장)"))
+            res["list_bullets"] = lclip.count("* ")
+            res["list_clip_last"] = lclip.split("\n")[-1]
+            res["list_copy_toast"] = await page.inner_text("#toast")
+            res["list_copy_label"] = (await page.inner_text("#share-listing .lbl")).strip()
+            res["list_privacy_hits"] = [t for t in TERMS + ALWAYS_TERMS if t in lclip]
+            await page.wait_for_timeout(1900)
+            res["list_copy_label_back"] = (await page.inner_text("#share-listing .lbl")).strip()
+        else:
+            await page.evaluate("navigator.clipboard.writeText('')")
+            await page.locator("#share-listing").dispatch_event("click")
+            await page.wait_for_timeout(250)
+            res["list_disabled_label"] = (await page.inner_text("#share-listing .lbl")).strip()
+            res["list_disabled_empty"] = (await page.evaluate("navigator.clipboard.readText()")) == ""
 
         # 같은 버튼을 다시 눌러도 같은 포맷으로 복사 (라벨 되돌림 뒤 반복 동작)
         await page.evaluate("navigator.clipboard.writeText('')")
@@ -1128,6 +1140,10 @@ async def main():
 
     # 조건을 한 줄씩 따로 평가합니다 — 실패한 조건만 이름 그대로 찍혀서
     # 어느 확인이 깨졌는지 바로 보입니다(조건 자체는 예전 and 체인과 같습니다).
+    # 청약 배지 기대값 — 프로덕션 data.json 의 일정으로 같은 규칙(sub_badge·hero_flag_text) 계산
+    SCHED_PROD = sorted(((IPO_PROD.get("upcoming") or {}).get("subscribe") or []),
+                        key=lambda x: str(x.get("start") or "9999"))
+
     _conds = [
         'res["http_status"] == 200',
         # 이전 Vercel 주소는 ipo.mydon.kr 로 영구 리다이렉트(308/301) — 200 이면 실패
@@ -1195,14 +1211,14 @@ async def main():
         'res["share_copy_label_back"] == "청약 정보 공유"',
         'res["share_fallback_clipboard"]',
         '"복사" in res["share_fallback_toast"]',
-        'res["list_exact"]',
-        'res["list_head_ok"]',
-        'res["list_bullets"] >= 1',
-        'res["list_clip_last"] == SITE_URL',
-        'not res["list_privacy_hits"]',
-        '"상장 정보" in res["list_copy_toast"]',
-        'res["list_copy_label"] == "복사됐어요"',
-        'res["list_copy_label_back"] == "상장 정보 공유"',
+        'not LIST_TODAY or res["list_exact"]',
+        'not LIST_TODAY or res["list_head_ok"]',
+        'not LIST_TODAY or res["list_bullets"] >= 1',
+        'not LIST_TODAY or res["list_clip_last"] == SITE_URL',
+        'not LIST_TODAY or not res["list_privacy_hits"]',
+        'not LIST_TODAY or "상장 정보" in res["list_copy_toast"]',
+        'not LIST_TODAY or res["list_copy_label"] == "복사됐어요"',
+        'not LIST_TODAY or res["list_copy_label_back"] == "상장 정보 공유"',
         'res["dark_share_visible"]',
         'res["dark_share_count"] == 2',
         'min(res["dark_share_btns"]) >= 44',
@@ -1300,7 +1316,8 @@ async def main():
         'res["sch_counts"]["subscribe"] >= 10',
         'res["sch_counts"]["listing"] >= 1',
         'res["sch_first"]',
-        'res["sch_first"]["dday"].startswith("D-")',
+        'res["sch_first"]["dday"] == sub_badge(SCHED_PROD[0], TODAY)["text"]',
+        'res["hero_kind"] != "subscribe" or res["hero_flags"][0] == hero_flag_text(IPO_PROD["subscribe"][0], TODAY)',
         'res["sch_first"]["when"].endswith("청약")',
         '"희망" in (res["sch_first"]["price"] or "")',
         'any("38.co.kr" in (u or "") for u in res["sch_src_urls"])',
