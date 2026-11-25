@@ -104,24 +104,13 @@
       "memo": "월요일 상장"
     },
     "upcoming": {
-      "asOf": "2026-11-25",
-      "windowLabel": "11/24(화) ~ 12/18(금)",
+      "asOf": "2026-11-26",
+      "windowLabel": "11/27(금) ~ 12/18(금)",
       "source": {
         "label": "38커뮤니케이션 공모주 청약일정",
         "url": "https://www.38.co.kr/html/fund/index.htm?o=k"
       },
       "subscribe": [
-        {
-          "name": "신영스팩12호",
-          "start": "2026-11-24",
-          "end": "2026-11-25",
-          "price": "확정 2,000원",
-          "minShares": 50,
-          "brokers": "신영증권",
-          "market": "코스닥",
-          "refund": "2026-11-27",
-          "spac": true
-        },
         {
           "name": "에이엔에이치스트럭쳐",
           "start": "2026-11-27",

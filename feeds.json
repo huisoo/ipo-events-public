@@ -1,5 +1,5 @@
 {
- "updated_at": "2026-11-25T16:08:21+09:00",
+ "updated_at": "2026-11-26T02:56:33+09:00",
  "channels": [
   {
    "name": "공모주한잔",
@@ -99,7 +99,7 @@
     "period": "2026.11.24~11.25",
     "price_fixed": "2,000",
     "price_band": "2,000~2,000",
-    "competition": "",
+    "competition": "253:1",
     "brokers": "신영증권"
    },
    {
