@@ -186,6 +186,9 @@ h1 em{font-style:normal; color:inherit}
 .flag.is-list{background:var(--green-soft); color:var(--green)}
 .flag.is-list-on{background:var(--green-soft); color:var(--green)}
 .flag.is-soft{background:var(--bg2); color:var(--ink2)}
+/* 청약 날짜 상태 — 진행 중(1일차…)은 블루, 마감(오늘 마감 / N일차 · 마감)은 레드 */
+.flag.is-day{background:var(--blue-soft); color:var(--blue-ink)}
+.flag.is-close{background:var(--red-soft); color:var(--red)}
 /* 주말 모드 — 휴장 배지는 차분하게, 미리보기 배지는 정보 블루 */
 .flag.is-week{background:var(--bg2); color:var(--ink2)}
 .flag.is-next{background:var(--blue-soft); color:var(--blue-ink)}
@@ -791,6 +794,9 @@ html[data-theme="dark"] .be-btn.done{background:var(--green-soft); color:var(--g
 }
 .sc-dd.hot{background:var(--blue-soft); color:var(--blue-ink)}
 .sc-dd.off{background:var(--bg2); color:var(--ink3); text-decoration:line-through}
+/* 1일차·2일차 = 진행 중(블루) · 오늘 마감 / N일차 · 마감 = 마감 강조(레드) */
+.sc-dd.is-day{background:var(--blue-soft); color:var(--blue-ink)}
+.sc-dd.is-close{background:var(--red-soft); color:var(--red); font-weight:800}
 .sc.is-list .sc-dd.hot{background:var(--green-soft); color:var(--green)}
 .sc-name{
   flex:0 1 auto; min-width:0;

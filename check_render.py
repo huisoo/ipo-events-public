@@ -386,6 +386,68 @@ def cash_peak_text(plan):
     return ("약 " + won_short(plan["peak"][1]["amount"])) if plan["peak"] else "0원"
 
 
+# ── 청약 배지(1일차 / N일차 · 마감 / 오늘 마감) 기대값 ─────────────
+# app.js periodDay·heroDay·subBadge 와 같은 규칙입니다.
+def period_start(text, base):
+    """'11/24(화) ~ 11/25(수) 16:00' → 11/24 (이미 지난 날짜면 내년) — app.js periodStart."""
+    m = re.search(r"(\d{1,2})\s*/\s*(\d{1,2})", str(text or ""))
+    if not m:
+        return None
+    mo, da = int(m.group(1)), int(m.group(2))
+    if not (1 <= mo <= 12 and 1 <= da <= 31):
+        return None
+    d = dt.date(base.year, mo, da)
+    if (base - d).days > 180:
+        d = dt.date(base.year + 1, mo, da)
+    return d
+
+
+def period_day(start, end, today):
+    """청약 기간 중 오늘 위치 — 1일차 / N일차 · 마감 / 오늘 마감 (기간 밖이면 None)."""
+    if not start or not today:
+        return None
+    e = end or start
+    if today < start or today > e:
+        return None
+    if start == e:
+        return {"text": "오늘 마감", "cls": "is-close"}
+    n = (today - start).days + 1
+    if today == e:
+        return {"text": f"{n}일차 · 마감", "cls": "is-close"}
+    return {"text": f"{n}일차", "cls": "is-day"}
+
+
+def sub_badge(item, today):
+    """전체 일정 카드의 청약 배지 — app.js subBadge."""
+    s = parse_iso((item or {}).get("start"))
+    e = parse_iso((item or {}).get("end")) or s
+    if not s:
+        return None
+    if e and today > e:
+        return {"text": "청약 종료", "cls": "off"}
+    if today < s:
+        diff = (s - today).days
+        return {"text": f"D-{diff}", "cls": "hot" if diff <= 4 else ""}
+    return period_day(s, e, today)
+
+
+def hero_flag_text(item, today):
+    """오늘 청약 카드 상단 배지 — dayBadge 우선, 없으면 기간·마감일 계산, 그것도 없으면 badge."""
+    raw = re.sub(r"^청약\s*", "", str((item or {}).get("dayBadge") or "")).strip()
+    if raw:
+        return "오늘 청약 " + raw
+    pd = period_day(period_start((item or {}).get("period"), today),
+                    parse_iso((item or {}).get("closeDate")), today)
+    if pd:
+        return "오늘 청약 " + pd["text"]
+    badge = re.sub(r"^오늘\s*청약\s*", "", str((item or {}).get("badge") or ""))
+    return "오늘 청약" + ((" " + badge) if badge else "")
+
+
+SCHED_SUBS = sorted(((IPO.get("upcoming") or {}).get("subscribe") or []),
+                    key=lambda x: str(x.get("start") or "9999"))
+
+
 def short_day(d):
     """11/24(화) — JS shortDay 와 같은 표기(일요일=0)."""
     return f"{d.month}/{d.day}(" + "일월화수목금토"[(d.weekday() + 1) % 7] + ")"
@@ -650,6 +712,7 @@ def listing_day(body):
         "hasListing": True, "date": "2026-11-20", "name": "하나에어로다이내믹스",
         "code": "271160", "market": "코스닥", "badge": "오늘 상장",
         "ipoPrice": "5,700원",
+        "brokers": "IBK투자증권",
         "openPrice": "10,130원", "openChange": "+77.7%",
         "closePrice": "6,050원", "closeChange": "+6.14%",
         "lockupRate": "72.69%", "floatSummary": "17.30% (약 175억)",
@@ -1127,29 +1190,43 @@ async def main():
             terms_all = PRIVACY_TERMS + ALWAYS_TERMS
             results["share_privacy_hits"] = [t for t in terms_all if t in clip]
 
-            # 오른쪽 버튼 — 상장 정보 복사 포맷
-            await page.evaluate("navigator.clipboard.writeText('')")
-            await page.locator("#share-listing").click()
-            await page.wait_for_timeout(350)
-            lclip = await page.evaluate("navigator.clipboard.readText()")
-            llines = lclip.split("\n")
-            results["list_clipboard"] = lclip
-            results["list_expect"] = expected_listing_copy(DATA)
-            results["list_exact"] = lclip == results["list_expect"]
-            results["list_head_ok"] = bool(
-                re.match(r"^📈 \S+ \(\d{1,2}/\d{1,2} 상장\)$", llines[0]))
-            results["list_bullets"] = lclip.count("* ")
-            results["list_last_line"] = llines[-1]
-            results["list_url_once"] = (lclip.count(SITE_URL) == 1
-                                        and lclip.endswith("\n" + SITE_URL))
-            results["list_no_subscribe_name"] = not any(
-                str(it.get("name")) in lclip for it, _ in share_items(DATA))
-            results["list_copy_toast"] = await page.inner_text("#toast")
-            results["list_copy_label"] = (await page.inner_text("#share-listing .lbl")).strip()
-            await page.wait_for_timeout(1900)
-            results["list_copy_label_back"] = (
-                await page.inner_text("#share-listing .lbl")).strip()
-            results["list_privacy_hits"] = [t for t in terms_all if t in lclip]
+            # 오른쪽 버튼 — 상장 정보 복사 포맷 (오늘 상장 종목이 있는 날만)
+            # 상장이 없는 날은 버튼이 비활성이라 실제 데이터로는 확인할 수 없으므로,
+            # 같은 경로는 아래 상장일 mock(listing_day · listing_sparse_day)이 검증합니다.
+            LIST_TODAY = bool((IPO.get("listing") or {}).get("hasListing"))
+            if LIST_TODAY:
+                await page.evaluate("navigator.clipboard.writeText('')")
+                await page.locator("#share-listing").click()
+                await page.wait_for_timeout(350)
+                lclip = await page.evaluate("navigator.clipboard.readText()")
+                llines = lclip.split("\n")
+                results["list_clipboard"] = lclip
+                results["list_expect"] = expected_listing_copy(DATA)
+                results["list_exact"] = lclip == results["list_expect"]
+                results["list_head_ok"] = bool(
+                    re.match(r"^📈 \S+ \(\d{1,2}/\d{1,2} 상장\)$", llines[0]))
+                results["list_bullets"] = lclip.count("* ")
+                results["list_last_line"] = llines[-1]
+                results["list_url_once"] = (lclip.count(SITE_URL) == 1
+                                            and lclip.endswith("\n" + SITE_URL))
+                results["list_no_subscribe_name"] = not any(
+                    str(it.get("name")) in lclip for it, _ in share_items(DATA))
+                results["list_copy_toast"] = await page.inner_text("#toast")
+                results["list_copy_label"] = (
+                    await page.inner_text("#share-listing .lbl")).strip()
+                await page.wait_for_timeout(1900)
+                results["list_copy_label_back"] = (
+                    await page.inner_text("#share-listing .lbl")).strip()
+                results["list_privacy_hits"] = [t for t in terms_all if t in lclip]
+            else:
+                # 비활성 버튼 — 눌러도 아무 것도 복사되지 않고 라벨도 그대로
+                await page.evaluate("navigator.clipboard.writeText('')")
+                await page.locator("#share-listing").dispatch_event("click")
+                await page.wait_for_timeout(250)
+                results["list_disabled_label"] = (
+                    await page.inner_text("#share-listing .lbl")).strip()
+                results["list_disabled_empty"] = (await page.evaluate(
+                    "navigator.clipboard.readText()")) == ""
 
             # 같은 버튼을 다시 눌러도 같은 포맷으로 복사 (라벨 되돌림 뒤 반복 동작)
             await page.evaluate("navigator.clipboard.writeText('')")
@@ -1511,6 +1588,7 @@ async def main():
                 if (!li) return null;
                 return {
                     dday: li.querySelector('.sc-dd')?.textContent.trim(),
+                    cls: li.querySelector('.sc-dd')?.className || '',
                     name: li.querySelector('.sc-name')?.textContent.trim(),
                     when: li.querySelector('.sc-when')?.textContent.trim(),
                     price: li.querySelector('.sc-price')?.textContent.trim(),
@@ -1521,6 +1599,8 @@ async def main():
                 "#sch-subscribe .sc .sc-name", "els => els.map(e => e.textContent.trim())")
             results["sch_ddays"] = await page.eval_on_selector_all(
                 "#sch-subscribe .sc .sc-dd", "els => els.map(e => e.textContent.trim())")
+            results["sch_dday_classes"] = await page.eval_on_selector_all(
+                "#sch-subscribe .sc .sc-dd", "els => els.map(e => e.className)")
 
             # ── 필요 금액 카드 (균등 최소증거금) — 계산값·칩 ─────
             plan_m = cash_plan(IPO, TODAY)                       # 기본: 이번 달 · 스팩 제외
@@ -1702,13 +1782,14 @@ async def main():
             results["stub_share_label"] = (
                 await spage.inner_text("#share-sub .lbl")).strip()
             results["stub_share_toast"] = (await spage.inner_text("#toast")).strip()
-            # 오른쪽 버튼도 공유 시트로 — title 은 '공모주 상장 정보'
+            # 오른쪽 버튼도 공유 시트로 — title 은 '공모주 상장 정보' (오늘 상장이 있는 날만)
             await spage.evaluate("window.__shared = null")
-            await spage.locator("#share-listing").click()
-            await spage.wait_for_timeout(300)
-            results["shared_listing_payload"] = await spage.evaluate("window.__shared")
-            results["stub_list_label"] = (
-                await spage.inner_text("#share-listing .lbl")).strip()
+            if LIST_TODAY:
+                await spage.locator("#share-listing").click()
+                await spage.wait_for_timeout(300)
+                results["shared_listing_payload"] = await spage.evaluate("window.__shared")
+                results["stub_list_label"] = (
+                    await spage.inner_text("#share-listing .lbl")).strip()
             results["stub_errors"] = s_errors
             await sctx.close()
 
@@ -1742,11 +1823,12 @@ async def main():
             results["share_reject_clipboard"] = (
                 await rpage.evaluate("navigator.clipboard.readText()")) == expected_copy(DATA)
             await rpage.evaluate("navigator.clipboard.writeText('')")
-            await rpage.locator("#share-listing").click()
-            await rpage.wait_for_timeout(450)
-            results["list_reject_toast"] = await rpage.inner_text("#toast")
-            results["list_reject_clipboard"] = (
-                await rpage.evaluate("navigator.clipboard.readText()")) == expected_listing_copy(DATA)
+            if LIST_TODAY:
+                await rpage.locator("#share-listing").click()
+                await rpage.wait_for_timeout(450)
+                results["list_reject_toast"] = await rpage.inner_text("#toast")
+                results["list_reject_clipboard"] = (
+                    await rpage.evaluate("navigator.clipboard.readText()")) == expected_listing_copy(DATA)
             results["reject_errors"] = r_errors
             await rctx.close()
 
@@ -2193,8 +2275,9 @@ async def main():
             await deepl2.close()
 
             # ── 6. 주관사 앱 열기 버튼 — OS 자동 구분 (상장 · 청약 카드) ────────
-            # (a) 실제 데이터 — 오늘 상장(하나에어로다이내믹스, 대표주관 IBK투자증권), Android UA
-            appctx, apppage, app_errors = await open_page(browser)
+            # (a) 상장 카드 — 대표주관이 있는 상장일 mock(하나에어로다이내믹스 · IBK투자증권), Android UA
+            # 오늘 상장 종목이 없는 날에도 같은 경로를 볼 수 있게 실제 데이터 대신 상장일 mock 을 씁니다.
+            appctx, apppage, app_errors = await open_page(browser, mutate=listing_day)
             results["app_hero_name"] = (await apppage.inner_text(".hero.is-list .hname")).strip()
             GET_APP = """els => els.map(e => ({
                 text: e.textContent.replace(/\\s+/g, ' ').trim(),
@@ -2250,7 +2333,8 @@ async def main():
             await appctx.close()
 
             # (b) 같은 페이지를 iPhone UA 로 — 같은 버튼의 href 가 App Store 로 바뀌는지
-            iosctx, iospage, ios_errors = await open_page(browser, user_agent=IOS_UA)
+            iosctx, iospage, ios_errors = await open_page(
+                browser, mutate=listing_day, user_agent=IOS_UA)
             ios_apps = await iospage.eval_on_selector_all(".hero.is-list .app-open", GET_APP)
             results["ios_app_btns"] = ios_apps
             results["ios_app_ok"] = bool(ios_apps) and all([
@@ -2267,7 +2351,8 @@ async def main():
 
             # (b-2) 같은 페이지를 데스크톱 UA(Windows Chrome)로 — 그대로 Google Play 스토어 링크
             dsctx, dspage, ds_errors = await open_page(
-                browser, user_agent=DESKTOP_UA, viewport={"width": 1280, "height": 900},
+                browser, mutate=listing_day, user_agent=DESKTOP_UA,
+                viewport={"width": 1280, "height": 900},
                 is_mobile=False, has_touch=False, device_scale_factor=1, permissions=[])
             ds_apps = await dspage.eval_on_selector_all(".hero.is-list .app-open", GET_APP)
             results["desktop_app_btns"] = ds_apps
@@ -2868,12 +2953,15 @@ async def main():
         'results["sch_counts"]["subscribe"] >= 10',
         'results["sch_counts"]["listing"] >= 1',
         'results["sch_first"]',
-        'results["sch_first"]["dday"].startswith("D-")',
+        'results["sch_first"]["dday"] == sub_badge(SCHED_SUBS[0], DAY)["text"]',
+        'results["sch_first"]["cls"] == ("sc-dd " + sub_badge(SCHED_SUBS[0], DAY)["cls"]).strip()',
         'results["sch_first"]["when"].endswith("청약")',
         '"희망" in (results["sch_first"]["price"] or "")',
         'results["sch_first"]["sub"]',
         '"증권" in results["sch_first"]["sub"]',
-        'all(d.startswith("D-") or d in ("청약 중", "청약 종료") for d in results["sch_ddays"])',
+        'results["sch_ddays"] == [sub_badge(it, DAY)["text"] for it in SCHED_SUBS]',
+        'results["sch_dday_classes"] == [("sc-dd " + sub_badge(it, DAY)["cls"]).strip() for it in SCHED_SUBS]',
+        'results["hero_kind"] != "subscribe" or results["flags"][0] == hero_flag_text(IPO["subscribe"][0], DAY)',
         'len(results["sch_list_items"]) >= 1',
         'all("상장" in it for it in results["sch_list_items"])',
         'any("38.co.kr" in (u or "") for u in results["sch_src_urls"])',
@@ -2969,20 +3057,20 @@ async def main():
         'results["share_copy_label_back"] == "청약 정보 공유"',
         'results["share_fallback_clipboard"]',
         '"복사" in results["share_fallback_toast"]',
-        'results["list_exact"]',
-        'results["list_head_ok"]',
-        'results["list_bullets"] == 7',
-        'results["list_last_line"] == SITE_URL',
-        'results["list_url_once"]',
-        'results["list_no_subscribe_name"]',
-        'not results["list_privacy_hits"]',
-        '"상장 정보" in results["list_copy_toast"]',
-        'results["list_copy_label"] == "복사됐어요"',
-        'results["list_copy_label_back"] == "상장 정보 공유"',
+        'not LIST_TODAY or results["list_exact"]',
+        'not LIST_TODAY or results["list_head_ok"]',
+        'not LIST_TODAY or results["list_bullets"] == 7',
+        'not LIST_TODAY or results["list_last_line"] == SITE_URL',
+        'not LIST_TODAY or results["list_url_once"]',
+        'not LIST_TODAY or results["list_no_subscribe_name"]',
+        'not LIST_TODAY or not results["list_privacy_hits"]',
+        'not LIST_TODAY or "상장 정보" in results["list_copy_toast"]',
+        'not LIST_TODAY or results["list_copy_label"] == "복사됐어요"',
+        'not LIST_TODAY or results["list_copy_label_back"] == "상장 정보 공유"',
         'results["stub_share_type"] == "function"',
         'results["stub_share_label"] == "청약 정보 공유"',
         'results["stub_share_toast"] == ""',
-        'results["stub_list_label"] == "상장 정보 공유"',
+        'not LIST_TODAY or results["stub_list_label"] == "상장 정보 공유"',
         'results["abort_clipboard_empty"]',
         'results["abort_toast_empty"]',
         'results["abort_label"] == "청약 정보 공유"',
@@ -3058,15 +3146,17 @@ async def main():
         'results["shared_payload"].get("title") == "공모주 청약 정보"',
         'results["shared_payload"].get("text") == expected_body(DATA)',
         'SITE_URL not in (results["shared_payload"].get("text") or "")',
-        'bool(results["shared_listing_payload"])',
-        'results["shared_listing_payload"].get("url") == SITE_URL',
-        'results["shared_listing_payload"].get("title") == "공모주 상장 정보"',
-        'results["shared_listing_payload"].get("text") == listing_block(DATA)',
-        'SITE_URL not in (results["shared_listing_payload"].get("text") or "")',
+        'not LIST_TODAY or bool(results["shared_listing_payload"])',
+        'not LIST_TODAY or results["shared_listing_payload"].get("url") == SITE_URL',
+        'not LIST_TODAY or results["shared_listing_payload"].get("title") == "공모주 상장 정보"',
+        'not LIST_TODAY or results["shared_listing_payload"].get("text") == listing_block(DATA)',
+        'not LIST_TODAY or SITE_URL not in (results["shared_listing_payload"].get("text") or "")',
         '"복사" in results["share_reject_toast"]',
         'results["share_reject_clipboard"]',
-        '"복사" in results["list_reject_toast"]',
-        'results["list_reject_clipboard"]',
+        'not LIST_TODAY or "복사" in results["list_reject_toast"]',
+        'not LIST_TODAY or results["list_reject_clipboard"]',
+        'LIST_TODAY or results["list_disabled_label"] == "오늘 상장 없음"',
+        'LIST_TODAY or results["list_disabled_empty"]',
         'results["dark_share_visible"]',
         'results["dark_share_count"] == 2',
         'min(results["dark_share_btns"]) >= 44',

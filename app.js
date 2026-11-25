@@ -523,12 +523,39 @@
     return rows ? '<div class="hero-next">' + rows + '</div>' : '';
   }
 
+  /* 청약 기간 중 오늘 위치 — 1일차 / 2일차 · 마감 / 오늘 마감
+   *   · 하루짜리 청약(s === e)      : '오늘 마감'
+   *   · 마지막 날(today === e)      : '(총일수)일차 · 마감'
+   *   · 기간 중 나머지 날           : '(경과일수+1)일차' (진행 중)
+   * 기간 밖이면 null — 배지에 날짜 상태를 붙이지 않습니다. */
+  function periodDay(start, end, today) {
+    if (!start || !today) return null;
+    var e = end || start;
+    if (today < start || today > e) return null;
+    if (start.getTime() === e.getTime()) return { text: '오늘 마감', cls: 'is-close' };
+    var day = Math.round((today - start) / 86400000) + 1;
+    if (today.getTime() === e.getTime()) return { text: day + '일차 · 마감', cls: 'is-close' };
+    return { text: day + '일차', cls: 'is-day' };
+  }
+
+  /* 오늘 청약 카드 상단 배지 — data.json 의 dayBadge('청약 2일차 · 마감')를 먼저 쓰고,
+   * 없으면 청약 기간(period · closeDate)으로 오늘 위치를 계산합니다. */
+  function heroDay(s, today) {
+    var raw = has(s.dayBadge) ? String(s.dayBadge).replace(/^청약\s*/, '').trim() : '';
+    if (raw) return { text: raw, cls: /마감/.test(raw) ? 'is-close' : 'is-day' };
+    return periodDay(periodStart(s.period, today), parseDay(s.closeDate), today);
+  }
+
   /* 오늘 청약 카드 — 1분 요약의 본문 */
   function heroCard(s, ipo, today) {
     var badge = String(s.badge || '').replace(/^오늘\s*청약\s*/, '');
+    var day = heroDay(s, today);
     var priceNum = String(s.price || '').replace(/^확정\s*/, '');
     var listingToday = !!(ipo.listing && ipo.listing.hasListing);
-    var flags = '<span class="flag">' + esc('오늘 청약' + (badge ? ' ' + badge : '')) + '</span>' +
+    /* 날짜 상태(1일차 / 2일차 · 마감)가 있으면 '오늘 청약' 배지에 붙여 한눈에 보이게 하고,
+       마감일은 배지 전체를 빨간 계열로 바꿉니다(is-close). 없으면 예전처럼 s.badge 로 폴백. */
+    var flagText = '오늘 청약' + (day ? ' ' + day.text : (badge ? ' ' + badge : ''));
+    var flags = '<span class="flag' + (day ? ' ' + day.cls : '') + '">' + esc(flagText) + '</span>' +
       (listingToday
         ? '<span class="flag is-list-on">오늘 상장 1건</span>'
         : '<span class="flag is-off">오늘 상장 없음</span>');
@@ -817,16 +844,19 @@
 
   /* ── 전체 일정 탭 ────────────────────────── */
 
-  /* 청약 D-day — 기간 중이면 '청약 중', 지나면 '종료' */
+  /* 청약 배지 — 예정이면 D-N, 기간 중이면 '1일차 / 2일차 · 마감', 지나면 '청약 종료'
+   * 기간이 여러 날이면 마지막 날을 '· 마감'(is-close)으로 강조해 하루짜리 청약의 '오늘 마감'과
+   * 같은 색으로 보이게 합니다. 진행 중인 날은 is-day(파랑)입니다. */
   function subBadge(item, today) {
     var s = parseDay(item.start);
     var e = parseDay(item.end) || s;
     if (!s) return null;
     if (e && today > e) return { text: '청약 종료', cls: 'off' };
-    if (today >= s) return { text: '청약 중', cls: 'hot' };
-    var diff = Math.round((s - today) / 86400000);
-    if (diff <= 4) return { text: 'D-' + diff, cls: 'hot' };
-    return { text: 'D-' + diff, cls: '' };
+    if (today < s) {
+      var diff = Math.round((s - today) / 86400000);
+      return { text: 'D-' + diff, cls: diff <= 4 ? 'hot' : '' };
+    }
+    return periodDay(s, e, today);
   }
 
   function listBadge(item, today) {
