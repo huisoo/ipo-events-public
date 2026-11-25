@@ -1,61 +1,17 @@
 {
-  "date": "2026-11-25",
-  "dateLabel": "2026년 11월 25일 수요일",
-  "updatedLabel": "16:13",
+  "date": "2026-11-26",
+  "dateLabel": "2026년 11월 26일 목요일",
+  "updatedLabel": "07:38",
   "draft": false,
-  "draftNote": "공모주 16:13 기준 · 증권사 혜택 11/21 확인",
+  "draftNote": "공모주 07:38 기준 · 증권사 혜택 11/21 확인",
   "benefitsAsOf": "2026-11-21",
   "ipo": {
-    "date": "2026-11-25",
-    "dateLabel": "2026년 11월 25일 수요일",
-    "updatedAt": "2026-11-25T16:13:00+09:00",
-    "updatedLabel": "16:13",
-    "subscribe": [
-      {
-        "name": "신영스팩12호",
-        "market": "코스닥 · 스팩",
-        "dayBadge": "청약 마감",
-        "price": "2,000원",
-        "priceNote": "단일가 확정",
-        "period": "11/24(화) ~ 11/25(수) 16:00",
-        "brokers": "신영증권",
-        "refund": "11/27(금)",
-        "listing": "12/03(목) 예정",
-        "spac": true,
-        "minEqual": {
-          "shares": 50,
-          "deposit": "100,000원",
-          "basis": "50주 × 2,000원 × 증거금률 100%"
-        },
-        "closeDate": "2026-11-25",
-        "closeDateLabel": "11/25",
-        "closeNote": "16:00 마감 완료",
-        "ipoPrice": "2,000원",
-        "lockupRate": "0.16%",
-        "marketCap": "127억",
-        "minSubscription": "50주 / 100,000원",
-        "fee": "2,000원",
-        "equalShares": "78.1만 주",
-        "expectedProRata": "1일차 비례 6.79:1",
-        "proRata10Shares": "",
-        "fullSubscription": "",
-        "refundDate": "11/27",
-        "listingDate": "12/03",
-        "opinion": ""
-      }
-    ],
-    "cancelled": [
-      {
-        "badge": "상장 철회",
-        "name": "아델",
-        "body": "수요예측(11/12~11/18)에 희망밴드 하단 18,000원보다 낮은 주문이 몰려 11/20 철회신고서를 냈어요. 청약(11/23~11/24)과 상장(12/02 예정) 모두 진행되지 않습니다."
-      },
-      {
-        "badge": "공모 철회",
-        "name": "케이엠에프",
-        "body": "수요예측(11/16~11/20)을 마친 뒤 11/23 철회신고서를 냈어요. 11/24~11/25 예정이던 일반청약과 11/27 환불·납입, 상장 모두 진행되지 않습니다. 확정 공모가는 공시되지 않았습니다(희망 15,000~17,800원)."
-      }
-    ],
+    "date": "2026-11-26",
+    "dateLabel": "2026년 11월 26일 목요일",
+    "updatedAt": "2026-11-26T07:38:00+09:00",
+    "updatedLabel": "07:38",
+    "subscribe": [],
+    "cancelled": [],
     "listing": {
       "hasListing": false
     },
@@ -63,7 +19,7 @@
       "channel": "공모주한잔",
       "channelUrl": "https://www.youtube.com/@공모주한잔",
       "items": [],
-      "note": "신영스팩12호(오늘 청약) 관련 분석 영상은 아직 없어요."
+      "note": "오늘 진행 중인 청약이 없어요. 다음 청약은 11/27(금) 에이엔에이치스트럭쳐입니다."
     },
     "gongmorin": {
       "channel": "공모주투자의법칙(공주)",
