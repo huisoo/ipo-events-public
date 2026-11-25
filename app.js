@@ -1480,7 +1480,9 @@
    *
    * 1) 청약 정보 — ipo.subscribe[](오늘 청약 종목) 순서대로, 오늘 청약이 없으면 ipo.next.
    *
-   *   📌 {종목명} ({M/DD} 마감[ 예정])
+   *   📌 {종목명} ({M/DD} 청약 마감)          — 마감일이 지난 뒤(마감일 당일 16:00 이후 포함)
+   *   📌 {종목명} ({M/DD} 16:00 마감)          — 마감일 당일 16:00 이전
+   *   📌 {종목명} ({M/DD} 마감 예정)           — 아직 마감일 전
    *
    *   * 공모가: …  * 확약률: …  * 시총: …  * 주관사: …  * 최소청약: …  * 수수료: …
    *   * 균등물량: …  * 예상 비례경쟁률: …  * 비례 10주: …  * 풀청약: …
@@ -1496,13 +1498,13 @@
    *   * 상장일 유통물량: …  * 가격제한폭: …  * 한줄 요약: …
    *
    * 값이 없거나 '미정'·'확인 필요'인 항목은 줄을 만들지 않습니다.
-   * navigator.share 가 있으면 공유 시트로 { title, text, url } 을 넘기고 (text 에는 URL 없음),
+   * navigator.share 가 있으면 공유 시트로 { text, url } 을 넘기고 (text 에는 URL 없음),
    * 미지원(데스크톱 등)이거나 AbortError 이외의 오류면 클립보드 복사본(마지막 줄에 URL)으로
    * 폴백합니다.
+   * title 은 넘기지 않습니다 — 안드로이드 공유 시트가 첫 줄을 'title - text' 로 중복해서
+   * 보여 주기 때문입니다(family-morning-brief 와 같은 처리).
    */
   var SITE_URL = 'https://ipo.mydon.kr';
-  var SHARE_TITLE = '공모주 청약 정보';
-  var LISTING_TITLE = '공모주 상장 정보';
   var subText = '';
   var subPayload = null;
   var listText = '';
@@ -1592,6 +1594,57 @@
     return (d && d <= todayDay()) ? '' : '예정';
   }
 
+  /* KST 현재 시각(0시부터의 분) — 기기 타임존과 무관하게 아시아/서울 기준 */
+  function kstMinutes() {
+    var t = new Date(Date.now() + 9 * 3600000);
+    return t.getUTCHours() * 60 + t.getUTCMinutes();
+  }
+
+  /* 청약 마감 시각 — period·closeNote 에 적힌 'HH:MM', 없으면 16:00 (KST) */
+  function closeClock(item) {
+    var src = String(item.period || '') + ' ' + String(item.closeNote || '');
+    var m = /(\d{1,2})\s*:\s*(\d{2})/.exec(src);
+    var h = m ? Number(m[1]) : 16, mi = m ? Number(m[2]) : 0;
+    if (!(h >= 0 && h <= 24) || !(mi >= 0 && mi < 60)) { h = 16; mi = 0; }
+    return (h < 10 ? '0' : '') + h + ':' + (mi < 10 ? '0' : '') + mi;
+  }
+
+  /* 마감일 당일 마감 시각을 지났는가 — 지난 날짜는 보지 않습니다(closeLabel 이 따로 처리) */
+  function closePassed(item) {
+    var d = closeDay(item);
+    if (!d || d.getTime() !== todayDay().getTime()) return false;
+    var hm = closeClock(item).split(':');
+    return kstMinutes() >= Number(hm[0]) * 60 + Number(hm[1]);
+  }
+
+  /* closeNote 정리 — 시각은 따로 붙이고 '마감'은 두 번 쓰지 않습니다
+     ('16:00 마감 완료' → '완료', '예정' → '예정') */
+  function closeNoteText(note) {
+    var s = String(note == null ? '' : note).trim();
+    if (!s) return '';
+    s = s.replace(/\d{1,2}\s*:\s*\d{2}/g, ' ').replace(/\s+/g, ' ').trim();
+    return s.replace(/^마감\s*/, '').trim();
+  }
+
+  /* 괄호 안 마감 표기 — '마감'이 두 번 겹치지 않게 한 곳에서 만듭니다.
+   *   마감일이 지났거나(당일 마감 시각 이후 포함) → '11/25 청약 마감'
+   *   마감일 당일 마감 시각 이전                → '11/25 16:00 마감'
+   *   아직 마감일 전                            → '11/30 마감 예정' · '11/30 마감'
+   */
+  function closeLabel(item, isNext) {
+    var close = closeText(item);
+    if (!close) return '';
+    var d = closeDay(item);
+    var today = todayDay();
+    if (d && d.getTime() < today.getTime()) return close + ' 청약 마감';
+    if (d && d.getTime() === today.getTime()) {
+      return closePassed(item) ? close + ' 청약 마감'
+        : close + ' ' + closeClock(item) + ' 마감';
+    }
+    var note = closeNoteText(closeNote(item, isNext));
+    return close + ' 마감' + (note ? ' ' + note : '');
+  }
+
   /* 공유할 청약 목록 — 오늘 청약 종목들, 없으면 다음 청약 */
   function shareItems(d) {
     var ipo = d.ipo || {};
@@ -1604,9 +1657,8 @@
   /* 종목 한 건 — 제목 / 항목 / 청약 의견 */
   function shareBlock(item, isNext) {
     var head = '📌 ' + String(item.name == null ? '' : item.name).trim();
-    var close = closeText(item);
-    var note = closeNote(item, isNext);
-    if (close) head += ' (' + close + ' 마감' + (note ? ' ' + note : '') + ')';
+    var close = closeLabel(item, isNext);
+    if (close) head += ' (' + close + ')';
 
     var bullets = [];
     SHARE_FIELDS.forEach(function (f) {
@@ -1678,11 +1730,12 @@
   function setShare(d) {
     var body = shareBody(d);
     subText = body ? body + '\n' + SITE_URL : '';
-    subPayload = body ? { title: SHARE_TITLE, text: body, url: SITE_URL } : null;
+    /* title 없이 text·url만 — 안드로이드 공유 시트 첫 줄 중복 방지(family-morning-brief 와 같음) */
+    subPayload = body ? { text: body, url: SITE_URL } : null;
 
     var lbody = listingBody(d);
     listText = lbody ? lbody + '\n' + SITE_URL : '';
-    listPayload = lbody ? { title: LISTING_TITLE, text: lbody, url: SITE_URL } : null;
+    listPayload = lbody ? { text: lbody, url: SITE_URL } : null;
 
     shareReady($('share-sub'), subPayload, '청약 정보 공유', '오늘 청약 없음');
     shareReady($('share-listing'), listPayload, '상장 정보 공유', '오늘 상장 없음');

@@ -285,6 +285,8 @@ async def main():
         res["share_expect"] = expected_copy(prod_data)
         res["share_exact"] = clip == res["share_expect"]
         res["share_head_ok"] = clip.startswith("📌 ") and " 마감" in res["share_clip_head"]
+        # '마감'은 첫 줄에 한 번만 — '(11/25 청약 마감)' · '(11/25 16:00 마감)'
+        res["share_head_once"] = res["share_clip_head"].count("마감") == 1
         res["share_no_summary"] = not any(
             s in clip for s in ("•", "직장인 1분 공모주 요약", "오늘 청약 없음", "상장 철회"))
         res["share_copy_toast"] = await page.inner_text("#toast")
@@ -1202,6 +1204,7 @@ async def main():
         'res["share_native"] == "undefined"',
         'res["share_lines"] >= 3',
         'res["share_head_ok"]',
+        'res["share_head_once"]',
         'res["share_clip_last"] == SITE_URL',
         'res["share_exact"]',
         'res["share_no_summary"]',

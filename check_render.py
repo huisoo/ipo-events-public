@@ -18,13 +18,16 @@ data.json 을 로컬 HTTP 로 띄워 확인합니다(파일 직접 열면 fetch 
   오른쪽 `상장 정보 공유`(ipo.listing.hasListing 일 때, 없으면 `:disabled` + `오늘 상장 없음`).
   두 버튼 44px 이상·같은 줄·같은 폭·글자 잘림 없음·아이콘은 이모지가 아닌 인라인 SVG,
   주 액션은 블루 솔리드·보조 액션은 화이트/1px 실선, 비활성은 커서 default + 흐린 회색 배경,
-  navigator.share 로 {title,text,url} 전달(url 은 text 에 중복 없음),
+  navigator.share 로 {text,url} 전달(title 없음 = 안드로이드 공유 시트 첫 줄 중복 방지,
+  url 은 text 에 중복 없음),
   미지원(헤드리스)·AbortError 이외 오류 시 클립보드에 해당 정보 포맷
-  (청약: 📌 {종목} ({M/DD} 마감) / * 항목 12개 / ✅ 청약 의견,
+  (청약: 📌 {종목} ({M/DD} 16:00 마감 | {M/DD} 청약 마감 | {M/DD} 마감 예정) / * 항목 12개 / ✅ 청약 의견,
    상장: 📈 {종목} ({M/DD} 상장) / * 항목 7개) · 토스트 · 라벨 '복사됐어요' 되돌림,
   AbortError(사용자가 닫음)에는 아무 것도 하지 않음
+- 청약 마감 경계: 마감일 당일 16:00 이전이면 '(M/DD 16:00 마감)', 16:00 이후(포함)에는
+  버튼을 그대로 둔 채 '(M/DD 청약 마감)' — '마감'이 두 번 겹치지 않음(브라우저 시각 고정 검증)
 - 공유문 포맷: 풀 필드 mock 2건(빈 줄 구분·정확한 문자열 일치), 값이 없는 항목은 줄 생략,
-  오늘 청약 0건이면 ipo.next 폴백('11/25 마감 예정'),
+  오늘 청약 0건이면 ipo.next 폴백('11/30 마감 예정'),
   상장 정보 mock(풀 필드·빈 항목 생략), 상장 없는 날 → 오른쪽 버튼 비활성 '오늘 상장 없음',
   청약·다음 청약 모두 없는 날 → 왼쪽 버튼 비활성 '오늘 청약 없음' + 눌러도 복사되지 않음
 - 스크린샷: preview-mobile.png / preview-mobile-events.png / preview-mobile-dark.png /
@@ -643,8 +646,9 @@ def min_shares_day(body):
 
 
 # 풀 필드 mock 의 기대 공유문 — 화면이 아니라 포맷 자체를 고정합니다.
+# 두 종목 모두 마감일이 지난 날짜라 앞머리는 '(M/DD 청약 마감)' 로 나옵니다.
 MOCK_COPY = (
-    "📌 하나에어로다이내믹스 (11/20 마감)\n"
+    "📌 하나에어로다이내믹스 (11/20 청약 마감)\n"
     "\n"
     "* 공모가: 5,700원\n"
     "* 확약률: 4.1%\n"
@@ -661,7 +665,7 @@ MOCK_COPY = (
     "\n"
     "✅ 청약 의견: 균등 + 비례 풀청약 추천\n"
     "\n"
-    "📌 신영스팩12호 (11/21 마감)\n"
+    "📌 신영스팩12호 (11/21 청약 마감)\n"
     "\n"
     "* 공모가: 2,000원\n"
     "* 주관사: 신영증권\n"
@@ -812,6 +816,37 @@ def week_empty_day(body):
     return body
 
 
+def close_today_day(body):
+    """마감일이 오늘(TODAY)인 청약 1건 — closeNote 에 '16:00 마감 완료' 가 적힌 실제 모양.
+    16:00 경계 문구를 브라우저 시각만 바꿔 가며 검증할 때 씁니다."""
+    body = json.loads(json.dumps(body))
+    ipo = body.setdefault("ipo", {})
+    label = f"{TODAY.month}/{TODAY.day:02d}"
+    ipo["subscribe"] = [{
+        "name": "신영스팩12호", "dayBadge": "청약 마감", "price": "2,000원",
+        "period": f"{label} 16:00", "closeDate": TODAY.isoformat(),
+        "closeDateLabel": label, "closeNote": "16:00 마감 완료",
+        "ipoPrice": "2,000원", "brokers": "신영증권", "refundDate": "11/27",
+    }]
+    ipo["next"] = {}
+    ipo["listing"] = {"hasListing": False}
+    return body
+
+
+def next_only_day(body):
+    """오늘 청약 없음 — ipo.next(TODAY+5일 마감, closeNote '예정') 폴백 모양."""
+    body = close_today_day(body)
+    ipo = body["ipo"]
+    nxt = TODAY + dt.timedelta(days=5)
+    label = f"{nxt.month}/{nxt.day:02d}"
+    ipo["subscribe"] = []
+    ipo["next"] = {"name": "에이엔에이치스트럭쳐", "period": label,
+                   "closeDate": nxt.isoformat(), "closeDateLabel": label,
+                   "closeNote": "예정", "ipoPrice": "희망 11,200~13,600원",
+                   "refundDate": "12/02"}
+    return body
+
+
 # ── 공유문 기대값 계산 (app.js 의 shareBlock 과 같은 규칙) ──────────────
 SHARE_FIELDS = [
     ("ipoPrice", "공모가"), ("lockupRate", "확약률"), ("marketCap", "시총"),
@@ -866,6 +901,8 @@ def close_day(item):
     if m:
         return dt.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
     label = close_text(item)
+    if not label:
+        return None
     mo, da = label.split("/")
     d = dt.date(TODAY.year, int(mo), int(da))
     if (TODAY - d).days > 180:
@@ -873,15 +910,68 @@ def close_day(item):
     return d
 
 
-def share_block(item, is_next=False):
-    head = "📌 " + str(item.get("name") or "").strip()
+def kst_now():
+    """KST 현재 시각 — 기대값 계산용(app.js 는 Date.now() + 9h)."""
+    return dt.datetime.now(dt.timezone(dt.timedelta(hours=9)))
+
+
+def close_clock(item):
+    """청약 마감 시각 'HH:MM' — period·closeNote 에 적힌 시각, 없으면 16:00 (app.js closeClock)."""
+    src = f"{item.get('period') or ''} {item.get('closeNote') or ''}"
+    m = re.search(r"(\d{1,2})\s*:\s*(\d{2})", src)
+    h, mi = (int(m.group(1)), int(m.group(2))) if m else (16, 0)
+    if not (0 <= h <= 24 and 0 <= mi < 60):
+        h, mi = 16, 0
+    return f"{h:02d}:{mi:02d}"
+
+
+def close_passed(item, now=None):
+    """마감일 당일 마감 시각을 지났는가 (app.js closePassed)."""
+    d = close_day(item)
+    if not d or d != TODAY:
+        return False
+    now = now or kst_now()
+    h, mi = (int(x) for x in close_clock(item).split(":"))
+    return now.hour * 60 + now.minute >= h * 60 + mi
+
+
+def close_note_text(note):
+    """closeNote 정리 — 시각은 따로 붙이고 '마감'은 두 번 쓰지 않음(app.js closeNoteText)."""
+    s = str(note or "").strip()
+    if not s:
+        return ""
+    s = re.sub(r"\d{1,2}\s*:\s*\d{2}", " ", s)
+    s = re.sub(r"\s+", " ", s).strip()
+    return re.sub(r"^마감\s*", "", s).strip()
+
+
+def close_label(item, is_next=False, now=None):
+    """괄호 안 마감 표기 (app.js closeLabel).
+
+    마감일이 지났거나 당일 마감 시각 이후 → '11/25 청약 마감'
+    마감일 당일 마감 시각 이전            → '11/25 16:00 마감'
+    아직 마감일 전                        → '11/30 마감 예정' · '11/30 마감'
+    """
     close = close_text(item)
-    note = str(item.get("closeNote") or "").strip()
+    if not close:
+        return ""
+    d = close_day(item)
+    if d and d < TODAY:
+        return f"{close} 청약 마감"
+    if d and d == TODAY:
+        return (f"{close} 청약 마감" if close_passed(item, now)
+                else f"{close} {close_clock(item)} 마감")
+    note = close_note_text(item.get("closeNote"))
     if not note and is_next:
-        d = close_day(item)
         note = "" if (d and d <= TODAY) else "예정"
+    return f"{close} 마감" + (f" {note}" if note else "")
+
+
+def share_block(item, is_next=False, now=None):
+    head = "📌 " + str(item.get("name") or "").strip()
+    close = close_label(item, is_next, now)
     if close:
-        head += f" ({close} 마감" + (f" {note}" if note else "") + ")"
+        head += f" ({close})"
     bullets = [f"* {label}: {v}" for key, label in SHARE_FIELDS
                if (v := share_value(item, key))]
     parts = [head]
@@ -900,12 +990,12 @@ def share_items(data):
     return [(nxt, True)] if nxt.get("name") else []
 
 
-def expected_body(data):
-    return "\n\n".join(share_block(it, is_next) for it, is_next in share_items(data))
+def expected_body(data, now=None):
+    return "\n\n".join(share_block(it, is_next, now) for it, is_next in share_items(data))
 
 
-def expected_copy(data):
-    body = expected_body(data)
+def expected_copy(data, now=None):
+    body = expected_body(data, now)
     return f"{body}\n{SITE_URL}" if body else ""
 
 
@@ -972,9 +1062,10 @@ def expected_listing_copy(data):
 
 
 async def open_page(browser, inject=None, path=None, init_script=None, mutate=None,
-                    pin=True, **ctx_kw):
+                    pin=True, clock=None, **ctx_kw):
     """pin=True(기본)면 수집일(평일)로 날짜를 고정해 연다 — 실제 요일과 무관하게 평일 화면을 검증.
-    pin=False 면 파라미터 없이 실제 KST 날짜로 열어 프로덕션과 같은 동작을 본다."""
+    pin=False 면 파라미터 없이 실제 KST 날짜로 열어 프로덕션과 같은 동작을 본다.
+    clock(datetime)을 주면 브라우저 시각을 그 시각으로 고정한다(16:00 경계 검증용)."""
     if path is None:
         path = ""
     if pin and DAY_PARAM not in path:
@@ -998,6 +1089,10 @@ async def open_page(browser, inject=None, path=None, init_script=None, mutate=No
     page.on("pageerror", lambda e: errors.append(f"pageerror: {e}"))
     if init_script:
         await page.add_init_script(init_script)
+    if clock is not None:
+        # Date.now()·new Date() 만 고정하고 타이머는 그대로 — app.js 는 Date.now()+9h 로 KST 를 봅니다.
+        await page.clock.install(time=clock)
+        await page.clock.set_fixed_time(clock)
 
     if inject or mutate:
         async def handler(route):
@@ -1168,7 +1263,9 @@ async def main():
             results["share_exact"] = clip == results["share_expect"]
             nxt = IPO.get("next") or {}
             listing = (IPO.get("listing") or {})
-            results["share_head_ok"] = bool(re.match(r"^📌 \S+ \(\d{1,2}/\d{1,2} 마감", clip))
+            results["share_head_ok"] = bool(re.match(
+                r"^📌 \S+ \(\d{1,2}/\d{1,2} (?:\d{2}:\d{2} 마감|청약 마감)", clip))
+            results["share_head_once"] = lines[0].count("마감") == 1
             if not (IPO.get("subscribe")) and nxt.get("name"):
                 # 청약 없는 날은 다음 청약을 폴백으로, '마감 예정' 표기
                 results["share_next_fallback"] = (
@@ -1782,7 +1879,7 @@ async def main():
             results["stub_share_label"] = (
                 await spage.inner_text("#share-sub .lbl")).strip()
             results["stub_share_toast"] = (await spage.inner_text("#toast")).strip()
-            # 오른쪽 버튼도 공유 시트로 — title 은 '공모주 상장 정보' (오늘 상장이 있는 날만)
+            # 오른쪽 버튼도 공유 시트로 — title 없이 {text,url} (오늘 상장이 있는 날만)
             await spage.evaluate("window.__shared = null")
             if LIST_TODAY:
                 await spage.locator("#share-listing").click()
@@ -1855,6 +1952,51 @@ async def main():
                 path=str(ROOT / "preview-mobile-share-full.png"))
             results["sub_errors"] = v_errors
             await vctx.close()
+
+            # ── 2.66 청약 마감 16:00 경계 — 마감일 당일 16:00 전/후 문구 ────
+            # 브라우저 시각만 고정해 같은 데이터로 경계를 오갑니다(공유 버튼은 둘 다 활성).
+            def kst_at(hh, mi):
+                return dt.datetime(TODAY.year, TODAY.month, TODAY.day, hh, mi, tzinfo=KST)
+
+            boundary = {}
+            for tag, when in (("before", kst_at(15, 59)), ("after", kst_at(16, 0))):
+                bctx, bpage, b_errors = await open_page(
+                    browser, mutate=close_today_day, clock=when)
+                await bpage.wait_for_timeout(200)
+                await bpage.evaluate("navigator.clipboard.writeText('')")
+                await bpage.locator("#share-sub").click()
+                await bpage.wait_for_timeout(300)
+                bclip = await bpage.evaluate("navigator.clipboard.readText()")
+                bhead = bclip.split("\n")[0] if bclip else ""
+                bexpect = expected_copy(close_today_day(json.loads(json.dumps(DATA))), when)
+                boundary[tag] = {
+                    "head": bhead,
+                    "exact": bclip == bexpect,
+                    "expect_head": bexpect.split("\n")[0],
+                    "marker_count": bhead.count("마감"),
+                    "disabled": await bpage.eval_on_selector(
+                        "#share-sub", "e => e.disabled === true"),
+                    "errors": b_errors,
+                }
+                await bctx.close()
+            results["close_before"] = boundary["before"]
+            results["close_after"] = boundary["after"]
+
+            # 오늘 청약이 없고 다음 청약만 있는 날 — '마감 예정' 표기(16:00 과 무관)
+            nctx, npage, n_errors = await open_page(
+                browser, mutate=next_only_day, clock=kst_at(15, 59))
+            await npage.wait_for_timeout(200)
+            results["next_label"] = (await npage.inner_text("#share-sub .lbl")).strip()
+            await npage.evaluate("navigator.clipboard.writeText('')")
+            await npage.locator("#share-sub").click()
+            await npage.wait_for_timeout(300)
+            nclip = await npage.evaluate("navigator.clipboard.readText()")
+            nexpect = expected_copy(next_only_day(json.loads(json.dumps(DATA))), kst_at(15, 59))
+            results["next_head"] = nclip.split("\n")[0] if nclip else ""
+            results["next_exact"] = nclip == nexpect
+            results["next_expected"] = nexpect.split("\n")[0]
+            results["next_errors"] = n_errors
+            await nctx.close()
 
             # ── 2.65 최소 주수 표기 — 확인된 50주와 미확인(10주 추정)이 한 목록에서 구분되는지 ──
             sctx, spage, s_errors = await open_page(
@@ -3045,6 +3187,7 @@ async def main():
         'results["share_native"] == "undefined"',
         'results["share_lines"] >= 3',
         'results["share_head_ok"]',
+        'results["share_head_once"]',
         'results["share_last_line"] == SITE_URL',
         'results["share_exact"]',
         'results["share_next_fallback"]',
@@ -3077,6 +3220,20 @@ async def main():
         'not results["abort_errors"]',
         'results["mock_exact"]',
         'results["mock_blocks"] == 2',
+        # 16:00 경계 — 16:00 이전은 '(M/DD 16:00 마감)', 16:00 이후는 '(M/DD 청약 마감)' + 버튼 활성
+        'results["close_before"]["head"] == f"📌 신영스팩12호 ({TODAY.month}/{TODAY.day:02d} 16:00 마감)"',
+        'results["close_before"]["exact"]',
+        'results["close_before"]["marker_count"] == 1',
+        'results["close_before"]["disabled"] is False',
+        'not results["close_before"]["errors"]',
+        'results["close_after"]["head"] == f"📌 신영스팩12호 ({TODAY.month}/{TODAY.day:02d} 청약 마감)"',
+        'results["close_after"]["exact"]',
+        'results["close_after"]["marker_count"] == 1',
+        'results["close_after"]["disabled"] is False',
+        'not results["close_after"]["errors"]',
+        'results["next_exact"]',
+        'results["next_head"].endswith(" 마감 예정)")',
+        'results["next_label"] == "청약 정보 공유"',
         'results["mock_bullets"] == 15',
         'results["mock_opinion"]',
         'results["mock_blank_between"]',
@@ -3143,12 +3300,12 @@ async def main():
         'not results["sparse_errors"]',
         'bool(results["shared_payload"])',
         'results["shared_payload"].get("url") == SITE_URL',
-        'results["shared_payload"].get("title") == "공모주 청약 정보"',
+        'results["shared_payload"].get("title") is None',   # title 없음 = 안드로이드 공유 시트 첫 줄 중복 방지
         'results["shared_payload"].get("text") == expected_body(DATA)',
         'SITE_URL not in (results["shared_payload"].get("text") or "")',
         'not LIST_TODAY or bool(results["shared_listing_payload"])',
         'not LIST_TODAY or results["shared_listing_payload"].get("url") == SITE_URL',
-        'not LIST_TODAY or results["shared_listing_payload"].get("title") == "공모주 상장 정보"',
+        'not LIST_TODAY or results["shared_listing_payload"].get("title") is None',
         'not LIST_TODAY or results["shared_listing_payload"].get("text") == listing_block(DATA)',
         'not LIST_TODAY or SITE_URL not in (results["shared_listing_payload"].get("text") or "")',
         '"복사" in results["share_reject_toast"]',
