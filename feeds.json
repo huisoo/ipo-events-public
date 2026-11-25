@@ -1,5 +1,5 @@
 {
- "updated_at": "2026-11-25T07:31:13+09:00",
+ "updated_at": "2026-11-25T13:11:15+09:00",
  "channels": [
   {
    "name": "공모주한잔",
@@ -213,6 +213,14 @@
     "price_band": "7,500~10,500",
     "competition": "",
     "brokers": "한국투자증권"
+   },
+   {
+    "name": "범한메카텍(구.두산메카텍)",
+    "period": "2026.12.17~12.18",
+    "price_fixed": "-",
+    "price_band": "22,800~28,000",
+    "competition": "",
+    "brokers": "NH투자증권,유진투자증권,BNK투자증권"
    },
    {
     "name": "피지티",
