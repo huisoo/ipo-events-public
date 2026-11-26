@@ -1,5 +1,5 @@
 {
- "updated_at": "2026-11-26T02:56:33+09:00",
+ "updated_at": "2026-11-27T02:41:05+09:00",
  "channels": [
   {
    "name": "공모주한잔",
@@ -94,14 +94,6 @@
   "source": "38커뮤니케이션 공모주 청약일정",
   "url": "http://www.38.co.kr/html/fund/index.htm?o=k",
   "items": [
-   {
-    "name": "신영스팩12호",
-    "period": "2026.11.24~11.25",
-    "price_fixed": "2,000",
-    "price_band": "2,000~2,000",
-    "competition": "253:1",
-    "brokers": "신영증권"
-   },
    {
     "name": "에이엔에이치스트럭쳐",
     "period": "2026.11.27~11.30",
