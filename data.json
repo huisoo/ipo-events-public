@@ -1,17 +1,23 @@
 {
-  "date": "2026-11-26",
-  "dateLabel": "2026년 11월 26일 목요일",
-  "updatedLabel": "16:13",
+  "date": "2026-11-27",
+  "dateLabel": "2026년 11월 27일 금요일",
+  "updatedLabel": "07:41",
   "draft": false,
   "draftNote": "공모주 16:13 기준 · 증권사 혜택 11/21 확인",
   "benefitsAsOf": "2026-11-21",
   "ipo": {
-    "date": "2026-11-26",
-    "dateLabel": "2026년 11월 26일 목요일",
-    "updatedAt": "2026-11-26T16:13:00+09:00",
-    "updatedLabel": "16:13",
+    "date": "2026-11-27",
+    "dateLabel": "2026년 11월 27일 금요일",
+    "updatedAt": "2026-11-27T07:41:00+09:00",
+    "updatedLabel": "07:41",
     "subscribe": [],
-    "cancelled": [],
+    "cancelled": [
+      {
+        "name": "에이엔에이치스트럭쳐",
+        "cancelledDate": "2026-11-26",
+        "reason": "수요예측 결과에 따른 공모 철회 (11/27~30 청약 취소)"
+      }
+    ],
     "listing": {
       "hasListing": false
     },
@@ -19,7 +25,7 @@
       "channel": "공모주한잔",
       "channelUrl": "https://www.youtube.com/@공모주한잔",
       "items": [],
-      "note": "오늘 진행 중인 청약이 없어요. 다음 청약은 11/27(금) 에이엔에이치스트럭쳐입니다."
+      "note": "오늘 진행 중인 청약이 없어요. (에이엔에이치스트럭쳐 11/26 공모 철회) 다음 청약은 12/1(화) 엔키화이트햇입니다."
     },
     "gongmorin": {
       "channel": "공모주투자의법칙(공주)",
@@ -34,12 +40,12 @@
       "period": "12/1(화)~12/2(수)",
       "price": "희망 13,000~16,500원",
       "brokers": "신영증권",
-      "memo": "",
+      "memo": "화요일~수요일 청약",
       "closeDate": "2026-12-02",
       "closeDateLabel": "12/02",
       "closeNote": "예정",
       "ipoPrice": "희망 13,000~16,500원",
-      "minShares": "",
+      "minShares": 50,
       "lockupRate": "",
       "marketCap": "",
       "minSubscription": "",
@@ -67,16 +73,6 @@
         "url": "https://www.38.co.kr/html/fund/index.htm?o=k"
       },
       "subscribe": [
-        {
-          "name": "에이엔에이치스트럭쳐",
-          "start": "2026-11-27",
-          "end": "2026-11-30",
-          "price": "희망 11,200~13,600원",
-          "minShares": 10,
-          "brokers": "NH투자증권",
-          "market": "코스닥",
-          "refund": "2026-12-02"
-        },
         {
           "name": "엔키화이트햇",
           "start": "2026-12-01",
