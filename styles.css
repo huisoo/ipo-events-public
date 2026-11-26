@@ -130,12 +130,33 @@ h1 em{font-style:normal; color:inherit}
   font-size:10.5px; font-weight:700; color:var(--red);
   background:var(--red-soft); border-radius:6px; padding:1px 6px; letter-spacing:0;
 }
+/* 상단 부제 줄 — 갱신 시각(#sched-note) + 공지/문의 링크.
+   값은 app.js 가 주말 문구로 갈아끼우므로 링크는 바깥 래퍼에 둡니다.
+   좁은 화면에서 폭이 모자라면 링크만 다음 줄로 접히고, 시각·문구는 한 줄로 유지됩니다. */
+.sched-line{
+  display:flex; align-items:center; flex-wrap:wrap; gap:0 4px;
+  margin:5px 0 0; line-height:1.5;
+}
 .sched{
   display:flex; align-items:center; gap:4px;
-  margin:5px 0 0; font-size:11.5px; font-weight:400; color:var(--ink3);
+  margin:0; font-size:11.5px; font-weight:400; color:var(--ink3);
   font-variant-numeric:tabular-nums; letter-spacing:0; white-space:nowrap;
 }
 .sched b{font-weight:600; color:var(--ink2)}
+.sched-sep{color:var(--ink3); opacity:.7; font-variant-numeric:normal}
+.sched-link{
+  display:inline-block; font-size:11.5px; font-weight:600; color:var(--ink2);
+  font-variant-numeric:normal; letter-spacing:-.01em;
+  white-space:nowrap; text-decoration:underline;
+  text-decoration-thickness:1px; text-decoration-color:var(--line2);
+  text-underline-offset:2.5px;
+  padding:2px 0; margin:-2px 0;   /* 터치 영역만 넓히고 줄 높이는 그대로 */
+  -webkit-tap-highlight-color:transparent;
+  transition:color .15s ease, text-decoration-color .15s ease;
+}
+.sched-link:hover{color:var(--blue); text-decoration-color:var(--blue)}
+html[data-theme="dark"] .sched-link{text-decoration-color:var(--ink3)}  /* 다크에서는 --line2 가 배경에 묻혀 밑줄이 안 보임 */
+.sched-link:focus-visible{outline:2px solid var(--blue); outline-offset:2px; border-radius:3px}
 
 /* ── 상단 3탭 (세그먼트 컨트롤) ─────────── */
 .tabs{
@@ -904,17 +925,11 @@ html[data-theme="dark"] .sup-btn:hover{background:#f5dc00}
 }
 .foot-src{margin-top:9px; font-size:10.5px; color:var(--ink3)}
 .foot-src a{color:inherit; text-decoration:underline; text-underline-offset:2px}
-/* 업데이트 공지·문의 링크 + 방문 통계 한 줄 */
+/* 방문 통계 한 줄 (공지·문의 링크는 상단 부제 줄로 이동) */
 .foot-links{
   margin-top:11px; padding-top:10px; border-top:1px solid var(--line, rgba(0,0,0,.07));
   display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px;
 }
-.foot-notice{
-  font-size:11.5px; font-weight:600; color:var(--ink2);
-  text-decoration:none; padding:4px 0;
-}
-.foot-notice:hover{text-decoration:underline; text-underline-offset:3px}
-.foot-notice:focus-visible{outline:2px solid var(--blue); outline-offset:2px; border-radius:4px}
 .foot-analytics{font-size:10.5px; color:var(--ink3)}
 
 /* ── 상태 ───────────────────────────────── */

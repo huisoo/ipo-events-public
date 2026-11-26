@@ -60,7 +60,7 @@ gtag('config', 'G-HEM23030KG');
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-<link rel="stylesheet" href="styles.css?v=20261126a">
+<link rel="stylesheet" href="styles.css?v=20261126b">
 <!-- 구조화 데이터 — 검색엔진이 사이트 이름·성격(무료 웹 앱·금융 정보)을 읽게 한다.
      화면에는 아무 영향이 없고, 값은 위 title·description 과 같은 내용만 담는다. -->
 <script type="application/ld+json">
@@ -132,7 +132,14 @@ gtag('config', 'G-HEM23030KG');
       <span id="dateline">—</span>
       <span class="draft" id="draft" hidden></span>
     </div>
-    <p class="sched" id="sched-note">평일 <b>07:30</b> · <b>16:05</b> 자동 갱신</p>
+    <!-- 갱신 시각 + 공지/문의 — 값(#sched-note)은 app.js 가 주말 문구로 바꾸므로
+         링크는 그 바깥(.sched-line)에 둡니다. 좁은 화면에서는 링크만 다음 줄로 접힙니다. -->
+    <div class="sched-line">
+      <p class="sched" id="sched-note">평일 <b>07:30</b> · <b>16:05</b> 자동 갱신</p>
+      <span class="sched-sep" aria-hidden="true">·</span>
+      <a class="sched-link" href="https://blog.naver.com/huiwater/224492624932"
+        target="_blank" rel="noopener noreferrer">공지/문의</a>
+    </div>
   </header>
 
   <div class="tabs" id="tabs" role="tablist" aria-label="공모주 화면 전환" hidden>
@@ -255,10 +262,8 @@ gtag('config', 'G-HEM23030KG');
     <div class="foot-title">꼭 읽어주세요</div>
     <ul id="notice-list"></ul>
     <div class="foot-src" id="foot-src"></div>
-    <!-- 업데이트 공지·문의 — 네이버 블로그 공지글로 연결 -->
+    <!-- 방문 통계 한 줄 — 업데이트 공지·문의 링크는 상단 부제 줄(.sched-line)로 옮겼습니다 -->
     <div class="foot-links">
-      <a class="foot-notice" href="https://blog.naver.com/huiwater/224492624932"
-        target="_blank" rel="noopener noreferrer">📢 업데이트 공지 · 문의</a>
       <span class="foot-analytics">방문 통계는 Google Analytics로 집계합니다.</span>
     </div>
   </footer>
@@ -267,6 +272,6 @@ gtag('config', 'G-HEM23030KG');
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-<script src="app.js?v=20261126a"></script>
+<script src="app.js?v=20261126b"></script>
 </body>
 </html>
