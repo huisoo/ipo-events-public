@@ -76,6 +76,8 @@ from playwright.async_api import async_playwright
 ROOT = Path(__file__).resolve().parent
 PORT = 8791
 SITE_URL = "https://ipo.mydon.kr"
+# 공유 시트로 넘기는 URL — app.js SHARE_URL 과 같은 값(GA4 유입 구분용 utm_source=share)
+SHARE_URL = SITE_URL + "/?utm_source=share"
 DATA = json.loads((ROOT / "data.json").read_text(encoding="utf-8"))
 IPO = DATA.get("ipo", {})
 BASE = f"http://127.0.0.1:{PORT}/"
@@ -3299,12 +3301,12 @@ async def main():
         'not results["listing_mock_errors"]',
         'not results["sparse_errors"]',
         'bool(results["shared_payload"])',
-        'results["shared_payload"].get("url") == SITE_URL',
+        'results["shared_payload"].get("url") == SHARE_URL',
         'results["shared_payload"].get("title") is None',   # title 없음 = 안드로이드 공유 시트 첫 줄 중복 방지
         'results["shared_payload"].get("text") == expected_body(DATA)',
         'SITE_URL not in (results["shared_payload"].get("text") or "")',
         'not LIST_TODAY or bool(results["shared_listing_payload"])',
-        'not LIST_TODAY or results["shared_listing_payload"].get("url") == SITE_URL',
+        'not LIST_TODAY or results["shared_listing_payload"].get("url") == SHARE_URL',
         'not LIST_TODAY or results["shared_listing_payload"].get("title") is None',
         'not LIST_TODAY or results["shared_listing_payload"].get("text") == listing_block(DATA)',
         'not LIST_TODAY or SITE_URL not in (results["shared_listing_payload"].get("text") or "")',

@@ -18,6 +18,14 @@
   }catch(e){}
 })();
 </script>
+<!-- GA4 — 방문·공유 유입 집계 (측정 ID G-HEM23030KG). Cloudflare Web Analytics 와 함께 씁니다. -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-HEM23030KG"></script>
+<script>
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-HEM23030KG');
+</script>
 <meta name="description" content="오늘 청약·상장하는 공모주와 이번 주 청약 일정, 상장일 시초가, 균등 최소 필요금액(증거금), 증권사 앱 바로가기를 한 화면에. 평일 07:30·16:05 갱신.">
 <meta name="robots" content="index, follow, max-image-preview:large">
 <link rel="canonical" href="https://ipo.mydon.kr/">
@@ -52,7 +60,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-<link rel="stylesheet" href="styles.css?v=20261125a">
+<link rel="stylesheet" href="styles.css?v=20261126a">
 <!-- 구조화 데이터 — 검색엔진이 사이트 이름·성격(무료 웹 앱·금융 정보)을 읽게 한다.
      화면에는 아무 영향이 없고, 값은 위 title·description 과 같은 내용만 담는다. -->
 <script type="application/ld+json">
@@ -247,12 +255,18 @@
     <div class="foot-title">꼭 읽어주세요</div>
     <ul id="notice-list"></ul>
     <div class="foot-src" id="foot-src"></div>
+    <!-- 업데이트 공지·문의 — 네이버 블로그 공지글로 연결 -->
+    <div class="foot-links">
+      <a class="foot-notice" href="https://blog.naver.com/huiwater/224492624932"
+        target="_blank" rel="noopener noreferrer">📢 업데이트 공지 · 문의</a>
+      <span class="foot-analytics">방문 통계는 Google Analytics로 집계합니다.</span>
+    </div>
   </footer>
 
 </div>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-<script src="app.js?v=20261125b"></script>
+<script src="app.js?v=20261126a"></script>
 </body>
 </html>

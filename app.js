@@ -1505,6 +1505,9 @@
    * 보여 주기 때문입니다(family-morning-brief 와 같은 처리).
    */
   var SITE_URL = 'https://ipo.mydon.kr';
+  /* 공유 시트로 넘기는 URL — GA4 유입을 공유 경로로 구분하기 위한 utm 만 붙입니다.
+     복사 폴백 본문·공유 문구(text)에는 URL 을 넣지 않으므로 문구는 그대로 깔끔합니다. */
+  var SHARE_URL = SITE_URL + '/?utm_source=share';
   var subText = '';
   var subPayload = null;
   var listText = '';
@@ -1731,11 +1734,11 @@
     var body = shareBody(d);
     subText = body ? body + '\n' + SITE_URL : '';
     /* title 없이 text·url만 — 안드로이드 공유 시트 첫 줄 중복 방지(family-morning-brief 와 같음) */
-    subPayload = body ? { text: body, url: SITE_URL } : null;
+    subPayload = body ? { text: body, url: SHARE_URL } : null;
 
     var lbody = listingBody(d);
     listText = lbody ? lbody + '\n' + SITE_URL : '';
-    listPayload = lbody ? { text: lbody, url: SITE_URL } : null;
+    listPayload = lbody ? { text: lbody, url: SHARE_URL } : null;
 
     shareReady($('share-sub'), subPayload, '청약 정보 공유', '오늘 청약 없음');
     shareReady($('share-listing'), listPayload, '상장 정보 공유', '오늘 상장 없음');
@@ -1774,6 +1777,11 @@
     var text = isList ? listText : subText;
     var what = isList ? '상장 정보' : '청약 정보';
     if (!payload || !text) return;
+
+    /* GA4 — 공유 버튼 클릭. 공유 시트를 띄우기 전에 보내 실패해도 클릭은 남깁니다. */
+    if (typeof gtag === 'function') {
+      gtag('event', 'share_click', { share_type: isList ? 'listing' : 'subscribe' });
+    }
 
     if (!navigator.share) { shareFallback(btn, text, what); return; }
     var p;
