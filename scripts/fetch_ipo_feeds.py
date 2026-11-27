@@ -99,6 +99,20 @@ def decode_kr(raw: bytes) -> str:
 
 
 # ---------------------------------------------------------------- YouTube RSS
+def youtube_duration(video_id):
+    """Read the duration only from the requested video's player metadata."""
+    try:
+        page = http(f"https://www.youtube.com/watch?v={video_id}", timeout=5, tries=1).decode("utf-8")
+        match = re.search(r'"videoDetails"\s*:\s*(?=\{)', page)
+        if match:
+            details, _ = json.JSONDecoder().raw_decode(page, match.end())
+            if details.get("videoId") == video_id:
+                return details.get("lengthSeconds")
+    except (OSError, ValueError, RuntimeError):
+        pass
+    return None
+
+
 def youtube_videos(channel: dict, limit: int = 5, with_description: bool = False) -> dict:
     feed = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel['channel_id']}"
     raw = http(feed)
@@ -121,6 +135,9 @@ def youtube_videos(channel: dict, limit: int = 5, with_description: bool = False
             "url": f"https://www.youtube.com/watch?v={video_id}",
             "published": published,
         }
+        media = entry.find("media:group/media:content", ns)
+        if media is not None and media.get("duration"):
+            video["lengthSeconds"] = media.get("duration")
         if with_description:
             description = entry.findtext("media:group/media:description", default="", namespaces=ns) or ""
             lines = [" ".join(line.split()) for line in description.splitlines() if line.strip()]
@@ -695,7 +712,7 @@ def main() -> int:
         try:
             from update_insights import update_insights
 
-            update_insights(insight_channels, now, os.path.join(here, "insights.json"))
+            update_insights(insight_channels, now, os.path.join(here, "insights.json"), youtube_duration)
         except Exception as exc:  # 인사이트 오류가 기존 피드 갱신을 막지 않게 한다.
             print(f"인사이트 갱신 실패: {type(exc).__name__}", file=sys.stderr)
 

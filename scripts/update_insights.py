@@ -187,7 +187,18 @@ def synthesize(key, videos):
     }
 
 
-def update_insights(channels, now, path):
+def duration_seconds(video):
+    for field in ("lengthSeconds", "duration"):
+        value = str(video.get(field, ""))
+        if re.fullmatch(r"[0-9]{1,9}", value) and int(value) > 0:
+            return int(value)
+    return 0
+
+
+SUMMARY_DURATION_LIMIT = 7 * 3600
+
+
+def update_insights(channels, now, path, lookup_duration=None):
     path = Path(path)
     previous = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
     data = {
@@ -210,6 +221,8 @@ def update_insights(channels, now, path):
                 "collectedAt": now.isoformat(timespec="seconds"),
                 "category": classify_title(source["title"]),
             })
+            if seconds := duration_seconds(source):
+                video["lengthSeconds"] = seconds
             description = source.get("description")
             if isinstance(description, str) and description.strip() and not video.get("description"):
                 lines = [" ".join(line.split()) for line in description.splitlines() if line.strip()]
@@ -220,7 +233,7 @@ def update_insights(channels, now, path):
         video_fallback = os.environ.get("IPO_INSIGHTS_VIDEO_FALLBACK") == "true"
         pending = sorted(
             ((video_id, video) for video_id, video in videos.items()
-             if "summary" not in video and now - WEEK <= timestamp(video["published"]) <= now),
+             if duration_seconds(video) < SUMMARY_DURATION_LIMIT and "summary" not in video and now - WEEK <= timestamp(video["published"]) <= now),
             key=lambda item: (
                 item[1].get("failCount", 0) >= MAX_FAILURES,  # 계속 실패한 영상은 뒤로
                 is_long_video(item[1]),                       # 일반 영상을 LIVE·장편보다 먼저
@@ -229,7 +242,17 @@ def update_insights(channels, now, path):
             ),
         )
         quota_exhausted = False
-        for video_id, video in pending[:BATCH_SIZE]:
+        attempts = 0
+        for video_id, video in pending:
+            if attempts >= BATCH_SIZE:
+                break
+            if lookup_duration and not duration_seconds(video):
+                seconds = duration_seconds({"lengthSeconds": lookup_duration(video_id)})
+                if seconds:
+                    video["lengthSeconds"] = seconds
+                    if seconds >= SUMMARY_DURATION_LIMIT:
+                        continue
+            attempts += 1
             video["attemptedAt"] = now.isoformat(timespec="seconds")
             try:
                 try:

@@ -2059,7 +2059,8 @@
         (v.summary ? '<p class="insight-meta">' + (({ video: '영상 기반 요약', notes: '제공된 메모 기반 요약' })[v.summarySource] || '자막 기반 요약') +
           '</p><ul class="insight-summary">' + v.summary.map(function (line) {
           return '<li>' + esc(line) + '</li>';
-        }).join('') + '</ul>' : '<p class="insight-meta">요약이 아직 없어요.</p>') +
+        }).join('') + '</ul>' : '<p class="insight-meta">' + (Number(v.lengthSeconds || v.duration) >= 7 * 3600
+          ? '7시간 이상 영상은 요약을 제공하지 않아요.' : '요약이 아직 없어요.') + '</p>') +
         '</article>';
     }).join('') || (data ? '최근 7일 동안 수집된 영상이 없어요.' : '영상 목록을 불러오지 못했어요.');
 
