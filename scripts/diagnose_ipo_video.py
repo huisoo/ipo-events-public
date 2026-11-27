@@ -13,7 +13,7 @@ def diagnose(key, video_id, video):
     start = time.monotonic()
     try:
         result = update_insights.summarize_video(key, video, video_id=video_id)
-        return {"outcome": "summary" if result else "no_grounded_summary"}
+        return {"outcome": "summary" if result else "no_grounded_summary", "result": result}
     except (urllib.error.HTTPError, update_insights.GeminiQuotaExceeded) as exc:
         error = exc if isinstance(exc, urllib.error.HTTPError) else exc.__cause__
         try:
@@ -57,5 +57,10 @@ def observed_urlopen(*args, **kwargs):
 
 
 with patch.object(update_insights.urllib.request, "urlopen", side_effect=observed_urlopen):
-    for label, video_id in (("previous_success", "gLyRjIZGclE"), ("previous_failure", "pI2F5ooQkrI")):
-        print(label, video_id, json.dumps(diagnose(key, video_id, videos[video_id])), flush=True)
+    for model in ("gemini-2.5-flash", "gemini-2.5-flash-lite"):
+        with patch.dict(os.environ, {"IPO_INSIGHTS_MODEL": model}):
+            video_id = "pI2F5ooQkrI"
+            result = diagnose(key, video_id, videos[video_id])
+            print("alternative_result", model, json.dumps(result, ensure_ascii=False), flush=True)
+            if result["outcome"] == "summary":
+                break
