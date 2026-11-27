@@ -24,7 +24,8 @@
       "channelTitle": "주식애소리",
       "published": "2026-11-25T10:05:07+00:00",
       "collectedAt": "2026-11-27T23:24:18+09:00",
-      "category": "청약 분석"
+      "category": "청약 분석",
+      "attemptedAt": "2026-11-28T00:17:59+09:00"
     },
     "iGqSWBGAjS8": {
       "title": "[공모주 경쟁률 LIVE] 신영해피투모로우제12호스팩, 2일차 경쟁률은?",
@@ -32,7 +33,8 @@
       "channelTitle": "주식애소리",
       "published": "2026-11-25T09:48:10+00:00",
       "collectedAt": "2026-11-27T23:24:18+09:00",
-      "category": "청약 분석"
+      "category": "청약 분석",
+      "attemptedAt": "2026-11-28T00:17:59+09:00"
     },
     "tNM-q33brR8": {
       "title": "[공모주 경쟁률 LIVE] 신영해피투모로우제12호스팩, 1일차 경쟁률",
@@ -40,7 +42,8 @@
       "channelTitle": "주식애소리",
       "published": "2026-11-25T03:27:49+00:00",
       "collectedAt": "2026-11-27T23:24:18+09:00",
-      "category": "청약 분석"
+      "category": "청약 분석",
+      "attemptedAt": "2026-11-28T00:17:59+09:00"
     },
     "w2aKJBVgjZQ": {
       "title": "[공모주] 26년 12월 공모주 모아보기 / 할만 한 조건은 딱 1종목 / 추가 할인이 필요하다",
@@ -48,7 +51,8 @@
       "channelTitle": "주식애소리",
       "published": "2026-11-25T00:38:43+00:00",
       "collectedAt": "2026-11-27T23:24:18+09:00",
-      "category": "기타"
+      "category": "기타",
+      "attemptedAt": "2026-11-28T00:17:59+09:00"
     },
     "JYhqlU3pjhA": {
       "title": "[공모주 상장일 LIVE] 엠비디, 상장일 주가 흐름은?",
@@ -132,6 +136,15 @@
     }
   },
   "today": {
+    "overview": "경제적자유민족은 신영스팩 12호의 수요예측 결과와 모집 규모는 무난하지만, 최근 공모주 시장이 부진해 청약에 신중할 필요가 있다고 봤습니다.",
+    "common": null,
+    "contrasting": null,
+    "writtenAt": "2026-11-27T15:10:42+00:00",
+    "videoIds": [
+      "gLyRjIZGclE"
+    ]
+  },
+  "weekly": {
     "overview": "경제적자유민족은 신영스팩 12호의 수요예측 결과와 모집 규모는 무난하지만, 최근 공모주 시장이 부진해 청약에 신중할 필요가 있다고 봤습니다.",
     "common": null,
     "contrasting": null,
