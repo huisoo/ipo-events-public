@@ -2038,15 +2038,16 @@
         esc(v.title) + '</a></h3><span class="insight-meta">' + esc(v.channelTitle) +
         ' · <time datetime="' + esc(v.published) + '">' + esc(insightDate(v.published)) +
         '</time></span></div></div>' +
-        (v.summary ? '<ul class="insight-summary">' + v.summary.map(function (line) {
+        (v.summary ? '<p class="insight-meta">' + (v.summarySource === 'video' ? '영상 기반 요약' : '자막 기반 요약') +
+          '</p><ul class="insight-summary">' + v.summary.map(function (line) {
           return '<li>' + esc(line) + '</li>';
-        }).join('') + '</ul>' : '<p class="insight-meta">자막 기반 요약이 아직 없어요.</p>') +
+        }).join('') + '</ul>' : '<p class="insight-meta">요약이 아직 없어요.</p>') +
         '</article>';
     }).join('') || (data ? '최근 7일 동안 수집된 영상이 없어요.' : '영상 목록을 불러오지 못했어요.');
 
     var today = data && data.today;
     if (!today) {
-      $('today-insight').textContent = data ? '아직 자막으로 종합할 수 있는 영상이 없어요.' : '인사이트를 불러오지 못했어요.';
+      $('today-insight').textContent = data ? '아직 종합할 수 있는 영상 요약이 없어요.' : '인사이트를 불러오지 못했어요.';
       return;
     }
     var fresh = today.videoIds.some(function (id) {

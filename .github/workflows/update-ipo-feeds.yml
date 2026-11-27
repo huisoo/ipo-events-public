@@ -39,6 +39,7 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           IPO_INSIGHTS_MODEL: ${{ vars.IPO_INSIGHTS_MODEL }}
+          IPO_INSIGHTS_VIDEO_FALLBACK: ${{ vars.IPO_INSIGHTS_VIDEO_FALLBACK || 'true' }}
         run: python3 scripts/fetch_ipo_feeds.py --sync-data --insights
 
       - name: 변경된 경우에만 커밋·푸시
