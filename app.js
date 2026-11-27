@@ -2056,7 +2056,7 @@
         esc(v.title) + '</a></h3><span class="insight-meta">' + esc(v.channelTitle) +
         ' · <time datetime="' + esc(v.published) + '">' + esc(insightDate(v.published)) +
         '</time></span></div></div>' +
-        (v.summary ? '<p class="insight-meta">' + (v.summarySource === 'video' ? '영상 기반 요약' : '자막 기반 요약') +
+        (v.summary ? '<p class="insight-meta">' + (({ video: '영상 기반 요약', notes: '제공된 메모 기반 요약' })[v.summarySource] || '자막 기반 요약') +
           '</p><ul class="insight-summary">' + v.summary.map(function (line) {
           return '<li>' + esc(line) + '</li>';
         }).join('') + '</ul>' : '<p class="insight-meta">요약이 아직 없어요.</p>') +
