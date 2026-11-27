@@ -60,7 +60,7 @@ gtag('config', 'G-HEM23030KG');
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-<link rel="stylesheet" href="styles.css?v=20261127-insights">
+<link rel="stylesheet" href="styles.css?v=20261127-weekly-insights">
 <!-- 구조화 데이터 — 검색엔진이 사이트 이름·성격(무료 웹 앱·금융 정보)을 읽게 한다.
      화면에는 아무 영향이 없고, 값은 위 title·description 과 같은 내용만 담는다. -->
 <script type="application/ld+json">
@@ -247,6 +247,10 @@ gtag('config', 'G-HEM23030KG');
     </section>
 
     <section class="panel" id="panel-insights" role="tabpanel" aria-labelledby="tab-insights" hidden>
+      <section class="insight-card insight-weekly" aria-labelledby="h-weekly-insight">
+        <div class="insight-heading"><h2 id="h-weekly-insight">최근 7일 한눈에 보기</h2></div>
+        <div id="weekly-insight" aria-live="polite">인사이트를 불러오고 있어요.</div>
+      </section>
       <div class="insight-heading"><h2>최근 7일 영상</h2></div>
       <div class="insight-list" id="insight-videos" aria-live="polite">영상을 불러오고 있어요.</div>
     </section>
@@ -287,6 +291,6 @@ gtag('config', 'G-HEM23030KG');
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-<script src="app.js?v=20261127-video-summary"></script>
+<script src="app.js?v=20261127-weekly-insights"></script>
 </body>
 </html>

@@ -87,6 +87,37 @@ class InsightTest(unittest.TestCase):
             urlopen.assert_called_once()
 
 
+    def test_weekly_summary_refreshes_when_a_video_ages_out(self):
+        now = dt.datetime(2026, 11, 27, 12, tzinfo=dt.timezone.utc)
+        old_id, new_id = "A" * 11, "B" * 11
+        video = {"title": "공모주", "channelId": "channel", "channelTitle": "채널",
+                 "summary": ["첫 문장", "둘째 문장", "셋째 문장"]}
+        old_date = (now - dt.timedelta(days=6)).isoformat()
+        videos = {old_id: {**video, "published": old_date, "collectedAt": old_date},
+                  new_id: {**video, "published": now.isoformat(), "collectedAt": now.isoformat()}}
+        summary = {"overview": "요지", "common": None, "contrasting": None}
+        with (tempfile.TemporaryDirectory() as folder,
+              patch.dict(os.environ, {"GEMINI_API_KEY": "test"}),
+              patch.object(update_insights, "synthesize", return_value=summary) as synthesize):
+            path = Path(folder) / "insights.json"
+            path.write_text(json.dumps({"videos": videos}), encoding="utf-8")
+            update_insights.update_insights([], now, path)
+            current = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(current["today"]["videoIds"], [new_id])
+            self.assertEqual(current["weekly"]["videoIds"], [old_id, new_id])
+            self.assertEqual(synthesize.call_count, 2)
+
+            update_insights.update_insights([], now + dt.timedelta(hours=1), path)
+            self.assertEqual(synthesize.call_count, 2)
+            update_insights.update_insights([], now + dt.timedelta(days=2), path)
+            current = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(current["weekly"]["videoIds"], [new_id])
+            self.assertEqual(synthesize.call_count, 2)
+            update_insights.update_insights([], now + dt.timedelta(days=8), path)
+            current = json.loads(path.read_text(encoding="utf-8"))
+            self.assertIsNone(current["weekly"])
+            self.assertEqual(current["today"]["videoIds"], [new_id])
+
     def test_missing_captions_and_failed_channel_preserve_prior_results(self):
         now = dt.datetime(2026, 11, 27, 12, tzinfo=dt.timezone.utc)
         first, second, unavailable, expired = ("A" * 11, "B" * 11, "C" * 11, "D" * 11)

@@ -980,6 +980,7 @@ html[data-theme="dark"] .toast.ok{background:rgba(62,207,142,.96); color:#0d1117
   background:var(--card); box-shadow:var(--shadow); overflow-wrap:anywhere;
 }
 #panel-today .insight-card{margin:12px 0}
+.insight-weekly{margin-bottom:12px}
 .insight-heading{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px}
 .insight-heading h2{margin:0; font-size:16px}
 .insight-heading a{color:var(--blue-ink); font-size:13px; font-weight:700; padding:6px 0}
