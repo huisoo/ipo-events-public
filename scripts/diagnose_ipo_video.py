@@ -57,7 +57,7 @@ def observed_urlopen(*args, **kwargs):
 
 
 with patch.object(update_insights.urllib.request, "urlopen", side_effect=observed_urlopen):
-    for model in ("gemini-2.5-flash", "gemini-2.5-flash-lite"):
+    for model in ("gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3-flash-preview"):
         with patch.dict(os.environ, {"IPO_INSIGHTS_MODEL": model}):
             video_id = "pI2F5ooQkrI"
             result = diagnose(key, video_id, videos[video_id])
