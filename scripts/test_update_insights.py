@@ -30,6 +30,41 @@ class InsightTest(unittest.TestCase):
         self.assertEqual(payload["generationConfig"]["responseMimeType"], "application/json")
         self.assertEqual(json.loads(payload["contents"][0]["parts"][0]["text"]), {"title": "영상"})
 
+    def test_video_fallback_requires_opt_in_and_uses_video_input(self):
+        now = dt.datetime(2026, 11, 27, 12, tzinfo=dt.timezone.utc)
+        video_id = "A" * 11
+        channels = [{"channelId": "channel", "channelTitle": "채널", "videos": [
+            {"videoId": video_id, "title": "공모주", "published": now.isoformat()},
+        ]}]
+        summary = {"summary": ["첫 문장", "둘째 문장", "셋째 문장"], "category": "청약 분석"}
+        daily = {"overview": "요지", "common": None, "contrasting": None}
+
+        def reply(data):
+            return io.BytesIO(json.dumps({"candidates": [{"finishReason": "STOP", "content": {
+                "parts": [{"text": json.dumps(data)}],
+            }}]}).encode())
+
+        with (tempfile.TemporaryDirectory() as folder,
+              patch.dict(os.environ, {"GEMINI_API_KEY": "test", "IPO_INSIGHTS_VIDEO_FALLBACK": ""}),
+              patch.object(update_insights, "captions", side_effect=RuntimeError("blocked")),
+              patch.object(update_insights.urllib.request, "urlopen",
+                           side_effect=[reply(summary), reply(daily)]) as api):
+            path = Path(folder) / "insights.json"
+            update_insights.update_insights(channels, now, path)
+            api.assert_not_called()
+            with patch.dict(os.environ, {"IPO_INSIGHTS_VIDEO_FALLBACK": "true"}):
+                update_insights.update_insights(channels, now, path)
+                update_insights.update_insights(channels, now, path)
+
+            result = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(result["videos"][video_id]["summarySource"], "video")
+            self.assertEqual(result["videos"][video_id]["summary"], summary["summary"])
+            self.assertEqual(result["today"]["videoIds"], [video_id])
+            self.assertEqual(api.call_count, 2)
+            parts = json.loads(api.call_args_list[0].args[0].data)["contents"][0]["parts"]
+            self.assertEqual(parts[0]["fileData"]["fileUri"], f"https://www.youtube.com/watch?v={video_id}")
+            self.assertEqual(json.loads(parts[1]["text"]), {"title": "공모주"})
+
     def test_gemini_quota_preserves_prior_summary_and_stops_requests(self):
         now = dt.datetime(2026, 11, 27, 12, tzinfo=dt.timezone.utc)
         prior = {"overview": "이전 요약", "videoIds": []}
@@ -39,7 +74,7 @@ class InsightTest(unittest.TestCase):
         ]}]
         quota = urllib.error.HTTPError("https://generativelanguage.googleapis.com", 429, "Quota", {}, None)
         with (tempfile.TemporaryDirectory() as folder,
-              patch.dict(os.environ, {"GEMINI_API_KEY": "test"}),
+              patch.dict(os.environ, {"GEMINI_API_KEY": "test", "IPO_INSIGHTS_VIDEO_FALLBACK": ""}),
               patch.object(update_insights, "captions", return_value="실제 자막"),
               patch.object(update_insights.urllib.request, "urlopen", side_effect=quota) as urlopen):
             path = Path(folder) / "insights.json"
@@ -69,7 +104,7 @@ class InsightTest(unittest.TestCase):
         video_summary = {"summary": lines, "category": "상장 전략"}
         daily_summary = {"overview": "전체 요지", "common": "공통점", "contrasting": "차이점"}
         with (tempfile.TemporaryDirectory() as folder,
-              patch.dict(os.environ, {"GEMINI_API_KEY": "test"}),
+              patch.dict(os.environ, {"GEMINI_API_KEY": "test", "IPO_INSIGHTS_VIDEO_FALLBACK": ""}),
               patch.object(update_insights, "captions",
                            side_effect=lambda video_id: "" if video_id == unavailable else "실제 자막"),
               patch.object(update_insights, "ask", side_effect=[video_summary, video_summary, daily_summary]) as ask):
