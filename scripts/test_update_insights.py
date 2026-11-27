@@ -61,9 +61,32 @@ class InsightTest(unittest.TestCase):
             self.assertEqual(result["videos"][video_id]["summary"], summary["summary"])
             self.assertEqual(result["today"]["videoIds"], [video_id])
             self.assertEqual(api.call_count, 2)
+            self.assertEqual([call.kwargs["timeout"] for call in api.call_args_list], [90, 15])
             parts = json.loads(api.call_args_list[0].args[0].data)["contents"][0]["parts"]
             self.assertEqual(parts[0]["fileData"]["fileUri"], f"https://www.youtube.com/watch?v={video_id}")
             self.assertEqual(json.loads(parts[1]["text"]), {"title": "공모주"})
+
+    def test_existing_timeouts_are_saved_and_untried_videos_move_ahead(self):
+        now = dt.datetime(2026, 11, 27, 12, tzinfo=dt.timezone.utc)
+        ids = [char * 11 for char in "ABCDE"]
+        videos = {
+            video_id: {"published": (now - dt.timedelta(hours=index)).isoformat()}
+            for index, video_id in enumerate(ids)
+        }
+        with (tempfile.TemporaryDirectory() as folder,
+              patch.dict(os.environ, {"GEMINI_API_KEY": "test", "IPO_INSIGHTS_VIDEO_FALLBACK": "true"}),
+              patch.object(update_insights, "captions", return_value=""),
+              patch.object(update_insights, "summarize_video", side_effect=TimeoutError) as summarize):
+            path = Path(folder) / "insights.json"
+            path.write_text(json.dumps({"videos": videos, "today": None, "weekly": None}), encoding="utf-8")
+            update_insights.update_insights([], now, path)
+            saved = json.loads(path.read_text(encoding="utf-8"))["videos"]
+            self.assertEqual([saved[video_id]["attemptedAt"] for video_id in ids[:4]], [now.isoformat()] * 4)
+            self.assertNotIn("attemptedAt", saved[ids[4]])
+
+            summarize.reset_mock()
+            update_insights.update_insights([], now + dt.timedelta(hours=1), path)
+            self.assertEqual(summarize.call_args_list[0].kwargs["video_id"], ids[4])
 
     def test_gemini_quota_preserves_prior_summary_and_stops_requests(self):
         now = dt.datetime(2026, 11, 27, 12, tzinfo=dt.timezone.utc)

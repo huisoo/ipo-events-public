@@ -72,7 +72,7 @@ def ask(key, instruction, source, *, video_id=None):
         headers={"x-goog-api-key": key, "Content-Type": "application/json"},
     )
     try:
-        with urllib.request.urlopen(req, timeout=45 if video_id else 15) as response:
+        with urllib.request.urlopen(req, timeout=90 if video_id else 15) as response:
             result = json.load(response)
     except urllib.error.HTTPError as exc:
         if exc.code == 429:
@@ -139,7 +139,7 @@ def update_insights(channels, now, path):
     path = Path(path)
     previous = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
     data = {
-        "videos": dict(previous.get("videos", {})),
+        "videos": {video_id: video.copy() for video_id, video in previous.get("videos", {}).items()},
         "today": previous.get("today"),
         "weekly": previous.get("weekly"),
     }
