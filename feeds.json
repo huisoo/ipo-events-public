@@ -1,5 +1,5 @@
 {
- "updated_at": "2026-11-27T23:15:45+09:00",
+ "updated_at": "2026-11-27T12:38:49+09:00",
  "channels": [
   {
    "name": "공모주한잔",
@@ -143,6 +143,14 @@
     "brokers": "대신증권"
    },
    {
+    "name": "씨아이에스케미칼",
+    "period": "2026.12.10~12.11",
+    "price_fixed": "-",
+    "price_band": "5,400~6,800",
+    "competition": "",
+    "brokers": "KB증권"
+   },
+   {
     "name": "데스틴파워",
     "period": "2026.12.11~12.14",
     "price_fixed": "-",
@@ -205,14 +213,6 @@
     "price_band": "18,000~20,000",
     "competition": "",
     "brokers": "한국투자증권,유안타증권"
-   },
-   {
-    "name": "씨아이에스케미칼",
-    "period": "2027.01.21~01.22",
-    "price_fixed": "-",
-    "price_band": "5,000~6,000",
-    "competition": "",
-    "brokers": "KB증권"
    }
   ]
  },
