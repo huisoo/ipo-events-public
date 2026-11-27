@@ -40,7 +40,7 @@
       "period": "12/1(화)~12/2(수)",
       "price": "희망 13,000~16,500원",
       "brokers": "신영증권",
-      "memo": "화요일~수요일 청약",
+      "memo": "",
       "closeDate": "2026-12-02",
       "closeDateLabel": "12/02",
       "closeNote": "예정",
@@ -67,7 +67,7 @@
     },
     "upcoming": {
       "asOf": "2026-11-27",
-      "windowLabel": "11/27(금) ~ 12/18(금)",
+      "windowLabel": "12/1(화) ~ 12/18(금)",
       "source": {
         "label": "38커뮤니케이션 공모주 청약일정",
         "url": "https://www.38.co.kr/html/fund/index.htm?o=k"

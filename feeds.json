@@ -1,5 +1,5 @@
 {
- "updated_at": "2026-11-27T02:41:05+09:00",
+ "updated_at": "2026-11-27T12:38:49+09:00",
  "channels": [
   {
    "name": "공모주한잔",
@@ -94,14 +94,6 @@
   "source": "38커뮤니케이션 공모주 청약일정",
   "url": "http://www.38.co.kr/html/fund/index.htm?o=k",
   "items": [
-   {
-    "name": "에이엔에이치스트럭쳐",
-    "period": "2026.11.27~11.30",
-    "price_fixed": "-",
-    "price_band": "11,200~13,600",
-    "competition": "",
-    "brokers": "NH투자증권"
-   },
    {
     "name": "엔키화이트햇",
     "period": "2026.12.01~12.02",
