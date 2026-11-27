@@ -138,7 +138,11 @@ def synthesize(key, videos):
 def update_insights(channels, now, path):
     path = Path(path)
     previous = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
-    data = {"videos": dict(previous.get("videos", {})), "today": previous.get("today")}
+    data = {
+        "videos": dict(previous.get("videos", {})),
+        "today": previous.get("today"),
+        "weekly": previous.get("weekly"),
+    }
     videos = data["videos"]
     for channel in channels:
         for source in channel["videos"]:
@@ -200,8 +204,31 @@ def update_insights(channels, now, path):
                     "writtenAt": now.isoformat(timespec="seconds"),
                     "videoIds": recent_ids,
                 }
+            except GeminiQuotaExceeded:
+                quota_exhausted = True
+                print("오늘의 인사이트: Gemini 사용 한도 초과")
             except Exception as exc:
                 print(f"오늘의 인사이트: {type(exc).__name__}")
+
+        weekly_ids = sorted(
+            video_id for video_id, video in videos.items()
+            if video.get("summary") and now - WEEK <= timestamp(video["published"]) <= now
+        )
+        previous_weekly_ids = (data["weekly"] or {}).get("videoIds", [])
+        if not weekly_ids:
+            data["weekly"] = None
+        elif weekly_ids != previous_weekly_ids and not quota_exhausted:
+            if weekly_ids == (data["today"] or {}).get("videoIds"):
+                data["weekly"] = data["today"]
+            else:
+                try:
+                    data["weekly"] = {
+                        **synthesize(key, [videos[video_id] for video_id in weekly_ids]),
+                        "writtenAt": now.isoformat(timespec="seconds"),
+                        "videoIds": weekly_ids,
+                    }
+                except Exception as exc:
+                    print(f"최근 7일 인사이트: {type(exc).__name__}")
 
     if data != previous:
         with tempfile.NamedTemporaryFile(dir=path.parent, mode="w", encoding="utf-8", delete=False) as output:

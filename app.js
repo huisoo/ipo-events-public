@@ -2019,6 +2019,14 @@
     return new Date(value).toLocaleString('ko-KR', options);
   }
 
+  function insightSummary(summary, label) {
+    return '<p class="insight-meta">' + esc(label) +
+      '<time datetime="' + esc(summary.writtenAt) + '">' + esc(insightDate(summary.writtenAt, true)) + '</time> KST</p>' +
+      '<p>' + esc(summary.overview) + '</p>' +
+      '<p><strong>공통 의견</strong> · ' + esc(summary.common || '확인된 공통 의견이 없어요.') + '</p>' +
+      '<p><strong>상반된 의견</strong> · ' + esc(summary.contrasting || '확인된 상반된 의견이 없어요.') + '</p>';
+  }
+
   function renderInsights(data) {
     var now = Date.now(), day = 86400000;
     var videos = (data && data.videos) || {};
@@ -2028,6 +2036,16 @@
     }).sort(function (a, b) {
       return Date.parse(videos[b].published) - Date.parse(videos[a].published);
     });
+
+    var weekly = data && data.weekly;
+    if (weekly && weekly.videoIds.length && weekly.videoIds.every(function (id) { return visible.indexOf(id) >= 0; })) {
+      $('weekly-insight').innerHTML = insightSummary(weekly,
+        '최근 7일 영상 ' + visible.length + '개 중 ' + weekly.videoIds.length + '개 반영 · 작성 ');
+    } else {
+      $('weekly-insight').textContent = data
+        ? '최근 7일 영상의 종합 요약이 아직 없어요.'
+        : '인사이트를 불러오지 못했어요.';
+    }
 
     $('insight-videos').innerHTML = visible.map(function (id) {
       var v = videos[id];
@@ -2054,12 +2072,7 @@
       var age = now - Date.parse(videos[id] && videos[id].collectedAt);
       return age >= 0 && age <= day;
     });
-    $('today-insight').innerHTML =
-      '<p class="insight-meta">' + (fresh ? '작성 ' : '이전 요약 · 작성 ') +
-      '<time datetime="' + esc(today.writtenAt) + '">' + esc(insightDate(today.writtenAt, true)) + '</time> KST</p>' +
-      '<p>' + esc(today.overview) + '</p>' +
-      '<p><strong>공통 의견</strong> · ' + esc(today.common || '확인된 공통 의견이 없어요.') + '</p>' +
-      '<p><strong>상반된 의견</strong> · ' + esc(today.contrasting || '확인된 상반된 의견이 없어요.') + '</p>';
+    $('today-insight').innerHTML = insightSummary(today, fresh ? '작성 ' : '이전 요약 · 작성 ');
   }
 
   /* ── 시작 ─────────────────────────────── */
