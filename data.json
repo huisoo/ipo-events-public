@@ -67,7 +67,7 @@
     },
     "upcoming": {
       "asOf": "2026-11-27",
-      "windowLabel": "12/1(화) ~ 12/18(금)",
+      "windowLabel": "12/1(화) ~ 1/22(금)",
       "source": {
         "label": "38커뮤니케이션 공모주 청약일정",
         "url": "https://www.38.co.kr/html/fund/index.htm?o=k"
@@ -133,16 +133,6 @@
           "brokers": "한국투자증권 · BNK투자증권",
           "market": "코스닥",
           "refund": "2026-12-14"
-        },
-        {
-          "name": "씨아이에스케미칼",
-          "start": "2026-12-10",
-          "end": "2026-12-11",
-          "price": "희망 5,400~6,800원",
-          "minShares": 10,
-          "brokers": "KB증권",
-          "market": "코스닥",
-          "refund": "2026-12-15"
         },
         {
           "name": "데스틴파워",
@@ -222,6 +212,16 @@
           "brokers": "한국투자증권 · 유안타증권",
           "market": "",
           "refund": "2026-12-22"
+        },
+        {
+          "name": "씨아이에스케미칼",
+          "start": "2027-01-21",
+          "end": "2027-01-22",
+          "price": "희망 5,000~6,000원",
+          "minShares": 10,
+          "brokers": "KB증권",
+          "market": "코스닥",
+          "refund": "2026-12-15"
         }
       ],
       "listing": [
