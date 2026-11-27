@@ -99,11 +99,15 @@ def decode_kr(raw: bytes) -> str:
 
 
 # ---------------------------------------------------------------- YouTube RSS
-def youtube_videos(channel: dict, limit: int = 5) -> dict:
+def youtube_videos(channel: dict, limit: int = 5, with_description: bool = False) -> dict:
     feed = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel['channel_id']}"
     raw = http(feed)
     root = ET.fromstring(raw)
-    ns = {"a": "http://www.w3.org/2005/Atom", "yt": "http://www.youtube.com/xml/schemas/2015"}
+    ns = {
+        "a": "http://www.w3.org/2005/Atom",
+        "yt": "http://www.youtube.com/xml/schemas/2015",
+        "media": "http://search.yahoo.com/mrss/",
+    }
     videos = []
     for entry in root.findall("a:entry", ns):
         video_id = (entry.findtext("yt:videoId", default="", namespaces=ns) or "").strip()
@@ -111,14 +115,17 @@ def youtube_videos(channel: dict, limit: int = 5) -> dict:
         published = (entry.findtext("a:published", default="", namespaces=ns) or "").strip()
         if not video_id:
             continue
-        videos.append(
-            {
-                "videoId": video_id,
-                "title": title,
-                "url": f"https://www.youtube.com/watch?v={video_id}",
-                "published": published,
-            }
-        )
+        video = {
+            "videoId": video_id,
+            "title": title,
+            "url": f"https://www.youtube.com/watch?v={video_id}",
+            "published": published,
+        }
+        if with_description:
+            description = entry.findtext("media:group/media:description", default="", namespaces=ns) or ""
+            lines = [" ".join(line.split()) for line in description.splitlines() if line.strip()]
+            video["description"] = "\n".join(lines)[:2000]
+        videos.append(video)
         if len(videos) >= limit:
             break
     channel_name = (root.findtext("a:title", default="", namespaces=ns) or channel["name"]).strip()
@@ -643,9 +650,14 @@ def main() -> int:
     insight_channels = []
     feed_channel_ids = {channel["channel_id"] for channel in CHANNELS}
     sources = CHANNELS + INSIGHT_CHANNELS if args.insights else CHANNELS
+    insight_ids = {channel["channel_id"] for channel in INSIGHT_CHANNELS}
     for channel in sources:
         try:
-            data = youtube_videos(channel, limit=15 if args.insights else 5)
+            data = youtube_videos(
+                channel,
+                limit=15 if args.insights else 5,
+                with_description=args.insights and channel["channel_id"] in insight_ids,
+            )
             if args.insights:
                 insight_channels.append(data)
             if data["channelId"] in feed_channel_ids:

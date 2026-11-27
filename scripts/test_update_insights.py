@@ -3,13 +3,22 @@ import datetime as dt
 import io
 import json
 import os
+import sys
 import tempfile
 import unittest
 import urllib.error
 from pathlib import Path
 from unittest.mock import patch
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 import update_insights
+
+
+def reply(data):
+    return io.BytesIO(json.dumps({"candidates": [{"finishReason": "STOP", "content": {
+        "parts": [{"text": json.dumps(data)}],
+    }}]}).encode())
 
 
 class InsightTest(unittest.TestCase):
@@ -64,11 +73,13 @@ class InsightTest(unittest.TestCase):
             self.assertEqual([call.kwargs["timeout"] for call in api.call_args_list], [90, 15])
             parts = json.loads(api.call_args_list[0].args[0].data)["contents"][0]["parts"]
             self.assertEqual(parts[0]["fileData"]["fileUri"], f"https://www.youtube.com/watch?v={video_id}")
+            self.assertNotIn("videoMetadata", parts[0]["fileData"])
             self.assertEqual(json.loads(parts[1]["text"]), {"title": "공모주"})
 
     def test_existing_timeouts_are_saved_and_untried_videos_move_ahead(self):
         now = dt.datetime(2026, 11, 27, 12, tzinfo=dt.timezone.utc)
-        ids = [char * 11 for char in "ABCDE"]
+        ids = [char * 11 for char in "ABCDEFG"]
+        batch = update_insights.BATCH_SIZE
         videos = {
             video_id: {"published": (now - dt.timedelta(hours=index)).isoformat()}
             for index, video_id in enumerate(ids)
@@ -81,12 +92,13 @@ class InsightTest(unittest.TestCase):
             path.write_text(json.dumps({"videos": videos, "today": None, "weekly": None}), encoding="utf-8")
             update_insights.update_insights([], now, path)
             saved = json.loads(path.read_text(encoding="utf-8"))["videos"]
-            self.assertEqual([saved[video_id]["attemptedAt"] for video_id in ids[:4]], [now.isoformat()] * 4)
-            self.assertNotIn("attemptedAt", saved[ids[4]])
+            self.assertEqual([saved[video_id]["attemptedAt"] for video_id in ids[:batch]], [now.isoformat()] * batch)
+            self.assertNotIn("attemptedAt", saved[ids[batch]])
+            self.assertEqual(saved[ids[0]]["failCount"], 1)
 
             summarize.reset_mock()
             update_insights.update_insights([], now + dt.timedelta(hours=1), path)
-            self.assertEqual(summarize.call_args_list[0].kwargs["video_id"], ids[4])
+            self.assertEqual(summarize.call_args_list[0].kwargs["video_id"], ids[batch])
 
     def test_gemini_quota_preserves_prior_summary_and_stops_requests(self):
         now = dt.datetime(2026, 11, 27, 12, tzinfo=dt.timezone.utc)
@@ -177,3 +189,90 @@ class InsightTest(unittest.TestCase):
             self.assertEqual(reloaded["today"], original["today"])
             self.assertEqual(reloaded["videos"][second], original["videos"][second])
             self.assertEqual(ask.call_count, 3)
+
+    def test_http_error_logs_status_and_body(self):
+        body = io.BytesIO(b'{"error": {"message": "API key not valid"}}')
+        error = urllib.error.HTTPError(
+            "https://generativelanguage.googleapis.com", 400, "Bad Request", {}, body)
+        stderr = io.StringIO()
+        with (patch.object(update_insights.urllib.request, "urlopen", side_effect=error),
+              patch("sys.stderr", stderr)):
+            with self.assertRaises(urllib.error.HTTPError):
+                update_insights.ask("test", "요약", {"title": "영상"})
+        logged = stderr.getvalue()
+        self.assertIn("Gemini HTTP 400", logged)
+        self.assertIn("API key not valid", logged)
+
+    def test_description_is_used_before_video_input(self):
+        now = dt.datetime(2026, 11, 28, 1, tzinfo=dt.timezone.utc)
+        video_id = "A" * 11
+        description = "공모주 청약 일정과 상장 전략을 설명하는 긴 설명란입니다. " * 8
+        channels = [{"channelId": "channel", "channelTitle": "채널", "videos": [
+            {"videoId": video_id, "title": "공모주", "published": now.isoformat(), "description": description},
+        ]}]
+        summary = {"summary": ["첫 문장", "둘째 문장", "셋째 문장"], "category": "청약 분석"}
+        daily = {"overview": "요지", "common": None, "contrasting": None}
+        with (tempfile.TemporaryDirectory() as folder,
+              patch.dict(os.environ, {"GEMINI_API_KEY": "test", "IPO_INSIGHTS_VIDEO_FALLBACK": "true"}),
+              patch.object(update_insights, "captions", side_effect=RuntimeError("blocked")),
+              patch.object(update_insights.urllib.request, "urlopen",
+                           side_effect=[reply(summary), reply(daily)]) as api):
+            path = Path(folder) / "insights.json"
+            update_insights.update_insights(channels, now, path)
+            saved = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(saved["videos"][video_id]["summarySource"], "notes")
+            self.assertEqual(saved["videos"][video_id]["summary"], summary["summary"])
+            self.assertNotIn("failCount", saved["videos"][video_id])
+            self.assertEqual(api.call_count, 2)
+            parts = json.loads(api.call_args_list[0].args[0].data)["contents"][0]["parts"]
+            self.assertNotIn("fileData", parts[0])
+            self.assertTrue(json.loads(parts[0]["text"])["notes"].startswith("공모주 청약 일정"))
+
+    def test_live_video_analysis_is_limited_to_first_ten_minutes(self):
+        now = dt.datetime(2026, 11, 28, 2, tzinfo=dt.timezone.utc)
+        video_id = "A" * 11
+        channels = [{"channelId": "channel", "channelTitle": "채널", "videos": [
+            {"videoId": video_id, "title": "공모주 LIVE 풀버전", "published": now.isoformat()},
+        ]}]
+        summary = {"summary": ["첫 문장", "둘째 문장", "셋째 문장"], "category": "시장 전망"}
+        daily = {"overview": "요지", "common": None, "contrasting": None}
+        with (tempfile.TemporaryDirectory() as folder,
+              patch.dict(os.environ, {"GEMINI_API_KEY": "test", "IPO_INSIGHTS_VIDEO_FALLBACK": "true"}),
+              patch.object(update_insights, "captions", return_value=""),
+              patch.object(update_insights.urllib.request, "urlopen",
+                           side_effect=[reply(summary), reply(daily)]) as api):
+            path = Path(folder) / "insights.json"
+            update_insights.update_insights(channels, now, path)
+            parts = json.loads(api.call_args_list[0].args[0].data)["contents"][0]["parts"]
+            self.assertEqual(parts[0]["fileData"]["videoMetadata"],
+                             {"startOffset": "0s", "endOffset": "600s"})
+
+    def test_failed_and_live_videos_wait_behind_normal_videos(self):
+        now = dt.datetime(2026, 11, 28, 3, tzinfo=dt.timezone.utc)
+        normals = [char * 11 for char in "ABCDE"]
+        live_id, failed_id = "L" * 11, "F" * 11
+        videos = {
+            video_id: {"title": "청약 일정", "published": (now - dt.timedelta(minutes=index)).isoformat()}
+            for index, video_id in enumerate(normals)
+        }
+        videos[live_id] = {"title": "공모주 라이브",
+                           "published": (now - dt.timedelta(minutes=30)).isoformat()}
+        videos[failed_id] = {
+            "title": "청약 일정",
+            "published": (now - dt.timedelta(minutes=5)).isoformat(),
+            "attemptedAt": (now - dt.timedelta(hours=1)).isoformat(),
+            "failCount": update_insights.MAX_FAILURES,
+        }
+        with (tempfile.TemporaryDirectory() as folder,
+              patch.dict(os.environ, {"GEMINI_API_KEY": "test", "IPO_INSIGHTS_VIDEO_FALLBACK": "true"}),
+              patch.object(update_insights, "captions", return_value=""),
+              patch.object(update_insights, "summarize_video", side_effect=TimeoutError) as summarize):
+            path = Path(folder) / "insights.json"
+            path.write_text(json.dumps({"videos": videos, "today": None, "weekly": None}), encoding="utf-8")
+            update_insights.update_insights([], now, path)
+            attempted = [call.kwargs["video_id"] for call in summarize.call_args_list]
+            self.assertEqual(attempted, normals + [live_id])
+            saved = json.loads(path.read_text(encoding="utf-8"))["videos"]
+            self.assertEqual(saved[failed_id]["attemptedAt"], videos[failed_id]["attemptedAt"])
+            self.assertEqual(saved[failed_id]["failCount"], update_insights.MAX_FAILURES)
+            self.assertEqual(saved[live_id]["failCount"], 1)
