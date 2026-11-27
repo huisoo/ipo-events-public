@@ -60,7 +60,7 @@ gtag('config', 'G-HEM23030KG');
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
-<link rel="stylesheet" href="styles.css?v=20261126b">
+<link rel="stylesheet" href="styles.css?v=20261127-insights">
 <!-- 구조화 데이터 — 검색엔진이 사이트 이름·성격(무료 웹 앱·금융 정보)을 읽게 한다.
      화면에는 아무 영향이 없고, 값은 위 title·description 과 같은 내용만 담는다. -->
 <script type="application/ld+json">
@@ -147,6 +147,8 @@ gtag('config', 'G-HEM23030KG');
       aria-controls="panel-today" data-tab="today">오늘 요약</button>
     <button type="button" class="tab" id="tab-schedule" role="tab" aria-selected="false"
       aria-controls="panel-schedule" data-tab="schedule">전체 일정</button>
+    <button type="button" class="tab" id="tab-insights" role="tab" aria-selected="false"
+      aria-controls="panel-insights" data-tab="insights">인사이트</button>
     <button type="button" class="tab" id="tab-benefits" role="tab" aria-selected="false"
       aria-controls="panel-benefits" data-tab="benefits">혜택</button>
   </div>
@@ -178,6 +180,14 @@ gtag('config', 'G-HEM23030KG');
 
       <!-- 철회 종목 · 출처 — 공유 버튼 아래 -->
       <div id="ipo-foot"></div>
+
+      <section class="insight-card" aria-labelledby="h-today-insight">
+        <div class="insight-heading">
+          <h2 id="h-today-insight">오늘의 인사이트</h2>
+          <a href="?tab=insights" data-tab="insights">영상 보기</a>
+        </div>
+        <div id="today-insight" aria-live="polite">인사이트를 불러오고 있어요.</div>
+      </section>
 
       <!-- 2레벨 · 혜택 탭으로 가는 한 줄 배너 (혜택 상세는 혜택 탭에 모아 둡니다) -->
       <a class="ben-link" id="ben-link" href="?tab=benefits" data-tab="benefits"
@@ -236,6 +246,11 @@ gtag('config', 'G-HEM23030KG');
       <div id="schedule-body"></div>
     </section>
 
+    <section class="panel" id="panel-insights" role="tabpanel" aria-labelledby="tab-insights" hidden>
+      <div class="insight-heading"><h2>최근 7일 영상</h2></div>
+      <div class="insight-list" id="insight-videos" aria-live="polite">영상을 불러오고 있어요.</div>
+    </section>
+
     <section class="panel" id="panel-benefits" role="tabpanel" aria-labelledby="tab-benefits" hidden>
       <div class="bf-head">
         <h2 class="bf-h">지금 챙길 혜택</h2>
@@ -272,6 +287,6 @@ gtag('config', 'G-HEM23030KG');
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-<script src="app.js?v=20261126b"></script>
+<script src="app.js?v=20261127-insights"></script>
 </body>
 </html>

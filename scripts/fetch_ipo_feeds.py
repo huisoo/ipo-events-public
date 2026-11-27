@@ -627,6 +627,7 @@ def main() -> int:
     ap.add_argument("--sync-data", action="store_true",
                     help="data.json 의 ipo.upcoming·ipo.next·ipo.nextListing 도 38 최신 표로 병합 갱신")
     ap.add_argument("--no-banner", action="store_true", help="--sync-data 로 data.json 을 고친 뒤에도 banner.png 를 다시 만들지 않음")
+    ap.add_argument("--insights", action="store_true", help="수집한 YouTube 영상으로 insights.json 갱신")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
@@ -636,7 +637,7 @@ def main() -> int:
     channels = []
     for channel in CHANNELS:
         try:
-            data = youtube_videos(channel)
+            data = youtube_videos(channel, limit=15 if args.insights else 5)
             channels.append(data)
             latest = data.get("latest") or {}
             print(f"  · {channel['name']}: 최신 '{latest.get('title', '(없음)')[:60]}' ({latest.get('published', '')})")
@@ -666,6 +667,17 @@ def main() -> int:
         except Exception as exc:  # noqa: BLE001 — 표를 못 읽으면 상장 예정은 기존 값 유지
             problems.append(f"38 신규상장 표 실패: {exc}")
             print(f"  ! 신규상장 표(?o=nw) 실패: {exc}", file=sys.stderr)
+
+    if args.insights and channels and not args.dry_run:
+        try:
+            from update_insights import update_insights
+
+            update_insights(channels, now, os.path.join(here, "insights.json"))
+        except Exception as exc:  # 인사이트 오류가 기존 피드 갱신을 막지 않게 한다.
+            print(f"인사이트 갱신 실패: {type(exc).__name__}", file=sys.stderr)
+
+    for channel in channels:
+        channel["videos"] = channel["videos"][:5]
 
     if not channels and not parsed["schedule"]:
         print("수집된 내용이 없습니다. feeds.json 을 쓰지 않습니다.", file=sys.stderr)

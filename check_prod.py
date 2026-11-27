@@ -335,9 +335,10 @@ async def main():
             "#tabs .tab", "els => els.map(e => e.textContent.trim())")
         res["tab_default_today"] = await page.evaluate("""(() => {
             const t = document.querySelector('#tab-today'), s = document.querySelector('#tab-schedule'),
-                  b = document.querySelector('#tab-benefits');
+                  b = document.querySelector('#tab-benefits'), i = document.querySelector('#tab-insights');
             return t.classList.contains('is-on') && !s.classList.contains('is-on')
                 && !b.classList.contains('is-on')
+                && !i.classList.contains('is-on') && document.querySelector('#panel-insights').hidden
                 && !document.querySelector('#panel-today').hidden
                 && document.querySelector('#panel-schedule').hidden
                 && document.querySelector('#panel-benefits').hidden;
@@ -345,10 +346,10 @@ async def main():
         res["tab_row"] = await page.evaluate("""(() => {
             const tabs = [...document.querySelectorAll('#tabs .tab')];
             const b = tabs.map(e => e.getBoundingClientRect());
-            return { three: b.length === 3,
-                     same_row: b.length === 3
+            return { four: b.length === 4,
+                     same_row: b.length === 4
                          && Math.max(...b.map(r => r.top)) - Math.min(...b.map(r => r.top)) <= 1,
-                     equal_w: b.length === 3
+                     equal_w: b.length === 4
                          && Math.max(...b.map(r => r.width)) - Math.min(...b.map(r => r.width)) <= 2,
                      fit: tabs.every(e => e.scrollWidth <= e.clientWidth + 1) };
         })()""")
@@ -1283,9 +1284,9 @@ async def main():
         'res["ben_link_switch"]',
         'res["ben_link_url_ok"]',
         'res["tabs_visible"]',
-        'res["tab_labels"] == ["오늘 요약", "전체 일정", "혜택"]',
+        'res["tab_labels"] == ["오늘 요약", "전체 일정", "인사이트", "혜택"]',
         'res["tab_default_today"]',
-        'res["tab_row"]["three"]',
+        'res["tab_row"]["four"]',
         'res["tab_row"]["same_row"]',
         'res["tab_row"]["equal_w"]',
         'res["tab_row"]["fit"]',
