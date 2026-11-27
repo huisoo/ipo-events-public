@@ -1381,8 +1381,8 @@
     setTab(tabFromUrl(), { silent: true });
   }
 
-  /* ── 탭 (오늘 요약 · 전체 일정 · 혜택) ──────── */
-  var TABS = ['today', 'schedule', 'benefits'];
+  /* ── 탭 (오늘 요약 · 전체 일정 · 인사이트 · 혜택) ──────── */
+  var TABS = ['today', 'schedule', 'insights', 'benefits'];
 
   function tabFromUrl() {
     var q = (location.search.match(/[?&]tab=([a-zA-Z]+)/) || [])[1];
@@ -2009,6 +2009,58 @@
     } catch (e) { /* noop */ }
   }
 
+  /* ── 공모주 인사이트 ───────────────────── */
+  function insightDate(value, showTime) {
+    var options = { timeZone: 'Asia/Seoul', year: 'numeric', month: 'short', day: 'numeric' };
+    if (showTime) {
+      options.hour = '2-digit';
+      options.minute = '2-digit';
+    }
+    return new Date(value).toLocaleString('ko-KR', options);
+  }
+
+  function renderInsights(data) {
+    var now = Date.now(), day = 86400000;
+    var videos = (data && data.videos) || {};
+    var visible = Object.keys(videos).filter(function (id) {
+      var age = now - Date.parse(videos[id].published);
+      return /^[A-Za-z0-9_-]{11}$/.test(id) && age >= 0 && age <= 7 * day;
+    }).sort(function (a, b) {
+      return Date.parse(videos[b].published) - Date.parse(videos[a].published);
+    });
+
+    $('insight-videos').innerHTML = visible.map(function (id) {
+      var v = videos[id];
+      return '<article class="insight-card"><div class="insight-video">' +
+        '<img src="https://i.ytimg.com/vi/' + id + '/mqdefault.jpg" alt="" loading="lazy">' +
+        '<div><span class="insight-meta insight-category">' + esc(v.category) + '</span>' +
+        '<h3><a href="https://www.youtube.com/watch?v=' + id + '" target="_blank" rel="noopener noreferrer">' +
+        esc(v.title) + '</a></h3><span class="insight-meta">' + esc(v.channelTitle) +
+        ' · <time datetime="' + esc(v.published) + '">' + esc(insightDate(v.published)) +
+        '</time></span></div></div>' +
+        (v.summary ? '<ul class="insight-summary">' + v.summary.map(function (line) {
+          return '<li>' + esc(line) + '</li>';
+        }).join('') + '</ul>' : '<p class="insight-meta">자막 기반 요약이 아직 없어요.</p>') +
+        '</article>';
+    }).join('') || (data ? '최근 7일 동안 수집된 영상이 없어요.' : '영상 목록을 불러오지 못했어요.');
+
+    var today = data && data.today;
+    if (!today) {
+      $('today-insight').textContent = data ? '아직 자막으로 종합할 수 있는 영상이 없어요.' : '인사이트를 불러오지 못했어요.';
+      return;
+    }
+    var fresh = today.videoIds.some(function (id) {
+      var age = now - Date.parse(videos[id] && videos[id].collectedAt);
+      return age >= 0 && age <= day;
+    });
+    $('today-insight').innerHTML =
+      '<p class="insight-meta">' + (fresh ? '작성 ' : '이전 요약 · 작성 ') +
+      '<time datetime="' + esc(today.writtenAt) + '">' + esc(insightDate(today.writtenAt, true)) + '</time> KST</p>' +
+      '<p>' + esc(today.overview) + '</p>' +
+      '<p><strong>공통 의견</strong> · ' + esc(today.common || '확인된 공통 의견이 없어요.') + '</p>' +
+      '<p><strong>상반된 의견</strong> · ' + esc(today.contrasting || '확인된 상반된 의견이 없어요.') + '</p>';
+  }
+
   /* ── 시작 ─────────────────────────────── */
   initTheme();
   initBanner();
@@ -2025,6 +2077,11 @@
   var pFeeds = fetch('feeds.json' + stamp)
     .then(function (r) { return r.ok ? r.json() : null; })
     .catch(function () { return null; });
+
+  fetch('insights.json' + stamp)
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(renderInsights)
+    .catch(function () { renderInsights(null); });
 
   Promise.all([pData, pFeeds])
     .then(function (res) {

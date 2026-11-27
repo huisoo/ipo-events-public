@@ -40,8 +40,8 @@ data.json 을 로컬 HTTP 로 띄워 확인합니다(파일 직접 열면 fetch 
   날짜별 동시 묶임(start ≤ d < 환불일)의 최댓값(피크)·피크 날짜·겹치는 종목·단순 합계,
   이번 달/전체·스팩 제외 칩이 같은 데이터로 즉시 재계산(기대값은 data.json 에서 같은 규칙으로 계산),
   가로 잘림 없음, 다크·데스크톱 동일 값
-- 상단 3탭: 기본 '오늘 요약', '전체 일정'(?tab=schedule) · '혜택'(?tab=benefits) —
-  390px에서 3탭이 한 줄(같은 폭·잘림 없음), 다크·데스크톱에서도 가로 스크롤 없이 렌더
+- 상단 4탭: 기본 '오늘 요약', '전체 일정'(?tab=schedule) · '인사이트'(?tab=insights) · '혜택'(?tab=benefits) —
+  390px에서 4탭이 한 줄(같은 폭·잘림 없음), 다크·데스크톱에서도 가로 스크롤 없이 렌더
 - 오늘 요약 하단 한 줄 배너(.ben-link): 증권사·금융 혜택 N건 · 누르면 혜택 탭 전환 · 혜택 상세는 없음
 - 혜택 탭: 칩 3개(전체·증권사·금융·간편 이벤트·설문, 건수 포함) 즉시 필터링,
   카드마다 카테고리·D-day·혜택명·핵심 금액·대상·마감·기간·공식 링크(_blank)·
@@ -1337,30 +1337,31 @@ async def main():
             results["share_fallback_label"] = (
                 await page.inner_text("#share-sub .lbl")).strip()
 
-            # ── 상단 3탭: 기본은 오늘 요약, ?tab=schedule / ?tab=benefits ──
+            # ── 상단 4탭: 기본은 오늘 요약, ?tab=schedule / ?tab=insights / ?tab=benefits ──
             results["tabs_visible"] = await page.locator("#tabs").is_visible()
             results["tab_labels"] = await page.eval_on_selector_all(
                 "#tabs .tab", "els => els.map(e => e.textContent.trim())")
             results["tab_count"] = await page.locator("#tabs .tab").count()
             results["tab_default_today"] = await page.evaluate("""(() => {
                 const t = document.querySelector('#tab-today'), s = document.querySelector('#tab-schedule'),
-                      b = document.querySelector('#tab-benefits');
+                      b = document.querySelector('#tab-benefits'), i = document.querySelector('#tab-insights');
                 return t.classList.contains('is-on') && t.getAttribute('aria-selected') === 'true'
                     && !s.classList.contains('is-on') && !b.classList.contains('is-on')
+                    && !i.classList.contains('is-on') && document.querySelector('#panel-insights').hidden
                     && !document.querySelector('#panel-today').hidden
                     && document.querySelector('#panel-schedule').hidden
                     && document.querySelector('#panel-benefits').hidden;
             })()""")
             results["tab_height"] = round(await page.evaluate(
                 "document.querySelector('#tabs .tab').getBoundingClientRect().height"))
-            # 390px 한 줄에 3탭 — 같은 줄 · 같은 폭 · 글자 잘림 없음
+            # 390px 한 줄에 4탭 — 같은 줄 · 같은 폭 · 글자 잘림 없음
             results["tab_row"] = await page.evaluate("""(() => {
                 const tabs = [...document.querySelectorAll('#tabs .tab')];
                 const b = tabs.map(e => e.getBoundingClientRect());
-                return { three: b.length === 3,
-                         same_row: b.length === 3
+                return { four: b.length === 4,
+                         same_row: b.length === 4
                              && Math.max(...b.map(r => r.top)) - Math.min(...b.map(r => r.top)) <= 1,
-                         equal_w: b.length === 3
+                         equal_w: b.length === 4
                              && Math.max(...b.map(r => r.width)) - Math.min(...b.map(r => r.width)) <= 2,
                          fit: tabs.every(e => e.scrollWidth <= e.clientWidth + 1) };
             })()""")
@@ -3084,9 +3085,9 @@ async def main():
         'not results["dark_app_overflow"]',
         'not results["dark_app_errors"]',
         'results["tabs_visible"]',
-        'results["tab_count"] == 3',
-        'results["tab_labels"] == ["오늘 요약", "전체 일정", "혜택"]',
-        'results["tab_row"]["three"]',
+        'results["tab_count"] == 4',
+        'results["tab_labels"] == ["오늘 요약", "전체 일정", "인사이트", "혜택"]',
+        'results["tab_row"]["four"]',
         'results["tab_row"]["same_row"]',
         'results["tab_row"]["equal_w"]',
         'results["tab_row"]["fit"]',

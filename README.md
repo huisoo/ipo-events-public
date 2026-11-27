@@ -551,6 +551,15 @@ python3 scripts/fetch_ipo_feeds.py --sync-data --dry-run
   (`--no-banner` 로 생략). 두 파일은 항상 같은 커밋에 넣습니다.
 - 38 청약일정 표를 못 읽은 실행은 `data.json` 을 손대지 않고 건너뜁니다(빈 일정으로 덮는 사고 방지).
 
+### 공모주 인사이트
+
+기존 워크플로가 공모주한잔·공모주투자의법칙의 YouTube RSS 응답을 재사용하고, 인사이트용으로 주식애소리·경제적자유민족·소유보다 경험(아이언)을 추가 수집해 `insights.json`을 갱신합니다. 인사이트 탭에는 게시 후 7일 이내 영상이 표시되고, 오늘의 인사이트는 최근 24시간에 처음 수집한 영상 중 자막 기반 요약이 있는 영상으로 작성합니다. 신규 요약이 없으면 마지막 종합과 작성 시각을 표시합니다.
+
+- [Google AI Studio](https://aistudio.google.com/app/apikey)에서 무료 프로젝트용 키를 발급하고 GitHub Actions에 `GEMINI_API_KEY` 저장소 시크릿으로 등록합니다. 기본 모델은 `gemini-3.1-flash-lite`이며 `IPO_INSIGHTS_MODEL` 저장소 변수로 변경할 수 있습니다. 무료로만 운영하려면 프로젝트에 유료 결제를 연결하지 않습니다. [Gemini 무료 티어 요금](https://ai.google.dev/gemini-api/docs/pricing)
+- Gemini가 사용 한도 초과(HTTP 429)를 반환하면 해당 실행의 남은 AI 호출을 중단합니다. 영상 정보와 기존 요약은 보존되며, 다음 배치에서 요약을 다시 시도합니다. 무료 티어에 전송한 자막과 응답은 Google 제품 개선에 사용될 수 있습니다. [Gemini API 약관](https://ai.google.dev/gemini-api/terms)
+- 영상 ID별 처리 결과를 저장하며, 실행당 미처리 영상 최대 4개와 새 종합 최대 1개를 요약합니다. 키가 없거나 자막이 비어 있거나 YouTube가 요청을 차단하면 영상 정보만 표시합니다. 자막 또는 API 요청에 실패한 건은 게시 후 7일 이내에 다음 배치에서 다시 시도합니다.
+- 수동 실행은 Actions의 **공모주 채널·청약일정 수집**에서 할 수 있습니다. 기존 배치 주기를 사용하며 청약 판단은 기존 `data.json`을 읽습니다.
+
 ## 상장일 시세 (`scripts/fetch_listing_price.py`)
 
 네이버 금융 실시간 API(`polling.finance.naver.com/api/realtime?query=SERVICE_ITEM:{code}`)에서

@@ -158,9 +158,9 @@ h1 em{font-style:normal; color:inherit}
 html[data-theme="dark"] .sched-link{text-decoration-color:var(--ink3)}  /* 다크에서는 --line2 가 배경에 묻혀 밑줄이 안 보임 */
 .sched-link:focus-visible{outline:2px solid var(--blue); outline-offset:2px; border-radius:3px}
 
-/* ── 상단 3탭 (세그먼트 컨트롤) ─────────── */
+/* ── 상단 4탭 (세그먼트 컨트롤) ─────────── */
 .tabs{
-  display:grid; grid-template-columns:repeat(3, 1fr); gap:2px;
+  display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:2px;
   margin:0 0 10px; padding:3px;
   background:var(--track);
   border-radius:12px;
@@ -972,3 +972,23 @@ html[data-theme="dark"] .toast.ok{background:rgba(62,207,142,.96); color:#0d1117
   .tabs{margin-bottom:16px}
   .tab{font-size:13.5px}
 }
+
+/* ── 공모주 인사이트 ────────────────────── */
+.insight-list{display:grid; gap:10px}
+.insight-card{
+  padding:14px; border:1px solid var(--line); border-radius:var(--r);
+  background:var(--card); box-shadow:var(--shadow); overflow-wrap:anywhere;
+}
+#panel-today .insight-card{margin:12px 0}
+.insight-heading{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px}
+.insight-heading h2{margin:0; font-size:16px}
+.insight-heading a{color:var(--blue-ink); font-size:13px; font-weight:700; padding:6px 0}
+.insight-card p{margin:6px 0 0}
+.insight-meta{color:var(--ink2); font-size:12px}
+.insight-video{display:grid; grid-template-columns:clamp(88px, 30%, 142px) minmax(0, 1fr); gap:10px; align-items:start}
+.insight-video img{width:100%; aspect-ratio:16/9; object-fit:cover; border-radius:8px; background:var(--sunken)}
+.insight-video h3{margin:2px 0; font-size:15px; line-height:1.4}
+.insight-video a{color:var(--ink); text-decoration-color:var(--line2); text-underline-offset:2px}
+.insight-category{color:var(--blue-ink); font-weight:700}
+.insight-summary{margin:9px 0 0; padding-left:19px; font-size:14px; color:var(--ink2)}
+.insight-summary li + li{margin-top:3px}
