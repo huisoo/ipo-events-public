@@ -50,6 +50,11 @@ CHANNELS = [
     {"name": "공모주한잔", "channel_id": "UC8kMkLj4kAqMTeOeVQgxyUg", "url": "https://www.youtube.com/@공모주한잔"},
     {"name": "공모주투자의법칙(공주)", "channel_id": "UCstq1xNCuEIR43dM3CMop3g", "url": "https://www.youtube.com/@공모주투자의법칙"},
 ]
+INSIGHT_CHANNELS = [
+    {"name": "주식애소리", "channel_id": "UC6Dbyc-0DV-I-iUoS2KqNoA", "url": "https://www.youtube.com/@stock_babysound"},
+    {"name": "경제적자유민족", "channel_id": "UCGQEzAvR0kOH5pj7aLI2f3w", "url": "https://www.youtube.com/@gyungja"},
+    {"name": "소유보다 경험 - 아이언 / 공모주", "channel_id": "UCPHt56f4p6wVsPIDttxXZ2g", "url": "https://www.youtube.com/@iron_invest"},
+]
 SCHEDULE_URL = "http://www.38.co.kr/html/fund/index.htm?o=k"
 NEW_LISTING_URL = "http://www.38.co.kr/html/fund/index.htm?o=nw"
 DETAIL_URL = "http://www.38.co.kr/html/fund/?o=v&no={no}"
@@ -635,10 +640,16 @@ def main() -> int:
     problems: list[str] = []
 
     channels = []
-    for channel in CHANNELS:
+    insight_channels = []
+    feed_channel_ids = {channel["channel_id"] for channel in CHANNELS}
+    sources = CHANNELS + INSIGHT_CHANNELS if args.insights else CHANNELS
+    for channel in sources:
         try:
             data = youtube_videos(channel, limit=15 if args.insights else 5)
-            channels.append(data)
+            if args.insights:
+                insight_channels.append(data)
+            if data["channelId"] in feed_channel_ids:
+                channels.append({**data, "videos": data["videos"][:5]})
             latest = data.get("latest") or {}
             print(f"  · {channel['name']}: 최신 '{latest.get('title', '(없음)')[:60]}' ({latest.get('published', '')})")
         except Exception as exc:  # noqa: BLE001 - 한 채널 실패가 전체를 막지 않게
@@ -668,16 +679,13 @@ def main() -> int:
             problems.append(f"38 신규상장 표 실패: {exc}")
             print(f"  ! 신규상장 표(?o=nw) 실패: {exc}", file=sys.stderr)
 
-    if args.insights and channels and not args.dry_run:
+    if insight_channels and not args.dry_run:
         try:
             from update_insights import update_insights
 
-            update_insights(channels, now, os.path.join(here, "insights.json"))
+            update_insights(insight_channels, now, os.path.join(here, "insights.json"))
         except Exception as exc:  # 인사이트 오류가 기존 피드 갱신을 막지 않게 한다.
             print(f"인사이트 갱신 실패: {type(exc).__name__}", file=sys.stderr)
-
-    for channel in channels:
-        channel["videos"] = channel["videos"][:5]
 
     if not channels and not parsed["schedule"]:
         print("수집된 내용이 없습니다. feeds.json 을 쓰지 않습니다.", file=sys.stderr)
