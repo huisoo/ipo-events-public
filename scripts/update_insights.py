@@ -198,6 +198,28 @@ def duration_seconds(video):
 SUMMARY_DURATION_LIMIT = 7 * 3600
 
 
+def is_subscription_rate_broadcast(title):
+    compact = re.sub(r"\s+", "", title).casefold()
+    if any(word in compact for word in ("예상", "전략", "분석", "해설", "해석", "배정수량", "배정결과")):
+        return False
+    return bool(re.search(
+        r"(?:청약|공모주)경쟁률(?:live|중계|라이브|생중계|실시간)"
+        r"|(?:실시간|생중계)(?:공모주)?청약경쟁률",
+        compact,
+    ))
+
+
+def filter_insight_broadcasts(data):
+    videos = data["videos"]
+    excluded = {key for key, video in videos.items()
+                if is_subscription_rate_broadcast(video.get("title", ""))}
+    for key in excluded:
+        del videos[key]
+    for period in ("today", "weekly"):
+        if excluded.intersection((data.get(period) or {}).get("videoIds", [])):
+            data[period] = None
+
+
 def update_insights(channels, now, path, lookup_durations=None):
     path = Path(path)
     previous = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
@@ -223,11 +245,13 @@ def update_insights(channels, now, path, lookup_durations=None):
             })
             if seconds := duration_seconds(source):
                 video["lengthSeconds"] = seconds
+            video["title"] = source["title"]
             description = source.get("description")
             if isinstance(description, str) and description.strip() and not video.get("description"):
                 lines = [" ".join(line.split()) for line in description.splitlines() if line.strip()]
                 video["description"] = "\n".join(lines)[:DESCRIPTION_MAX_LEN]
 
+    filter_insight_broadcasts(data)
     missing = [video_id for video_id, video in videos.items()
                if not video.get("summary") and not duration_seconds(video)
                and now - WEEK <= timestamp(video["published"]) <= now]
