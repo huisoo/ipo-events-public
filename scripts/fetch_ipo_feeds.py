@@ -40,6 +40,7 @@ import re
 import subprocess
 import sys
 import time
+import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from html.parser import HTMLParser
@@ -99,18 +100,36 @@ def decode_kr(raw: bytes) -> str:
 
 
 # ---------------------------------------------------------------- YouTube RSS
-def youtube_duration(video_id):
-    """Read the duration only from the requested video's player metadata."""
-    try:
-        page = http(f"https://www.youtube.com/watch?v={video_id}", timeout=5, tries=1).decode("utf-8")
-        match = re.search(r'"videoDetails"\s*:\s*(?=\{)', page)
-        if match:
-            details, _ = json.JSONDecoder().raw_decode(page, match.end())
-            if details.get("videoId") == video_id:
-                return details.get("lengthSeconds")
-    except (OSError, ValueError, RuntimeError):
-        pass
-    return None
+def youtube_durations(video_ids):
+    durations = {}
+    key = os.environ.get("YOUTUBE_API_KEY")
+    if not key:
+        print("YouTube duration lookup: YOUTUBE_API_KEY missing")
+        return durations
+    for offset in range(0, len(video_ids), 50):
+        ids = video_ids[offset:offset + 50]
+        query = urllib.parse.urlencode({"id": ",".join(ids), "part": "contentDetails,snippet",
+                                        "fields": "items(id,contentDetails/duration,snippet/liveBroadcastContent)"})
+        request = urllib.request.Request("https://www.googleapis.com/youtube/v3/videos?" + query,
+                                         headers={"X-Goog-Api-Key": key})
+        try:
+            with urllib.request.urlopen(request, timeout=10) as response:
+                items = json.load(response).get("items", [])
+        except (OSError, ValueError) as exc:
+            print("YouTube duration lookup failed:", getattr(exc, "code", type(exc).__name__))
+            break
+        for item in items:
+            if item.get("id") not in ids or item.get("snippet", {}).get("liveBroadcastContent") in ("live", "upcoming"):
+                continue
+            raw = item.get("contentDetails", {}).get("duration", "")
+            match = re.fullmatch(r"P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?", raw)
+            if match:
+                days, hours, minutes, seconds = (int(part or 0) for part in match.groups())
+                total = ((days * 24 + hours) * 60 + minutes) * 60 + seconds
+                if total:
+                    durations[item["id"]] = total
+    print(f"YouTube durations: {len(durations)}/{len(video_ids)}")
+    return durations
 
 
 def youtube_videos(channel: dict, limit: int = 5, with_description: bool = False) -> dict:
@@ -712,7 +731,7 @@ def main() -> int:
         try:
             from update_insights import update_insights
 
-            update_insights(insight_channels, now, os.path.join(here, "insights.json"), youtube_duration)
+            update_insights(insight_channels, now, os.path.join(here, "insights.json"), youtube_durations)
         except Exception as exc:  # 인사이트 오류가 기존 피드 갱신을 막지 않게 한다.
             print(f"인사이트 갱신 실패: {type(exc).__name__}", file=sys.stderr)
 

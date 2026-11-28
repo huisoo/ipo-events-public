@@ -37,6 +37,7 @@ jobs:
 
       - name: YouTube RSS + 38커뮤니케이션 일정 수집 + data.json 전체 일정 병합
         env:
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           IPO_INSIGHTS_MODEL: ${{ vars.IPO_INSIGHTS_MODEL }}
           IPO_INSIGHTS_VIDEO_FALLBACK: ${{ vars.IPO_INSIGHTS_VIDEO_FALLBACK || 'true' }}

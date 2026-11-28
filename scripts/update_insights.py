@@ -198,7 +198,7 @@ def duration_seconds(video):
 SUMMARY_DURATION_LIMIT = 7 * 3600
 
 
-def update_insights(channels, now, path, lookup_duration=None):
+def update_insights(channels, now, path, lookup_durations=None):
     path = Path(path)
     previous = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
     data = {
@@ -228,12 +228,19 @@ def update_insights(channels, now, path, lookup_duration=None):
                 lines = [" ".join(line.split()) for line in description.splitlines() if line.strip()]
                 video["description"] = "\n".join(lines)[:DESCRIPTION_MAX_LEN]
 
+    missing = [video_id for video_id, video in videos.items()
+               if not video.get("summary") and not duration_seconds(video)
+               and now - WEEK <= timestamp(video["published"]) <= now]
+    if missing and lookup_durations:
+        for video_id, seconds in lookup_durations(missing).items():
+            videos[video_id]["lengthSeconds"] = seconds
+
     key = os.environ.get("GEMINI_API_KEY")
     if key:
         video_fallback = os.environ.get("IPO_INSIGHTS_VIDEO_FALLBACK") == "true"
         pending = sorted(
             ((video_id, video) for video_id, video in videos.items()
-             if duration_seconds(video) < SUMMARY_DURATION_LIMIT and "summary" not in video and now - WEEK <= timestamp(video["published"]) <= now),
+             if duration_seconds(video) < SUMMARY_DURATION_LIMIT and not video.get("summary") and now - WEEK <= timestamp(video["published"]) <= now),
             key=lambda item: (
                 item[1].get("failCount", 0) >= MAX_FAILURES,  # 계속 실패한 영상은 뒤로
                 is_long_video(item[1]),                       # 일반 영상을 LIVE·장편보다 먼저
@@ -242,17 +249,7 @@ def update_insights(channels, now, path, lookup_duration=None):
             ),
         )
         quota_exhausted = False
-        attempts = 0
-        for video_id, video in pending:
-            if attempts >= BATCH_SIZE:
-                break
-            if lookup_duration and not duration_seconds(video):
-                seconds = duration_seconds({"lengthSeconds": lookup_duration(video_id)})
-                if seconds:
-                    video["lengthSeconds"] = seconds
-                    if seconds >= SUMMARY_DURATION_LIMIT:
-                        continue
-            attempts += 1
+        for video_id, video in pending[:BATCH_SIZE]:
             video["attemptedAt"] = now.isoformat(timespec="seconds")
             try:
                 try:
@@ -266,7 +263,7 @@ def update_insights(channels, now, path, lookup_duration=None):
                     result = summarize_video(key, video, transcript)
                 elif notes:
                     result = summarize_video(key, video, notes=notes)
-                if result is None and not transcript and video_fallback:
+                if result is None and not transcript and video_fallback and duration_seconds(video):
                     result = summarize_video(key, video, video_id=video_id)
                 if result:
                     video.update(result)

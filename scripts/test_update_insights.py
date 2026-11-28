@@ -63,6 +63,8 @@ class InsightTest(unittest.TestCase):
             api.assert_not_called()
             with patch.dict(os.environ, {"IPO_INSIGHTS_VIDEO_FALLBACK": "true"}):
                 update_insights.update_insights(channels, now, path)
+                api.assert_not_called()
+                update_insights.update_insights(channels, now, path, lambda ids: {video_id: 600})
                 update_insights.update_insights(channels, now, path)
 
             result = json.loads(path.read_text(encoding="utf-8"))
@@ -81,7 +83,7 @@ class InsightTest(unittest.TestCase):
         ids = [char * 11 for char in "ABCDEFG"]
         batch = update_insights.BATCH_SIZE
         videos = {
-            video_id: {"published": (now - dt.timedelta(hours=index)).isoformat()}
+            video_id: {"lengthSeconds": 600, "published": (now - dt.timedelta(hours=index)).isoformat()}
             for index, video_id in enumerate(ids)
         }
         with (tempfile.TemporaryDirectory() as folder,
@@ -232,7 +234,7 @@ class InsightTest(unittest.TestCase):
         now = dt.datetime(2026, 11, 28, 2, tzinfo=dt.timezone.utc)
         video_id = "A" * 11
         channels = [{"channelId": "channel", "channelTitle": "채널", "videos": [
-            {"videoId": video_id, "title": "공모주 LIVE 풀버전", "published": now.isoformat()},
+            {"videoId": video_id, "title": "공모주 LIVE 풀버전", "lengthSeconds": 7200, "published": now.isoformat()},
         ]}]
         summary = {"summary": ["첫 문장", "둘째 문장", "셋째 문장"], "category": "시장 전망"}
         daily = {"overview": "요지", "common": None, "contrasting": None}
@@ -252,10 +254,10 @@ class InsightTest(unittest.TestCase):
         normals = [char * 11 for char in "ABCDE"]
         live_id, failed_id = "L" * 11, "F" * 11
         videos = {
-            video_id: {"title": "청약 일정", "published": (now - dt.timedelta(minutes=index)).isoformat()}
+            video_id: {"lengthSeconds": 600, "title": "청약 일정", "published": (now - dt.timedelta(minutes=index)).isoformat()}
             for index, video_id in enumerate(normals)
         }
-        videos[live_id] = {"title": "공모주 라이브",
+        videos[live_id] = {"lengthSeconds": 7200, "title": "공모주 라이브",
                            "published": (now - dt.timedelta(minutes=30)).isoformat()}
         videos[failed_id] = {
             "title": "청약 일정",
