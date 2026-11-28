@@ -351,7 +351,13 @@ html[data-theme="dark"] .sched-link{text-decoration-color:var(--ink3)}  /* 다�
 .yt-date{font-size:10px; font-weight:500; color:var(--ink3); font-variant-numeric:tabular-nums}
 .yt-none{font-size:10.5px; font-weight:500; color:var(--ink3); letter-spacing:-.01em}
 .v.is-off{background:var(--bg2); color:var(--ink3)}
-.yt-name{font-size:11.5px; font-weight:600; color:var(--ink2)}
+.yt-name{font-size:11.5px; font-weight:600; color:var(--ink2); text-decoration:none}
+/* 채널명은 유튜브 채널 홈으로 가는 링크 — 영상 ›(블루) 와 헷갈리지 않게 글자색은 그대로 두고
+   얇은 밑줄로만 누를 수 있다는 걸 알립니다(라이트·다크 같은 회색). */
+a.yt-name{text-decoration:underline; text-decoration-thickness:1px;
+  text-decoration-color:var(--ink3); text-underline-offset:2px;
+  -webkit-tap-highlight-color:transparent}
+a.yt-name:hover,a.yt-name:focus-visible{color:var(--blue); text-decoration-color:var(--blue)}
 .v{font-size:10.5px; font-weight:600; border-radius:5px; padding:1px 7px; white-space:nowrap}
 .v.pass{background:var(--bg2); color:var(--ink2)}
 .v.go{background:var(--green-soft); color:var(--green)}
@@ -990,6 +996,14 @@ html[data-theme="dark"] .toast.ok{background:rgba(62,207,142,.96); color:#0d1117
 .insight-video img{width:100%; aspect-ratio:16/9; object-fit:cover; border-radius:8px; background:var(--sunken)}
 .insight-video h3{margin:2px 0; font-size:15px; line-height:1.4}
 .insight-video a{color:var(--ink); text-decoration-color:var(--line2); text-underline-offset:2px}
+/* 인사이트 카드의 채널명 — 제목 링크(--ink)와 구분되게 메타 줄 색을 그대로 잇고,
+   누를 수 있다는 표시는 얇은 밑줄 하나로만 둡니다. */
+.insight-video a.insight-channel{color:inherit; font-weight:600;
+  text-decoration:underline; text-decoration-thickness:1px;
+  text-decoration-color:var(--ink3); text-underline-offset:2px;
+  -webkit-tap-highlight-color:transparent}
+.insight-video a.insight-channel:hover,.insight-video a.insight-channel:focus-visible{
+  color:var(--blue); text-decoration-color:var(--blue)}
 .insight-category{color:var(--blue-ink); font-weight:700}
 .insight-summary{margin:9px 0 0; padding-left:19px; font-size:14px; color:var(--ink2)}
 .insight-summary li + li{margin-top:3px}

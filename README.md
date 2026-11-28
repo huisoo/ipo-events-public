@@ -524,6 +524,11 @@ python3 scripts/fetch_ipo_feeds.py --sync-data --dry-run
   최신 영상(75일 이내)을 채널별로 찾습니다. `data.json` 의 `ipo.hanjan.items`·`ipo.gongmorin` 큐레이션 판단이 있으면
   그 배지(균등·비례·관점)를 먼저 쓰고, 비어 있는 채널만 `feeds.json` 영상으로 채웁니다.
   표시는 `채널 · 제목에서 읽은 톤(신중/수급/기대) · 업로드 날짜 · 영상›` + 영상 제목에서 뽑은 한 줄(1줄 말줄임).
+  **채널명 자체가 유튜브 채널 홈 링크**입니다(`a.yt-name`, `target="_blank" rel="noopener noreferrer"`).
+  주소는 `data.json`·`feeds.json` 의 `channelUrl`(예: `https://www.youtube.com/@공모주한잔`)을 먼저 쓰고,
+  없으면 `channelId` 로 `https://www.youtube.com/channel/{id}` 를 만듭니다. 둘 다 없는 채널은 예전처럼 글자만 남깁니다.
+  인사이트 탭 카드도 같은 규칙으로 채널명(`a.insight-channel`)에 채널 홈 링크를 걸고 영상 링크는 제목에만 둡니다
+  (카드 안에 `<a>` 안 `<a>` 없음). 링크는 글자색을 바꾸지 않고 `--ink3` 얇은 밑줄로만 표시하며 hover·focus 에서 블루입니다.
   **예상 매도가·목표가·원화 금액이 들어간 문구는 요약으로 옮기지 않습니다**(제목에 있으면 요약 생략).
   관련 영상이 하나도 없으면 `공모주한잔·공주 관련 영상 없음` 한 줄만 남깁니다(상장 카드는 `ipo.gongmorin`
   판단을 붙이지 않고 종목명이 맞는 영상만 씁니다).

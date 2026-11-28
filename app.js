@@ -380,6 +380,37 @@
     return null;
   }
 
+  /* 유튜브 채널 홈 주소 — channelUrl(@핸들)이 있으면 그대로, channelId 만 있으면 /channel/{id}
+   * (채널명에 링크를 걸 때 씁니다. 둘 다 없으면 '' → 이름만 글자로 표시) */
+  function channelHome(ch) {
+    var url = String((ch && ch.channelUrl) || '').trim();
+    if (/^https?:\/\/(www\.)?youtube\.com\//.test(url)) return url;
+    var id = String((ch && ch.channelId) || '').trim();
+    return /^UC[\w-]{22}$/.test(id) ? 'https://www.youtube.com/channel/' + id : '';
+  }
+
+  /* data.json 큐레이션에 channelUrl 이 없을 때 feeds.json 에서 같은 채널을 찾아 홈 주소를 채웁니다 */
+  function feedChannelHome(name) {
+    var channels = (FEEDS && FEEDS.channels) || [];
+    var key = shortChannel(name);
+    if (!key) return '';
+    for (var i = 0; i < channels.length; i++) {
+      var ch = channels[i];
+      if (shortChannel(ch.name || ch.channelTitle) === key) return channelHome(ch);
+    }
+    return '';
+  }
+
+  /* 채널명 — 홈 주소가 있으면 이름만 링크로 감싸고, 없으면 예전처럼 글자로 둡니다.
+   * 카드 전체나 영상 링크(영상 ›)와 겹치지 않도록 <a> 안에 <a> 를 두지 않습니다. */
+  function channelName(name, url, cls) {
+    var c = cls || 'yt-name';
+    var label = esc(name);
+    if (!url) return '<span class="' + c + '">' + label + '</span>';
+    return '<a class="' + c + '" href="' + esc(url) + '" target="_blank" rel="noopener noreferrer"' +
+      ' title="' + esc(name) + ' 유튜브 채널 열기">' + label + '</a>';
+  }
+
   /* feeds.json → 종목명이 제목에 있는 채널별 최신 영상 (오래된 영상은 제외) */
   function feedHits(name) {
     var channels = (FEEDS && FEEDS.channels) || [];
@@ -401,6 +432,7 @@
       out.push({
         name: shortChannel(ch.name || ch.channelTitle),
         channel: ch.name || ch.channelTitle || '',
+        channelUrl: channelHome(ch),
         url: best.v.url,
         title: best.v.title,
         date: best.ts ? mdd(new Date(best.ts).toISOString()) : ''
@@ -422,6 +454,8 @@
     var rows = 0;
     var hanjanName = shortChannel(hanjan.channel) || '공모주한잔';
     var gmName = shortChannel(gm.name) || '공주';
+    var hanjanHome = channelHome(hanjan) || feedChannelHome(hanjanName);
+    var gmHome = channelHome(gm) || feedChannelHome(gmName);
 
     /* 큐레이션 판단이 있는 종목만 '영상 없음' 대신 판단 배지를 보입니다.
        영상이 하나도 없으면 맨 아래에서 한 줄로 조용히 적습니다. */
@@ -432,7 +466,7 @@
       if (has(hit.equal)) vs += '<span class="v ' + tone(hit.equal) + '">균등 ' + esc(hit.equal) + '</span>';
       if (has(hit.proportional)) vs += '<span class="v ' + tone(hit.proportional) + '">비례 ' + esc(hit.proportional) + '</span>';
       out += '<div class="yt-row">' +
-          '<span class="yt-name">' + esc(hanjanName) + '</span>' +
+          channelName(hanjanName, hanjanHome) +
           vs +
           (vUrl ? '<a class="yt-link" href="' + esc(vUrl) + '" target="_blank" rel="noopener"' +
             (vObj && vObj.title ? ' title="' + esc(vObj.title) + '"' : '') + '>' +
@@ -446,7 +480,7 @@
     if (!(opts && opts.listing) && (has(gm.verdict) || has(gm.note) || (gm.video && gm.video.url))) {
       var gUrl = (gm.video && gm.video.url) || '';
       out += '<div class="yt-row">' +
-          '<span class="yt-name">' + esc(gmName) + '</span>' +
+          channelName(gmName, gmHome) +
           (has(gm.verdict) ? '<span class="v ' + tone(gm.verdict) + '">' + esc(gm.verdict) + '</span>' : '') +
           (has(gm.score) ? '<span class="score ' + scoreTone(gm.score) + '">' + esc(gm.score) + '</span>' : '') +
           (gUrl ? '<a class="yt-link" href="' + esc(gUrl) + '" target="_blank" rel="noopener">영상<i aria-hidden="true">›</i></a>' : '') +
@@ -463,7 +497,7 @@
       var line = videoLine(h.title);
       var tn = videoTone(h.title);
       out += '<div class="yt-row">' +
-          '<span class="yt-name">' + esc(h.name) + '</span>' +
+          channelName(h.name, h.channelUrl) +
           (tn ? '<span class="v ' + tn.c + '" title="영상 제목에서 읽은 톤">' + tn.t + '</span>' : '') +
           (h.date ? '<span class="yt-date">' + esc(h.date) + '</span>' : '') +
           '<a class="yt-link" href="' + esc(h.url) + '" target="_blank" rel="noopener" title="' + esc(h.title) + '">' +
@@ -2057,7 +2091,8 @@
         '<img src="https://i.ytimg.com/vi/' + id + '/mqdefault.jpg" alt="" loading="lazy">' +
         '<div><span class="insight-meta insight-category">' + esc(v.category) + '</span>' +
         '<h3><a href="https://www.youtube.com/watch?v=' + id + '" target="_blank" rel="noopener noreferrer">' +
-        esc(v.title) + '</a></h3><span class="insight-meta">' + esc(v.channelTitle) +
+        esc(v.title) + '</a></h3><span class="insight-meta">' +
+        channelName(v.channelTitle, channelHome(v), 'insight-channel') +
         ' · <time datetime="' + esc(v.published) + '">' + esc(insightDate(v.published)) +
         '</time></span></div></div>' +
         (v.summary ? '<p class="insight-meta">' + (({ video: '영상 기반 요약', notes: '제공된 메모 기반 요약' })[v.summarySource] || '자막 기반 요약') +
