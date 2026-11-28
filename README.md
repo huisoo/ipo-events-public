@@ -349,7 +349,7 @@ BROWSABLE 딥링크가 확인된 앱(2026-11-21 기준 — 근거는 `handoffs/�
 | `scripts/generate_banner.py` | 배너 생성기 (Pillow · 한글 폰트 동봉) — `--self-test` 로 네 가지 상황을 확인 |
 | `check_render.py` | 390×844 Playwright 검증 + 스크린샷 생성 (스크린샷은 `.gitignore`, 저장소에 올리지 않음) |
 | `scripts/generate_icons.py` | 홈 화면 아이콘 생성기 (Pillow · 폰트 불필요, 블루 배경 + 흰 막대 3개) |
-| `scripts/fetch_ipo_feeds.py` | 공모주 유튜브 2채널 RSS + 38커뮤니케이션 청약·신규상장 일정 수집기. `--sync-data` 로 `data.json` 전체 일정까지 자동 병합 (API 키 불필요) |
+| `scripts/fetch_ipo_feeds.py` | 공모주 유튜브 3채널 RSS + 38커뮤니케이션 청약·신규상장 일정 수집기. `--sync-data` 로 `data.json` 전체 일정까지 자동 병합 (API 키 불필요) |
 | `feeds.json` | 수집기가 만드는 최신 영상·청약일정·신규상장 스냅샷 (사람이 쓰는 `data.json` 과 분리). `app.js` 가 화면에서 함께 읽어 **유튜버 1줄 요약**을 채웁니다 |
 | `scripts/fetch_listing_price.py` | 상장일 시초가·종가 조회기 — 네이버 금융 실시간 API에서 `ov`·`nv`·`hv`를 읽어 공모가 대비 등락률과 함께 JSON으로 출력하고, `--mode open·close --apply-data` 로 `ipo.listing`에 반영 |
 | `.github/workflows/update-ipo-feeds.yml` | 평일 06:13·16:13 KST 자동 수집·병합·커밋 |
@@ -527,7 +527,8 @@ python3 scripts/fetch_ipo_feeds.py --sync-data --dry-run
   **예상 매도가·목표가·원화 금액이 들어간 문구는 요약으로 옮기지 않습니다**(제목에 있으면 요약 생략).
   관련 영상이 하나도 없으면 `공모주한잔·공주 관련 영상 없음` 한 줄만 남깁니다(상장 카드는 `ipo.gongmorin`
   판단을 붙이지 않고 종목명이 맞는 영상만 씁니다).
-- **유튜브**: `공모주한잔`(UC8kMkLj4kAqMTeOeVQgxyUg), `공모주투자의법칙(공주)`(UCstq1xNCuEIR43dM3CMop3g) RSS에서
+- **유튜브**: `공모주한잔`(UC8kMkLj4kAqMTeOeVQgxyUg), `공모주투자의법칙(공주)`(UCstq1xNCuEIR43dM3CMop3g),
+  `슈엔슈`/재테크의 여왕 슈엔슈(UCkj9DORrXoTMdCeaWRj1Thg · @xuenxu) RSS에서
   최신 5개 영상의 제목·URL·업로드 시각을 가져옵니다.
 - **38커뮤니케이션**(`http://www.38.co.kr/html/fund/index.htm?o=k`, EUC-KR): 공모주 청약일정 표
   (종목명·청약기간·확정/희망 공모가·경쟁률·주관사)와 IPO 신규상장 일정(`?o=nw` — 상장일·확정 공모가·시초가·첫날종가)을 파싱합니다.

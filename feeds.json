@@ -1,5 +1,5 @@
 {
- "updated_at": "2026-11-27T23:24:18+09:00",
+ "updated_at": "2026-11-28T18:01:05+09:00",
  "channels": [
   {
    "name": "공모주한잔",
@@ -86,6 +86,50 @@
      "title": "[공모주 경쟁률] 유캐스트 공모주 11/18일 1일차 실시간 경쟁률 LIVE",
      "url": "https://www.youtube.com/watch?v=wEkS9VIyHxs",
      "published": "2026-11-18T08:38:24+00:00"
+    }
+   ]
+  },
+  {
+   "name": "슈엔슈",
+   "channelTitle": "재테크의 여왕 슈엔슈",
+   "channelId": "UCkj9DORrXoTMdCeaWRj1Thg",
+   "channelUrl": "https://www.youtube.com/@xuenxu",
+   "latest": {
+    "videoId": "TB_N03DQBHs",
+    "title": "2026.11.28/ 11월 마지막주 추천 ELS",
+    "url": "https://www.youtube.com/watch?v=TB_N03DQBHs",
+    "published": "2026-11-28T07:07:05+00:00"
+   },
+   "videos": [
+    {
+     "videoId": "TB_N03DQBHs",
+     "title": "2026.11.28/ 11월 마지막주 추천 ELS",
+     "url": "https://www.youtube.com/watch?v=TB_N03DQBHs",
+     "published": "2026-11-28T07:07:05+00:00"
+    },
+    {
+     "videoId": "tXDGOqh7Msk",
+     "title": "2026.11.22/ 현재 주식시장 점검",
+     "url": "https://www.youtube.com/watch?v=tXDGOqh7Msk",
+     "published": "2026-11-22T11:28:53+00:00"
+    },
+    {
+     "videoId": "ad9aaISDUzg",
+     "title": "2026.11.15/ 2026년 11월 개인투자용 국채의 모든 것",
+     "url": "https://www.youtube.com/watch?v=ad9aaISDUzg",
+     "published": "2026-11-15T07:20:04+00:00"
+    },
+    {
+     "videoId": "oXyYyPIEioQ",
+     "title": "2026.11.12/ 11월 엠비디 공모주 청약(11.12~13)",
+     "url": "https://www.youtube.com/watch?v=oXyYyPIEioQ",
+     "published": "2026-11-12T05:12:41+00:00"
+    },
+    {
+     "videoId": "a0FLrXKFhIs",
+     "title": "2026.11.10/ 11월 하나에어로다이내믹스 공모주 청약(11.10~11)",
+     "url": "https://www.youtube.com/watch?v=a0FLrXKFhIs",
+     "published": "2026-11-10T06:49:48+00:00"
     }
    ]
   }

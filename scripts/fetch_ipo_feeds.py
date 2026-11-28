@@ -3,7 +3,7 @@
 """공모주 채널 영상 + 38커뮤니케이션 청약 일정 수집기 (API 키 불필요).
 
 가져오는 것
-  1) YouTube 채널 RSS  — '공모주한잔', '공모주투자의법칙(공주)' 최신 영상 제목·URL·업로드 시각
+  1) YouTube 채널 RSS  — '공모주한잔', '공모주투자의법칙(공주)', '슈엔슈' 최신 영상 제목·URL·업로드 시각
   2) 38커뮤니케이션 공모주 청약일정 표 — 종목명·청약기간·확정/희망 공모가·경쟁률·주관사
      (+ IPO 신규상장 일정 `?o=nw` — 상장일·확정 공모가·시초가·첫날종가)
 
@@ -50,6 +50,7 @@ UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chr
 CHANNELS = [
     {"name": "공모주한잔", "channel_id": "UC8kMkLj4kAqMTeOeVQgxyUg", "url": "https://www.youtube.com/@공모주한잔"},
     {"name": "공모주투자의법칙(공주)", "channel_id": "UCstq1xNCuEIR43dM3CMop3g", "url": "https://www.youtube.com/@공모주투자의법칙"},
+    {"name": "슈엔슈", "channel_id": "UCkj9DORrXoTMdCeaWRj1Thg", "url": "https://www.youtube.com/@xuenxu"},
 ]
 INSIGHT_CHANNELS = [
     {"name": "주식애소리", "channel_id": "UC6Dbyc-0DV-I-iUoS2KqNoA", "url": "https://www.youtube.com/@stock_babysound"},
