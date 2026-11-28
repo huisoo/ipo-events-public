@@ -530,6 +530,10 @@ python3 scripts/fetch_ipo_feeds.py --sync-data --dry-run
 - **유튜브**: `공모주한잔`(UC8kMkLj4kAqMTeOeVQgxyUg), `공모주투자의법칙(공주)`(UCstq1xNCuEIR43dM3CMop3g),
   `슈엔슈`/재테크의 여왕 슈엔슈(UCkj9DORrXoTMdCeaWRj1Thg · @xuenxu) RSS에서
   최신 5개 영상의 제목·URL·업로드 시각을 가져옵니다.
+  · `종목 카드`의 1줄 요약은 제목에 종목명이 들어간 영상만 붙으므로, 슈엔슈처럼
+    `2026.11.12/ 11월 엠비디 공모주 청약(11.12~13)` 형태로 올라오는 청약 영상이 그 종목 카드에 붙습니다.
+  · `인사이트 탭`에는 슈엔슈 채널의 ELS·국채·시장 점검 영상이 섞이지 않도록
+    `insight_keywords`(`공모주`, `청약`)가 제목에 있는 영상만 넣고, 이전에 저장된 항목도 같은 규칙으로 정리합니다.
 - **38커뮤니케이션**(`http://www.38.co.kr/html/fund/index.htm?o=k`, EUC-KR): 공모주 청약일정 표
   (종목명·청약기간·확정/희망 공모가·경쟁률·주관사)와 IPO 신규상장 일정(`?o=nw` — 상장일·확정 공모가·시초가·첫날종가)을 파싱합니다.
 - 지난 `feeds.json` 과 비교해 새로 올라온 영상·일정만 stdout 에 요약하고, 바뀐 내용이 없으면
@@ -554,7 +558,7 @@ python3 scripts/fetch_ipo_feeds.py --sync-data --dry-run
 
 ### 공모주 인사이트
 
-기존 워크플로가 공모주한잔·공모주투자의법칙의 YouTube RSS 응답을 재사용하고, 인사이트용으로 주식애소리·경제적자유민족·소유보다 경험(아이언)을 추가 수집해 `insights.json`을 갱신합니다. 인사이트 탭에는 게시 후 7일 이내 영상과 그 영상들의 종합 요약이 표시되고, 오늘의 인사이트는 최근 24시간에 처음 수집한 영상 중 자막이나 공개 영상에 근거한 요약이 있는 영상으로 작성합니다. 신규 요약이 없으면 마지막 종합과 작성 시각을 표시합니다.
+기존 워크플로가 공모주한잔·공모주투자의법칙의 YouTube RSS 응답을 재사용하고, 인사이트용으로 주식애소리·경제적자유민족·소유보다 경험(아이언)을 추가 수집해 `insights.json`을 갱신합니다. 슈엔슈 채널은 공모주 외 영상도 올리므로 제목에 `공모주`·`청약`이 있는 영상만 인사이트로 넘깁니다(`CHANNELS` 의 `insight_keywords`). 인사이트 탭에는 게시 후 7일 이내 영상과 그 영상들의 종합 요약이 표시되고, 오늘의 인사이트는 최근 24시간에 처음 수집한 영상 중 자막이나 공개 영상에 근거한 요약이 있는 영상으로 작성합니다. 신규 요약이 없으면 마지막 종합과 작성 시각을 표시합니다.
 
 - [Google AI Studio](https://aistudio.google.com/app/apikey)에서 무료 프로젝트용 키를 발급하고 GitHub Actions에 `GEMINI_API_KEY` 저장소 시크릿으로 등록합니다. 기본 모델은 `gemini-3.1-flash-lite`이며 `IPO_INSIGHTS_MODEL` 저장소 변수로 변경할 수 있습니다. 무료로만 운영하려면 프로젝트에 유료 결제를 연결하지 않습니다. [Gemini 무료 티어 요금](https://ai.google.dev/gemini-api/docs/pricing)
 - Gemini가 사용 한도 초과(HTTP 429)를 반환하면 해당 실행의 남은 AI 호출을 중단합니다. 영상 정보와 기존 요약은 보존되며, 다음 배치에서 요약을 다시 시도합니다. 무료 티어에 전송한 자막과 응답은 Google 제품 개선에 사용될 수 있습니다. [Gemini API 약관](https://ai.google.dev/gemini-api/terms)

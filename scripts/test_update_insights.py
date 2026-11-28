@@ -278,3 +278,31 @@ class InsightTest(unittest.TestCase):
             self.assertEqual(saved[failed_id]["attemptedAt"], videos[failed_id]["attemptedAt"])
             self.assertEqual(saved[failed_id]["failCount"], update_insights.MAX_FAILURES)
             self.assertEqual(saved[live_id]["failCount"], 1)
+
+    def test_channel_keywords_keep_only_matching_videos_in_the_insight_feed(self):
+        now = dt.datetime(2026, 11, 28, 3, tzinfo=dt.timezone.utc)
+        ipo_id, els_id, stale_id, other_id = "A" * 11, "B" * 11, "C" * 11, "D" * 11
+        channel = {
+            "channelId": "xuenxu", "channelTitle": "재테크의 여왕 슈엔슈",
+            "insightKeywords": ["공모주", "청약"],
+            "videos": [
+                {"videoId": ipo_id, "title": "2026.11.12/ 11월 엠비디 공모주 청약(11.12~13)",
+                 "published": (now - dt.timedelta(hours=2)).isoformat()},
+                {"videoId": els_id, "title": "2026.11.28/ 11월 마지막주 추천 ELS",
+                 "published": (now - dt.timedelta(hours=1)).isoformat()},
+            ],
+        }
+        stale = {stale_id: {"title": "2026.11.28/ 11월 마지막주 추천 ELS", "channelId": "xuenxu",
+                            "channelTitle": "재테크의 여왕 슈엔슈",
+                            "published": (now - dt.timedelta(hours=3)).isoformat()},
+                 other_id: {"title": "공모주 청약 경쟁률", "channelId": "other",
+                            "channelTitle": "다른 채널",
+                            "published": (now - dt.timedelta(hours=4)).isoformat()}}
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "insights.json"
+            path.write_text(json.dumps({"videos": stale}), encoding="utf-8")
+            with patch.dict(os.environ, {"GEMINI_API_KEY": "", "YOUTUBE_API_KEY": ""}):
+                update_insights.update_insights([channel], now, path)
+            saved = json.loads(path.read_text(encoding="utf-8"))["videos"]
+            self.assertEqual(set(saved), {ipo_id, other_id})
+            self.assertEqual(saved[ipo_id]["channelTitle"], "재테크의 여왕 슈엔슈")

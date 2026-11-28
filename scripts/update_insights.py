@@ -220,6 +220,34 @@ def filter_insight_broadcasts(data):
             data[period] = None
 
 
+def filter_insight_channels(channels):
+    """채널의 insightKeywords 에 걸리지 않는 영상을 인사이트 수집 대상에서 뺕니다.
+
+    슈엔슈처럼 공모주 외(ELS·국금·시장 점검) 영상도 올리는 채널을 인사이트 탭(공모주 전용)에
+    그대로 넣지 않도록, 저장된 기존 항목도 같은 규칙으로 함께 정리합니다.
+    키워드가 없는 채널은 지금처럼 모든 영상을 넣습니다.
+    """
+    for channel in channels:
+        keywords = [word for word in (channel.get("insightKeywords") or []) if word]
+        if not keywords:
+            continue
+        channel["videos"] = [video for video in channel["videos"]
+                             if any(word in str(video.get("title") or "") for word in keywords)]
+    return channels
+
+
+def prune_insight_videos(videos, channels):
+    """키워드 규칙이 있는 채널의 저장된 영상 중 제목이 맞지 않는 항목을 지웁니다."""
+    for channel in channels:
+        keywords = [word for word in (channel.get("insightKeywords") or []) if word]
+        if not keywords:
+            continue
+        for video_id in [key for key, video in videos.items()
+                         if video.get("channelId") == channel.get("channelId")
+                         and not any(word in str(video.get("title") or "") for word in keywords)]:
+            del videos[video_id]
+
+
 def update_insights(channels, now, path, lookup_durations=None):
     path = Path(path)
     previous = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
@@ -229,6 +257,8 @@ def update_insights(channels, now, path, lookup_durations=None):
         "weekly": previous.get("weekly"),
     }
     videos = data["videos"]
+    filter_insight_channels(channels)
+    prune_insight_videos(videos, channels)
     for channel in channels:
         for source in channel["videos"]:
             video_id = source["videoId"]

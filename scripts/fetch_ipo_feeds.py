@@ -50,7 +50,9 @@ UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chr
 CHANNELS = [
     {"name": "공모주한잔", "channel_id": "UC8kMkLj4kAqMTeOeVQgxyUg", "url": "https://www.youtube.com/@공모주한잔"},
     {"name": "공모주투자의법칙(공주)", "channel_id": "UCstq1xNCuEIR43dM3CMop3g", "url": "https://www.youtube.com/@공모주투자의법칙"},
-    {"name": "슈엔슈", "channel_id": "UCkj9DORrXoTMdCeaWRj1Thg", "url": "https://www.youtube.com/@xuenxu"},
+    # 슈엔슈 채널은 ELS·국채·시장 점검도 올려서, 인사이트 탭에는 제목에 공모주·청약이 있는 영상만 넣습니다.
+    {"name": "슈엔슈", "channel_id": "UCkj9DORrXoTMdCeaWRj1Thg", "url": "https://www.youtube.com/@xuenxu",
+     "insight_keywords": ["공모주", "청약"]},
 ]
 INSIGHT_CHANNELS = [
     {"name": "주식애소리", "channel_id": "UC6Dbyc-0DV-I-iUoS2KqNoA", "url": "https://www.youtube.com/@stock_babysound"},
@@ -696,7 +698,7 @@ def main() -> int:
                 with_description=args.insights and channel["channel_id"] in insight_ids,
             )
             if args.insights:
-                insight_channels.append(data)
+                insight_channels.append({**data, "insightKeywords": channel.get("insight_keywords") or []})
             if data["channelId"] in feed_channel_ids:
                 channels.append({**data, "videos": data["videos"][:5]})
             latest = data.get("latest") or {}
